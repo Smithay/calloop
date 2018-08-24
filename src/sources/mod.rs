@@ -6,6 +6,8 @@ use mio::{Evented, Poll, PollOpt, Ready, Token};
 
 use list::SourceList;
 
+pub mod generic;
+
 /// Trait representing a source that can be inserted into an EventLoop
 ///
 /// This is the interface between the source and the loop, you need to

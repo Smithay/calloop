@@ -63,7 +63,7 @@
 extern crate mio;
 
 pub use self::loop_logic::{EventLoop, LoopHandle};
-pub use self::sources::{EventDispatcher, EventSource, Idle, Source};
+pub use self::sources::{generic, EventDispatcher, EventSource, Idle, Source};
 
 mod list;
 mod loop_logic;
