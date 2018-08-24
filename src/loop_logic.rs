@@ -137,3 +137,46 @@ impl EventLoop {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+    use std::rc::Rc;
+    use std::time::Duration;
+
+    use super::EventLoop;
+
+    #[test]
+    fn dispatch_idle() {
+        let mut event_loop = EventLoop::new().unwrap();
+
+        let dispatched = Rc::new(Cell::new(false));
+
+        let impl_dispatched = dispatched.clone();
+        event_loop
+            .handle()
+            .insert_idle(move || impl_dispatched.set(true));
+
+        event_loop.dispatch(Some(Duration::from_millis(0))).unwrap();
+
+        assert!(dispatched.get());
+    }
+
+    #[test]
+    fn cancel_idle() {
+        let mut event_loop = EventLoop::new().unwrap();
+
+        let dispatched = Rc::new(Cell::new(false));
+
+        let impl_dispatched = dispatched.clone();
+        let idle = event_loop
+            .handle()
+            .insert_idle(move || impl_dispatched.set(true));
+
+        idle.cancel();
+
+        event_loop.dispatch(Some(Duration::from_millis(0))).unwrap();
+
+        assert!(!dispatched.get());
+    }
+}
