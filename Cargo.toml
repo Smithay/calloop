@@ -2,6 +2,14 @@
 name = "calloop"
 version = "0.1.0"
 authors = ["Victor Berger <victor.berger@m4x.org>"]
+documentation = "https://docs.rs/calloop/"
+repository = "https://github.com/Smithay/calloop"
+license = "MIT"
+description = "A callback-based event loop"
+
+[badges]
+travis-ci = { repository = "Smithay/calloop" }
+codecov = { repository = "Smithay/calloop" }
 
 [dependencies]
 mio = "0.6"

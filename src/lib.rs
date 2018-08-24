@@ -1,4 +1,4 @@
-//! ## Calloop, a Callback-based Event Loop
+//! Calloop, a Callback-based Event Loop
 //! 
 //! This crate provides an `EventLoop` type, which is a small abstraction
 //! over an `mio`-based event loop. The main difference between this crate
@@ -12,7 +12,7 @@
 //! servers (like wayland-based apps) than performance critial networking code, which are
 //! more versed towards `tokio` and async-await.
 //! 
-//! ### How to use it
+//! ## How to use it
 //! 
 //! ```no_run
 //! extern crate calloop;
@@ -44,7 +44,7 @@
 //! }
 //! ```
 //! 
-//! ### Event source types
+//! ## Event source types
 //! 
 //! The event loop is backed by `mio`, as such anything implementing the `mio::Evented` trait
 //! can be used as an event source, with some adapter code (see the `EventSource` trait).
