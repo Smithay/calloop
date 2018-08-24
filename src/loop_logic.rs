@@ -9,7 +9,7 @@ use list::SourceList;
 use sources::{EventSource, Idle, Source};
 
 /// An handle to an event loop
-/// 
+///
 /// This handle allows you to insert new sources and idles in this event loop,
 /// it can be cloned, and it is possible to insert new sources from within a source
 /// callback.
@@ -22,7 +22,7 @@ pub struct LoopHandle {
 
 impl LoopHandle {
     /// Insert an new event source in the loop
-    /// 
+    ///
     /// The provided callback will be called during the dispatching cycles whenever the
     /// associated source generates events, see `EventLoop::dispatch(..)` for details.
     pub fn insert_source<E: EventSource, F: FnMut(E::Event) + 'static>(
@@ -48,7 +48,7 @@ impl LoopHandle {
     }
 
     /// Insert an idle callback
-    /// 
+    ///
     /// This callback will be called during a dispatching cycle when the event loop has
     /// finished processing all pending events from the sources and becomes idle.
     pub fn insert_idle<F: FnMut() + 'static>(&self, callback: F) -> Idle {
@@ -59,7 +59,7 @@ impl LoopHandle {
 }
 
 /// An event loop
-/// 
+///
 /// This loop can host several event sources, that can be dynamically added or removed.
 pub struct EventLoop {
     handle: LoopHandle,
@@ -68,7 +68,7 @@ pub struct EventLoop {
 
 impl EventLoop {
     /// Create a new event loop
-    /// 
+    ///
     /// It is backed by an `mio` provided machinnery, and will fail if the `mio`
     /// initialization fails.
     pub fn new() -> io::Result<EventLoop> {
@@ -122,11 +122,11 @@ impl EventLoop {
     }
 
     /// Dispatch pending events to their callbacks
-    /// 
+    ///
     /// Some source have events available, their callbacks will be immediatly called.
     /// Otherwise this will wait until an event is receive or the provided `timeout`
     /// is reached. If `timeout` is `None`, it will wait without a duration limit.
-    /// 
+    ///
     /// Once pending events have been processed or the timeout is reached, all pending
     /// idle callbacks will be fired before this method returns.
     pub fn dispatch(&mut self, timeout: Option<Duration>) -> io::Result<()> {
