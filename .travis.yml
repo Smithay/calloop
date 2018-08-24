@@ -1,0 +1,78 @@
+language: rust
+
+cache: cargo
+
+dist: trusty
+
+sudo: false
+
+os: linux
+
+branches:
+  only:
+    - master
+
+rust:
+  - 1.21.0
+  - stable
+  - beta
+  - nightly
+
+matrix:
+  allow_failures:
+    - rust: nightly
+  include:
+    - rust: stable
+      env: BUILD_FMT=1
+    - rust: stable
+      env: TARPAULIN=1
+      sudo: true
+    - rust: stable
+      env: BUILD_DOC=1
+
+before_script:
+  - |
+      if [ -n "$BUILD_FMT" ]; then
+        rustup component add rustfmt-preview
+      elif [ -n "$TARPAULIN" ]; then
+        which cargo-install-update || cargo install cargo-update
+        cargo install-update cargo-update
+        env RUSTFLAGS="--cfg procmacro2_semver_exempt" cargo install-update -i cargo-tarpaulin
+        # sanity check, tarpaulin may fail to run after a rust upgrade and then needs recompilation
+        cargo tarpaulin --version || env RUSTFLAGS="--cfg procmacro2_semver_exempt" cargo install cargo-tarpaulin --force
+      elif [ -n "BUILD_DOC" ]; then
+        which cargo-install-update || cargo install cargo-update
+        cargo install-update cargo-update
+        cargo install-update -i cargo-readme
+      fi
+
+script:
+  - |
+      if [ -n "$BUILD_FMT" ]; then
+        cargo fmt -- --check
+      elif [ -n "$TARPAULIN" ]; then
+        cargo tarpaulin --ignore-tests
+        bash <(curl -s https://codecov.io/bash)
+      elif [ -n "$BUILD_DOC" ]; then
+        cargo doc --no-deps --all-features &&
+        cargo readme --output README.md &&
+        git diff --exit-code -- README.md
+      else
+        cargo test
+      fi
+
+after_success:
+  - |
+      if [ -n "$BUILD_DOC" ]; then
+        cp ./doc_index.html ./target/doc/index.html
+      fi
+
+deploy:
+  provider: pages
+  skip_cleanup: true
+  github_token: $GITHUB_TOKEN
+  local_dir: "target/doc"
+  on:
+    branch: master
+    rust: stable
+    condition: $BUILD_DOC = 1
