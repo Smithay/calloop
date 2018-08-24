@@ -51,7 +51,7 @@ script:
       if [ -n "$BUILD_FMT" ]; then
         cargo fmt -- --check
       elif [ -n "$TARPAULIN" ]; then
-        cargo tarpaulin --ignore-tests
+        cargo tarpaulin --ignore-tests --out Xml
         bash <(curl -s https://codecov.io/bash)
       elif [ -n "$BUILD_DOC" ]; then
         cargo doc --no-deps --all-features &&
