@@ -46,7 +46,9 @@ pub trait EventDispatcher {
 /// depending on the source kind that will be provided by the `Deref`
 /// implementation of this struct to the evented object.
 ///
-/// Dropping this handle does *not* remove the source from the event loop.
+/// Dropping this handle does not deregister this source from the event loop,
+/// but will drop the wrapped `EventSource`, maybe rendering it inert depending on
+/// its implementation.
 pub struct Source<E: EventSource> {
     pub(crate) source: E,
     pub(crate) poll: Rc<Poll>,
