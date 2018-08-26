@@ -6,6 +6,7 @@ documentation = "https://docs.rs/calloop/"
 repository = "https://github.com/Smithay/calloop"
 license = "MIT"
 description = "A callback-based event loop"
+autotests = false
 
 [badges]
 travis-ci = { repository = "Smithay/calloop" }
@@ -13,3 +14,10 @@ codecov = { repository = "Smithay/calloop" }
 
 [dependencies]
 mio = "0.6"
+
+[target.'cfg(unix)'.dependencies]
+nix = "0.11"
+
+[[test]]
+name = "signals"
+harness = false

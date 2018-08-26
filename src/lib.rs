@@ -61,8 +61,12 @@
 #![warn(missing_docs)]
 
 extern crate mio;
+#[cfg(unix)]
+extern crate nix;
 
 pub use self::loop_logic::{EventLoop, LoopHandle};
+#[cfg(unix)]
+pub use self::sources::signals;
 pub use self::sources::{generic, EventDispatcher, EventSource, Idle, Source};
 
 mod list;
