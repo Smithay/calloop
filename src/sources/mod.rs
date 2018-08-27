@@ -6,6 +6,7 @@ use mio::{Evented, Poll, PollOpt, Ready, Token};
 
 use list::SourceList;
 
+pub mod channel;
 pub mod generic;
 #[cfg(unix)]
 pub mod signals;

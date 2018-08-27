@@ -56,9 +56,12 @@ fn main() {
 The event loop is backed by `mio`, as such anything implementing the `mio::Evented` trait
 can be used as an event source, with some adapter code (see the `EventSource` trait).
 
-This crate also provide some adapters for common event sources:
+This crate also provide some adapters for common event sources such as:
 
-- *COMING SOON*
+- MPSC channels
+- unix signals
+
+As well as generic `mio::Evented` objects.
 
 It is also possible to insert "idle" callbacks. These callbacks represent computations that
 need to be done at some point, but are not as urgent as processing the events. These callbacks
