@@ -10,7 +10,9 @@
 //! This crate was initially an implementation detail of `wayland-server`, and has been
 //! split-off for reuse. I expect it to be more useful for GUI programs or graphical
 //! servers (like wayland-based apps) than performance critial networking code, which are
-//! more versed towards `tokio` and async-await.
+//! more versed towards `tokio` and async-await. It mostly shines in the conception of
+//! modular infrastructures, allowing different modules to use the same event loop without
+//! needing to know about each other.
 //!
 //! ## How to use it
 //!
