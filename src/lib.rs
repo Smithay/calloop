@@ -54,6 +54,7 @@
 //! This crate also provide some adapters for common event sources such as:
 //!
 //! - MPSC channels
+//! - Timers
 //! - unix signals
 //!
 //! As well as generic `mio::Evented` objects.

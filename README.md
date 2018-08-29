@@ -61,6 +61,7 @@ can be used as an event source, with some adapter code (see the `EventSource` tr
 This crate also provide some adapters for common event sources such as:
 
 - MPSC channels
+- Timers
 - unix signals
 
 As well as generic `mio::Evented` objects.
