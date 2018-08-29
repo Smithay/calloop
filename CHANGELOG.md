@@ -2,7 +2,12 @@
 
 ## Unreleased
 
+## 0.1.1 -- 2018-08-29
+
 - `Generic` event source for wrapping arbitrary `Evented` types
+- timer event sources
+- UNIX signal event sources
+- channel event sources
 
 ## 0.1.0 -- 2018-08-24
 
