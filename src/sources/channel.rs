@@ -6,7 +6,7 @@
 //! one event per message.
 //!
 //! This implementation is based on
-//! [`mio_more::channels`](https://docs.rs/mio-more/*/mio_more/channel/index.html).
+//! [`mio_more::channel`](https://docs.rs/mio-more/*/mio_more/channel/index.html).
 
 use std::cell::RefCell;
 use std::io;
