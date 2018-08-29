@@ -10,6 +10,7 @@ pub mod channel;
 pub mod generic;
 #[cfg(unix)]
 pub mod signals;
+pub mod timer;
 
 /// Trait representing a source that can be inserted into an EventLoop
 ///
