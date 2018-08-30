@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.0 -- 2018-08-30
+
 - **[breaking]** Add a `&mut shared_data` argument to `EventLoop::dispatch(..)` to share data
   between callbacks.
 
