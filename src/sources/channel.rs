@@ -97,30 +97,32 @@ impl<T: 'static> EventSource for Channel<T> {
         PollOpt::edge()
     }
 
-    fn make_dispatcher<F: FnMut(Event<T>) + 'static>(
+    fn make_dispatcher<Data: 'static, F: FnMut(Event<T>, &mut Data) + 'static>(
         &self,
         callback: F,
-    ) -> Rc<RefCell<EventDispatcher>> {
+    ) -> Rc<RefCell<EventDispatcher<Data>>> {
         Rc::new(RefCell::new(Dispatcher {
+            _data: ::std::marker::PhantomData,
             receiver: self.receiver.clone(),
             callback,
         }))
     }
 }
 
-struct Dispatcher<T, F: FnMut(Event<T>)> {
+struct Dispatcher<Data, T, F: FnMut(Event<T>, &mut Data)> {
+    _data: ::std::marker::PhantomData<fn(&mut Data)>,
     receiver: Rc<Receiver<T>>,
     callback: F,
 }
 
-impl<T, F: FnMut(Event<T>)> EventDispatcher for Dispatcher<T, F> {
-    fn ready(&mut self, _: Ready) {
+impl<Data, T, F: FnMut(Event<T>, &mut Data)> EventDispatcher<Data> for Dispatcher<Data, T, F> {
+    fn ready(&mut self, _: Ready, data: &mut Data) {
         loop {
             match self.receiver.try_recv() {
-                Ok(val) => (self.callback)(Event::Msg(val)),
+                Ok(val) => (self.callback)(Event::Msg(val), data),
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
-                    (self.callback)(Event::Closed);
+                    (self.callback)(Event::Closed, data);
                     break;
                 }
             }
@@ -130,9 +132,6 @@ impl<T, F: FnMut(Event<T>)> EventDispatcher for Dispatcher<T, F> {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
-    use std::rc::Rc;
-
     use super::*;
 
     #[test]
@@ -143,45 +142,41 @@ mod tests {
 
         let (tx, rx) = channel::<()>();
 
-        let got_msg = Rc::new(Cell::new(false));
-        let got_closed = Rc::new(Cell::new(false));
-        let got_msg_2 = got_msg.clone();
-        let got_closed_2 = got_closed.clone();
+        // (got_msg, got_closed)
+        let mut got = (false, false);
 
         let _source = handle
-            .insert_source(rx, move |evt| match evt {
+            .insert_source(rx, move |evt, got: &mut (bool, bool)| match evt {
                 Event::Msg(()) => {
-                    got_msg_2.set(true);
+                    got.0 = true;
                 }
                 Event::Closed => {
-                    got_closed_2.set(true);
+                    got.1 = true;
                 }
             })
             .unwrap();
 
         // nothing is sent, nothing is received
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(0)))
+            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut got)
             .unwrap();
 
-        assert!(!got_msg.get());
-        assert!(!got_closed.get());
+        assert_eq!(got, (false, false));
 
         // a message is send
         tx.send(()).unwrap();
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(0)))
+            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut got)
             .unwrap();
 
-        assert!(got_msg.get());
-        assert!(!got_closed.get());
+        assert_eq!(got, (true, false));
 
         // the sender is dropped
         ::std::mem::drop(tx);
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(0)))
+            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut got)
             .unwrap();
 
-        assert!(got_closed.get());
+        assert_eq!(got, (true, true));
     }
 }

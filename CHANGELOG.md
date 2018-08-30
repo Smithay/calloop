@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **[breaking]** Add a `&mut shared_data` argument to `EventLoop::dispatch(..)` to share data
+  between callbacks.
+
 ## 0.1.1 -- 2018-08-29
 
 - `Generic` event source for wrapping arbitrary `Evented` types

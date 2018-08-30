@@ -149,31 +149,35 @@ impl<T: 'static> EventSource for Timer<T> {
         PollOpt::edge()
     }
 
-    fn make_dispatcher<F: FnMut((T, TimerHandle<T>)) + 'static>(
+    fn make_dispatcher<Data: 'static, F: FnMut((T, TimerHandle<T>), &mut Data) + 'static>(
         &self,
         callback: F,
-    ) -> Rc<RefCell<EventDispatcher>> {
+    ) -> Rc<RefCell<EventDispatcher<Data>>> {
         Rc::new(RefCell::new(Dispatcher {
+            _data: ::std::marker::PhantomData,
             timer: self.inner.clone(),
             callback,
         }))
     }
 }
 
-struct Dispatcher<T, F: FnMut((T, TimerHandle<T>))> {
+struct Dispatcher<Data, T, F: FnMut((T, TimerHandle<T>), &mut Data)> {
+    _data: ::std::marker::PhantomData<fn(&mut Data)>,
     timer: Arc<Mutex<mio_timer::Timer<T>>>,
     callback: F,
 }
 
-impl<T, F: FnMut((T, TimerHandle<T>))> EventDispatcher for Dispatcher<T, F> {
-    fn ready(&mut self, _: Ready) {
+impl<Data, T, F: FnMut((T, TimerHandle<T>), &mut Data)> EventDispatcher<Data>
+    for Dispatcher<Data, T, F>
+{
+    fn ready(&mut self, _: Ready, data: &mut Data) {
         let handle = TimerHandle {
             inner: self.timer.clone(),
         };
         loop {
             let opt_evt = self.timer.lock().unwrap().poll();
             match opt_evt {
-                Some(val) => (self.callback)((val, handle.clone())),
+                Some(val) => (self.callback)((val, handle.clone()), data),
                 None => break,
             }
         }
@@ -182,8 +186,6 @@ impl<T, F: FnMut((T, TimerHandle<T>))> EventDispatcher for Dispatcher<T, F> {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
-    use std::rc::Rc;
     use std::time::Duration;
 
     use super::*;
@@ -194,12 +196,11 @@ mod tests {
 
         let evl_handle = event_loop.handle();
 
-        let fired = Rc::new(Cell::new(false));
-        let fired2 = fired.clone();
+        let mut fired = false;
 
         let timer = evl_handle
-            .insert_source(Timer::<()>::new(), move |((), _)| {
-                fired2.set(true);
+            .insert_source(Timer::<()>::new(), move |((), _), f| {
+                *f = true;
             })
             .unwrap();
 
@@ -209,18 +210,18 @@ mod tests {
             .unwrap();
 
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(100)))
+            .dispatch(Some(::std::time::Duration::from_millis(100)), &mut fired)
             .unwrap();
 
         // it should not have fired yet
-        assert!(!fired.get());
+        assert!(!fired);
 
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(300)))
+            .dispatch(Some(::std::time::Duration::from_millis(300)), &mut fired)
             .unwrap();
 
         // it should have fired now
-        assert!(fired.get());
+        assert!(fired);
     }
 
     #[test]
@@ -229,12 +230,11 @@ mod tests {
 
         let evl_handle = event_loop.handle();
 
-        let fired = Rc::new(RefCell::new(Vec::new()));
-        let fired2 = fired.clone();
+        let mut fired = Vec::new();
 
         let timer = evl_handle
-            .insert_source(Timer::<u32>::new(), move |(val, _)| {
-                fired2.borrow_mut().push(val)
+            .insert_source(Timer::new(), |(val, _), fired: &mut Vec<u32>| {
+                fired.push(val);
             })
             .unwrap();
 
@@ -254,22 +254,22 @@ mod tests {
         // 3 dispatches as each returns once at least one event occured
 
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(200)))
+            .dispatch(Some(::std::time::Duration::from_millis(200)), &mut fired)
             .unwrap();
 
-        assert_eq!(&**fired.borrow(), &[2]);
+        assert_eq!(&fired, &[2]);
 
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(300)))
+            .dispatch(Some(::std::time::Duration::from_millis(300)), &mut fired)
             .unwrap();
 
-        assert_eq!(&**fired.borrow(), &[2, 1]);
+        assert_eq!(&fired, &[2, 1]);
 
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(400)))
+            .dispatch(Some(::std::time::Duration::from_millis(400)), &mut fired)
             .unwrap();
 
-        assert_eq!(&**fired.borrow(), &[2, 1, 3]);
+        assert_eq!(&fired, &[2, 1, 3]);
     }
 
     #[test]
@@ -278,12 +278,11 @@ mod tests {
 
         let evl_handle = event_loop.handle();
 
-        let fired = Rc::new(RefCell::new(Vec::new()));
-        let fired2 = fired.clone();
+        let mut fired = Vec::new();
 
         let timer = evl_handle
-            .insert_source(Timer::<u32>::new(), move |(val, _)| {
-                fired2.borrow_mut().push(val)
+            .insert_source(Timer::new(), |(val, _), fired: &mut Vec<u32>| {
+                fired.push(val)
             })
             .unwrap();
 
@@ -306,28 +305,28 @@ mod tests {
         // fire
 
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(200)))
+            .dispatch(Some(::std::time::Duration::from_millis(200)), &mut fired)
             .unwrap();
 
-        assert_eq!(&**fired.borrow(), &[2]);
+        assert_eq!(&fired, &[2]);
 
         // timeout2 has already fired, we cancel timeout1
         assert_eq!(timer.handle().cancel_timeout(&timeout2), None);
         assert_eq!(timer.handle().cancel_timeout(&timeout1), Some(1));
 
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(300)))
+            .dispatch(Some(::std::time::Duration::from_millis(300)), &mut fired)
             .unwrap();
 
-        assert_eq!(&**fired.borrow(), &[2]);
+        assert_eq!(&fired, &[2]);
 
         // cancel timeout3
         assert_eq!(timer.handle().cancel_timeout(&timeout3), Some(3));
 
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(600)))
+            .dispatch(Some(::std::time::Duration::from_millis(600)), &mut fired)
             .unwrap();
 
-        assert_eq!(&**fired.borrow(), &[2]);
+        assert_eq!(&fired, &[2]);
     }
 }

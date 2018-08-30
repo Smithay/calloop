@@ -13,23 +13,32 @@ use sources::{EventSource, Idle, Source};
 /// This handle allows you to insert new sources and idles in this event loop,
 /// it can be cloned, and it is possible to insert new sources from within a source
 /// callback.
-#[derive(Clone)]
-pub struct LoopHandle {
+pub struct LoopHandle<Data> {
     poll: Rc<Poll>,
-    list: Rc<RefCell<SourceList>>,
-    idles: Rc<RefCell<Vec<Rc<RefCell<Option<Box<FnMut()>>>>>>>,
+    list: Rc<RefCell<SourceList<Data>>>,
+    idles: Rc<RefCell<Vec<Rc<RefCell<Option<Box<FnMut(&mut Data)>>>>>>>,
 }
 
-impl LoopHandle {
+impl<Data> Clone for LoopHandle<Data> {
+    fn clone(&self) -> LoopHandle<Data> {
+        LoopHandle {
+            poll: self.poll.clone(),
+            list: self.list.clone(),
+            idles: self.idles.clone(),
+        }
+    }
+}
+
+impl<Data: 'static> LoopHandle<Data> {
     /// Insert an new event source in the loop
     ///
     /// The provided callback will be called during the dispatching cycles whenever the
     /// associated source generates events, see `EventLoop::dispatch(..)` for details.
-    pub fn insert_source<E: EventSource, F: FnMut(E::Event) + 'static>(
+    pub fn insert_source<E: EventSource, F: FnMut(E::Event, &mut Data) + 'static>(
         &self,
         source: E,
         callback: F,
-    ) -> io::Result<Source<E>> {
+    ) -> io::Result<Source<E, Data>> {
         let dispatcher = source.make_dispatcher(callback);
 
         let token = self.list.borrow_mut().add_source(dispatcher);
@@ -51,8 +60,10 @@ impl LoopHandle {
     ///
     /// This callback will be called during a dispatching cycle when the event loop has
     /// finished processing all pending events from the sources and becomes idle.
-    pub fn insert_idle<F: FnMut() + 'static>(&self, callback: F) -> Idle {
-        let callback = Rc::new(RefCell::new(Some(Box::new(callback) as Box<FnMut()>)));
+    pub fn insert_idle<F: FnMut(&mut Data) + 'static>(&self, callback: F) -> Idle<Data> {
+        let callback = Rc::new(RefCell::new(Some(
+            Box::new(callback) as Box<FnMut(&mut Data)>
+        )));
         self.idles.borrow_mut().push(callback.clone());
         Idle { callback }
     }
@@ -61,17 +72,17 @@ impl LoopHandle {
 /// An event loop
 ///
 /// This loop can host several event sources, that can be dynamically added or removed.
-pub struct EventLoop {
-    handle: LoopHandle,
+pub struct EventLoop<Data> {
+    handle: LoopHandle<Data>,
     events_buffer: Events,
 }
 
-impl EventLoop {
+impl<Data> EventLoop<Data> {
     /// Create a new event loop
     ///
     /// It is backed by an `mio` provided machinnery, and will fail if the `mio`
     /// initialization fails.
-    pub fn new() -> io::Result<EventLoop> {
+    pub fn new() -> io::Result<EventLoop<Data>> {
         Ok(EventLoop {
             handle: LoopHandle {
                 poll: Rc::new(Poll::new()?),
@@ -83,11 +94,11 @@ impl EventLoop {
     }
 
     /// Retrieve a loop handle
-    pub fn handle(&self) -> LoopHandle {
+    pub fn handle(&self) -> LoopHandle<Data> {
         self.handle.clone()
     }
 
-    fn dispatch_events(&mut self, timeout: Option<Duration>) -> io::Result<()> {
+    fn dispatch_events(&mut self, timeout: Option<Duration>, data: &mut Data) -> io::Result<()> {
         self.events_buffer.clear();
         self.handle.poll.poll(&mut self.events_buffer, timeout)?;
 
@@ -98,7 +109,7 @@ impl EventLoop {
 
             for event in &self.events_buffer {
                 if let Some(dispatcher) = self.handle.list.borrow().get_dispatcher(event.token()) {
-                    dispatcher.borrow_mut().ready(event.readiness());
+                    dispatcher.borrow_mut().ready(event.readiness(), data);
                 }
             }
 
@@ -112,11 +123,11 @@ impl EventLoop {
         Ok(())
     }
 
-    fn dispatch_idles(&mut self) {
+    fn dispatch_idles(&mut self, data: &mut Data) {
         let idles = ::std::mem::replace(&mut *self.handle.idles.borrow_mut(), Vec::new());
         for idle in idles {
             if let Some(ref mut callback) = *idle.borrow_mut() {
-                callback();
+                callback(data);
             }
         }
     }
@@ -129,10 +140,10 @@ impl EventLoop {
     ///
     /// Once pending events have been processed or the timeout is reached, all pending
     /// idle callbacks will be fired before this method returns.
-    pub fn dispatch(&mut self, timeout: Option<Duration>) -> io::Result<()> {
-        self.dispatch_events(timeout)?;
+    pub fn dispatch(&mut self, timeout: Option<Duration>, data: &mut Data) -> io::Result<()> {
+        self.dispatch_events(timeout, data)?;
 
-        self.dispatch_idles();
+        self.dispatch_idles(data);
 
         Ok(())
     }
@@ -140,8 +151,6 @@ impl EventLoop {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
-    use std::rc::Rc;
     use std::time::Duration;
 
     use super::EventLoop;
@@ -150,33 +159,35 @@ mod tests {
     fn dispatch_idle() {
         let mut event_loop = EventLoop::new().unwrap();
 
-        let dispatched = Rc::new(Cell::new(false));
+        let mut dispatched = false;
 
-        let impl_dispatched = dispatched.clone();
+        event_loop.handle().insert_idle(|d| {
+            *d = true;
+        });
+
         event_loop
-            .handle()
-            .insert_idle(move || impl_dispatched.set(true));
+            .dispatch(Some(Duration::from_millis(0)), &mut dispatched)
+            .unwrap();
 
-        event_loop.dispatch(Some(Duration::from_millis(0))).unwrap();
-
-        assert!(dispatched.get());
+        assert!(dispatched);
     }
 
     #[test]
     fn cancel_idle() {
         let mut event_loop = EventLoop::new().unwrap();
 
-        let dispatched = Rc::new(Cell::new(false));
+        let mut dispatched = false;
 
-        let impl_dispatched = dispatched.clone();
-        let idle = event_loop
-            .handle()
-            .insert_idle(move || impl_dispatched.set(true));
+        let idle = event_loop.handle().insert_idle(move |d| {
+            *d = true;
+        });
 
         idle.cancel();
 
-        event_loop.dispatch(Some(Duration::from_millis(0))).unwrap();
+        event_loop
+            .dispatch(Some(Duration::from_millis(0)), &mut dispatched)
+            .unwrap();
 
-        assert!(!dispatched.get());
+        assert!(!dispatched);
     }
 }

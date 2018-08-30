@@ -18,8 +18,6 @@ mod test {
     extern crate calloop;
     extern crate nix;
 
-    use std::cell::Cell;
-    use std::rc::Rc;
     use std::time::Duration;
 
     use self::calloop::signals::{Signal, Signals};
@@ -37,38 +35,42 @@ mod test {
     fn single_usr1() {
         let mut event_loop = EventLoop::new().unwrap();
 
-        let signal_received = Rc::new(Cell::new(false));
-        let signal_received2 = signal_received.clone();
+        let mut signal_received = false;
 
         let _signal_source = event_loop
             .handle()
-            .insert_source(Signals::new(&[Signal::SIGUSR1]).unwrap(), move |evt| {
-                assert!(evt.signal() == Signal::SIGUSR1);
-                signal_received2.set(true);
-            })
+            .insert_source(
+                Signals::new(&[Signal::SIGUSR1]).unwrap(),
+                move |evt, rcv| {
+                    assert!(evt.signal() == Signal::SIGUSR1);
+                    *rcv = true;
+                },
+            )
             .unwrap();
 
         // send ourselves a SIGUSR1
         kill(Pid::this(), Signal::SIGUSR1).unwrap();
 
         event_loop
-            .dispatch(Some(Duration::from_millis(10)))
+            .dispatch(Some(Duration::from_millis(10)), &mut signal_received)
             .unwrap();
 
-        assert!(signal_received.get());
+        assert!(signal_received);
     }
 
     fn usr2_added_afterwards() {
         let mut event_loop = EventLoop::new().unwrap();
 
-        let signal_received = Rc::new(Cell::new(None));
-        let signal_received2 = signal_received.clone();
+        let mut signal_received = None;
 
         let mut signal_source = event_loop
             .handle()
-            .insert_source(Signals::new(&[Signal::SIGUSR1]).unwrap(), move |evt| {
-                signal_received2.set(Some(evt.signal()));
-            })
+            .insert_source(
+                Signals::new(&[Signal::SIGUSR1]).unwrap(),
+                move |evt, rcv| {
+                    *rcv = Some(evt.signal());
+                },
+            )
             .unwrap();
 
         signal_source.add_signals(&[Signal::SIGUSR2]).unwrap();
@@ -77,24 +79,23 @@ mod test {
         kill(Pid::this(), Signal::SIGUSR2).unwrap();
 
         event_loop
-            .dispatch(Some(Duration::from_millis(10)))
+            .dispatch(Some(Duration::from_millis(10)), &mut signal_received)
             .unwrap();
 
-        assert_eq!(signal_received.get(), Some(Signal::SIGUSR2));
+        assert_eq!(signal_received, Some(Signal::SIGUSR2));
     }
 
     fn usr2_signal_removed() {
         let mut event_loop = EventLoop::new().unwrap();
 
-        let signal_received = Rc::new(Cell::new(None));
-        let signal_received2 = signal_received.clone();
+        let mut signal_received = None;
 
         let mut signal_source = event_loop
             .handle()
             .insert_source(
                 Signals::new(&[Signal::SIGUSR1, Signal::SIGUSR2]).unwrap(),
-                move |evt| {
-                    signal_received2.set(Some(evt.signal()));
+                move |evt, rcv| {
+                    *rcv = Some(evt.signal());
                 },
             )
             .unwrap();
@@ -110,20 +111,20 @@ mod test {
         kill(Pid::this(), Signal::SIGUSR2).unwrap();
 
         event_loop
-            .dispatch(Some(Duration::from_millis(10)))
+            .dispatch(Some(Duration::from_millis(10)), &mut signal_received)
             .unwrap();
 
         // we should not have received anything, as we don't listen to SIGUSR2 any more
-        assert!(signal_received.get().is_none());
+        assert!(signal_received.is_none());
 
         // swap the signals from [SIGUSR1] to [SIGUSR2]
         signal_source.set_signals(&[Signal::SIGUSR2]).unwrap();
 
         event_loop
-            .dispatch(Some(Duration::from_millis(10)))
+            .dispatch(Some(Duration::from_millis(10)), &mut signal_received)
             .unwrap();
 
         // we should get back the pending SIGUSR2 now
-        assert_eq!(signal_received.get(), Some(Signal::SIGUSR2));
+        assert_eq!(signal_received, Some(Signal::SIGUSR2));
     }
 }

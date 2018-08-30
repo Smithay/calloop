@@ -43,7 +43,10 @@ fn main() {
     loop {
         // Dispatch received events to their callbacks, waiting at most 20 ms for
         // new events
-        event_loop.dispatch(Some(Duration::from_millis(20)));
+        //
+        // The `&mut shared_data` is a mutable reference that will be forwarded to all
+        // your callbacks, allowing them to easily share some state
+        event_loop.dispatch(Some(Duration::from_millis(20)), &mut shared_data);
 
         /*
          * Insert here the processing you need to do do between each event loop run

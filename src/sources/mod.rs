@@ -28,10 +28,10 @@ pub trait EventSource: Evented {
 
     /// Wrap an user callback into a dispatcher, that will convert an `mio` readiness
     /// into an event
-    fn make_dispatcher<F: FnMut(Self::Event) + 'static>(
+    fn make_dispatcher<Data: 'static, F: FnMut(Self::Event, &mut Data) + 'static>(
         &self,
         callback: F,
-    ) -> Rc<RefCell<EventDispatcher>>;
+    ) -> Rc<RefCell<EventDispatcher<Data>>>;
 }
 
 /// An event dispatcher
@@ -39,9 +39,9 @@ pub trait EventSource: Evented {
 /// It is the junction between user callbacks and and an event source,
 /// receiving `mio` readinesses, converting them into appropriate events
 /// and calling their inner user callback.
-pub trait EventDispatcher {
+pub trait EventDispatcher<Data> {
     /// The source has a readiness event
-    fn ready(&mut self, ready: Ready);
+    fn ready(&mut self, ready: Ready, data: &mut Data);
 }
 
 /// An event source that has been inserted into the event loop
@@ -53,14 +53,14 @@ pub trait EventDispatcher {
 /// Dropping this handle does not deregister this source from the event loop,
 /// but will drop the wrapped `EventSource`, maybe rendering it inert depending on
 /// its implementation.
-pub struct Source<E: EventSource> {
+pub struct Source<E: EventSource, Data> {
     pub(crate) source: E,
     pub(crate) poll: Rc<Poll>,
-    pub(crate) list: Rc<RefCell<SourceList>>,
+    pub(crate) list: Rc<RefCell<SourceList<Data>>>,
     pub(crate) token: Token,
 }
 
-impl<E: EventSource> Source<E> {
+impl<E: EventSource, Data> Source<E, Data> {
     /// Refresh the registration of this event source to the loop
     ///
     /// This can be necessary if the evented object provides methods to change
@@ -84,14 +84,14 @@ impl<E: EventSource> Source<E> {
     }
 }
 
-impl<E: EventSource> ::std::ops::Deref for Source<E> {
+impl<E: EventSource, Data> ::std::ops::Deref for Source<E, Data> {
     type Target = E;
     fn deref(&self) -> &E {
         &self.source
     }
 }
 
-impl<E: EventSource> ::std::ops::DerefMut for Source<E> {
+impl<E: EventSource, Data> ::std::ops::DerefMut for Source<E, Data> {
     fn deref_mut(&mut self) -> &mut E {
         &mut self.source
     }
@@ -101,11 +101,11 @@ impl<E: EventSource> ::std::ops::DerefMut for Source<E> {
 ///
 /// This handle allows you to cancel the callback. Dropping
 /// it will *not* cancel it.
-pub struct Idle {
-    pub(crate) callback: Rc<RefCell<Option<Box<FnMut()>>>>,
+pub struct Idle<Data> {
+    pub(crate) callback: Rc<RefCell<Option<Box<FnMut(&mut Data)>>>>,
 }
 
-impl Idle {
+impl<Data> Idle<Data> {
     /// Cancel the idle callback if it was not already run
     pub fn cancel(self) {
         self.callback.borrow_mut().take();

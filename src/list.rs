@@ -5,25 +5,28 @@ use mio::Token;
 
 use sources::EventDispatcher;
 
-pub(crate) struct SourceList {
-    sources: Vec<Option<Rc<RefCell<EventDispatcher>>>>,
+pub(crate) struct SourceList<Data> {
+    sources: Vec<Option<Rc<RefCell<EventDispatcher<Data>>>>>,
 }
 
-impl SourceList {
-    pub(crate) fn new() -> SourceList {
+impl<Data> SourceList<Data> {
+    pub(crate) fn new() -> SourceList<Data> {
         SourceList {
             sources: Vec::new(),
         }
     }
 
-    pub(crate) fn get_dispatcher(&self, token: Token) -> Option<Rc<RefCell<EventDispatcher>>> {
+    pub(crate) fn get_dispatcher(
+        &self,
+        token: Token,
+    ) -> Option<Rc<RefCell<EventDispatcher<Data>>>> {
         match self.sources.get(token.0) {
             Some(&Some(ref dispatcher)) => Some(dispatcher.clone()),
             _ => None,
         }
     }
 
-    pub(crate) fn add_source(&mut self, dispatcher: Rc<RefCell<EventDispatcher>>) -> Token {
+    pub(crate) fn add_source(&mut self, dispatcher: Rc<RefCell<EventDispatcher<Data>>>) -> Token {
         let free_id = self.sources.iter().position(Option::is_none);
         if let Some(id) = free_id {
             self.sources[id] = Some(dispatcher);

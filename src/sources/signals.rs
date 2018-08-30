@@ -179,28 +179,30 @@ impl EventSource for Signals {
         PollOpt::edge()
     }
 
-    fn make_dispatcher<F: FnMut(Event) + 'static>(
+    fn make_dispatcher<Data: 'static, F: FnMut(Event, &mut Data) + 'static>(
         &self,
         callback: F,
-    ) -> Rc<RefCell<EventDispatcher>> {
+    ) -> Rc<RefCell<EventDispatcher<Data>>> {
         Rc::new(RefCell::new(Dispatcher {
+            _data: ::std::marker::PhantomData,
             callback,
             sfd: self.sfd.clone(),
         }))
     }
 }
 
-struct Dispatcher<F: FnMut(Event) + 'static> {
+struct Dispatcher<Data, F: FnMut(Event, &mut Data) + 'static> {
+    _data: ::std::marker::PhantomData<fn(&mut Data)>,
     callback: F,
     sfd: Rc<RefCell<SignalFd>>,
 }
 
-impl<F: FnMut(Event) + 'static> EventDispatcher for Dispatcher<F> {
-    fn ready(&mut self, _: Ready) {
+impl<Data, F: FnMut(Event, &mut Data) + 'static> EventDispatcher<Data> for Dispatcher<Data, F> {
+    fn ready(&mut self, _: Ready, data: &mut Data) {
         loop {
             let ret = self.sfd.borrow_mut().read_signal();
             match ret {
-                Ok(Some(info)) => (self.callback)(Event { info }),
+                Ok(Some(info)) => (self.callback)(Event { info }, data),
                 Ok(None) => {
                     // nothing more to read
                     break;

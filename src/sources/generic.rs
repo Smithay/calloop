@@ -149,36 +149,41 @@ impl<E: Evented + 'static> EventSource for Generic<E> {
         self.pollopts
     }
 
-    fn make_dispatcher<F: FnMut(Event<E>) + 'static>(
+    fn make_dispatcher<Data: 'static, F: FnMut(Event<E>, &mut Data) + 'static>(
         &self,
         callback: F,
-    ) -> Rc<RefCell<EventDispatcher>> {
+    ) -> Rc<RefCell<EventDispatcher<Data>>> {
         Rc::new(RefCell::new(Dispatcher {
+            _data: ::std::marker::PhantomData,
             inner: self.inner.clone(),
             callback,
         }))
     }
 }
 
-struct Dispatcher<E: Evented + 'static, F: FnMut(Event<E>)> {
+struct Dispatcher<Data, E: Evented + 'static, F: FnMut(Event<E>, &mut Data)> {
+    _data: ::std::marker::PhantomData<fn(&mut Data)>,
     inner: Rc<RefCell<E>>,
     callback: F,
 }
 
-impl<E: Evented + 'static, F: FnMut(Event<E>)> EventDispatcher for Dispatcher<E, F> {
-    fn ready(&mut self, ready: Ready) {
-        (self.callback)(Event {
-            source: self.inner.clone(),
-            readiness: ready,
-        })
+impl<Data, E: Evented + 'static, F: FnMut(Event<E>, &mut Data)> EventDispatcher<Data>
+    for Dispatcher<Data, E, F>
+{
+    fn ready(&mut self, ready: Ready, data: &mut Data) {
+        (self.callback)(
+            Event {
+                source: self.inner.clone(),
+                readiness: ready,
+            },
+            data,
+        )
     }
 }
 
 #[cfg(test)]
 mod test {
-    use std::cell::Cell;
     use std::io::{Read, Write};
-    use std::rc::Rc;
 
     use super::{Event, Generic};
     #[cfg(unix)]
@@ -195,11 +200,10 @@ mod test {
         let mut generic = Generic::from_fd_source(rx);
         generic.set_interest(::mio::Ready::readable());
 
-        let dispached = Rc::new(Cell::new(false));
-        let dispatched2 = dispached.clone();
+        let mut dispached = false;
 
         handle
-            .insert_source(generic, move |Event { source, readiness }| {
+            .insert_source(generic, move |Event { source, readiness }, d| {
                 assert!(readiness.is_readable());
                 // we have not registered for writability
                 assert!(!readiness.is_writable());
@@ -208,23 +212,23 @@ mod test {
                 assert_eq!(ret, 6);
                 assert_eq!(&buffer[..6], &[1, 2, 3, 4, 5, 6]);
 
-                dispatched2.set(true);
+                *d = true;
             })
             .unwrap();
 
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(0)))
+            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut dispached)
             .unwrap();
 
-        assert!(!dispached.get());
+        assert!(!dispached);
 
         tx.write(&[1, 2, 3, 4, 5, 6]).unwrap();
         tx.flush().unwrap();
 
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(0)))
+            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut dispached)
             .unwrap();
 
-        assert!(dispached.get());
+        assert!(dispached);
     }
 }
