@@ -60,10 +60,13 @@ impl<Data: 'static> LoopHandle<Data> {
     ///
     /// This callback will be called during a dispatching cycle when the event loop has
     /// finished processing all pending events from the sources and becomes idle.
-    pub fn insert_idle<F: FnMut(&mut Data) + 'static>(&self, callback: F) -> Idle<Data> {
-        let callback = Rc::new(RefCell::new(Some(
-            Box::new(callback) as Box<FnMut(&mut Data)>
-        )));
+    pub fn insert_idle<F: FnOnce(&mut Data) + 'static>(&self, callback: F) -> Idle<Data> {
+        let mut opt_cb = Some(callback);
+        let callback = Rc::new(RefCell::new(Some(Box::new(move |data: &mut Data| {
+            if let Some(cb) = opt_cb.take() {
+                cb(data);
+            }
+        }) as Box<FnMut(&mut Data)>)));
         self.idles.borrow_mut().push(callback.clone());
         Idle { callback }
     }
