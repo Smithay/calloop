@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.2.2 -- 2018-09-10
+
+- Introduce an `EventLoop::run` method, as well as the `LoopSignal` handle allowing to
+  wakeup or stop the event loop from anywhere.
+
 ## 0.2.1 -- 2018-09-01
 
 - Use `FnOnce` for insertion in idle callbacks.
