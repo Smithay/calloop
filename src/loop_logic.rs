@@ -40,7 +40,7 @@ impl<Data: 'static> LoopHandle<Data> {
         &self,
         source: E,
         callback: F,
-    ) -> io::Result<Source<E, Data>> {
+    ) -> io::Result<Source<E>> {
         let dispatcher = source.make_dispatcher(callback);
 
         let token = self.list.borrow_mut().add_source(dispatcher);
@@ -62,7 +62,7 @@ impl<Data: 'static> LoopHandle<Data> {
     ///
     /// This callback will be called during a dispatching cycle when the event loop has
     /// finished processing all pending events from the sources and becomes idle.
-    pub fn insert_idle<F: FnOnce(&mut Data) + 'static>(&self, callback: F) -> Idle<Data> {
+    pub fn insert_idle<F: FnOnce(&mut Data) + 'static>(&self, callback: F) -> Idle {
         let mut opt_cb = Some(callback);
         let callback = Rc::new(RefCell::new(Some(Box::new(move |data: &mut Data| {
             if let Some(cb) = opt_cb.take() {

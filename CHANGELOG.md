@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **[breaking]** Erase the `Data` type parameter from `Source` and `Idle`, for
+  improved ergonomics.
+
 ## 0.2.2 -- 2018-09-10
 
 - Introduce an `EventLoop::run` method, as well as the `LoopSignal` handle allowing to

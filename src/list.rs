@@ -41,3 +41,13 @@ impl<Data> SourceList<Data> {
         self.sources[token.0] = None;
     }
 }
+
+pub(crate) trait ErasedList {
+    fn del_source(&mut self, token: Token);
+}
+
+impl<Data> ErasedList for SourceList<Data> {
+    fn del_source(&mut self, token: Token) {
+        self.del_source(token);
+    }
+}

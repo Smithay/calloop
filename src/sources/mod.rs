@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use mio::{Evented, Poll, PollOpt, Ready, Token};
 
-use list::SourceList;
+use list::ErasedList;
 
 pub mod channel;
 pub mod generic;
@@ -53,14 +53,14 @@ pub trait EventDispatcher<Data> {
 /// Dropping this handle does not deregister this source from the event loop,
 /// but will drop the wrapped `EventSource`, maybe rendering it inert depending on
 /// its implementation.
-pub struct Source<E: EventSource, Data> {
+pub struct Source<E: EventSource> {
     pub(crate) source: E,
     pub(crate) poll: Rc<Poll>,
-    pub(crate) list: Rc<RefCell<SourceList<Data>>>,
+    pub(crate) list: Rc<RefCell<ErasedList>>,
     pub(crate) token: Token,
 }
 
-impl<E: EventSource, Data> Source<E, Data> {
+impl<E: EventSource> Source<E> {
     /// Refresh the registration of this event source to the loop
     ///
     /// This can be necessary if the evented object provides methods to change
@@ -84,14 +84,14 @@ impl<E: EventSource, Data> Source<E, Data> {
     }
 }
 
-impl<E: EventSource, Data> ::std::ops::Deref for Source<E, Data> {
+impl<E: EventSource> ::std::ops::Deref for Source<E> {
     type Target = E;
     fn deref(&self) -> &E {
         &self.source
     }
 }
 
-impl<E: EventSource, Data> ::std::ops::DerefMut for Source<E, Data> {
+impl<E: EventSource> ::std::ops::DerefMut for Source<E> {
     fn deref_mut(&mut self) -> &mut E {
         &mut self.source
     }
@@ -101,13 +101,23 @@ impl<E: EventSource, Data> ::std::ops::DerefMut for Source<E, Data> {
 ///
 /// This handle allows you to cancel the callback. Dropping
 /// it will *not* cancel it.
-pub struct Idle<Data> {
-    pub(crate) callback: Rc<RefCell<Option<Box<FnMut(&mut Data)>>>>,
+pub struct Idle {
+    pub(crate) callback: Rc<RefCell<ErasedIdle>>,
 }
 
-impl<Data> Idle<Data> {
+impl Idle {
     /// Cancel the idle callback if it was not already run
     pub fn cancel(self) {
-        self.callback.borrow_mut().take();
+        self.callback.borrow_mut().cancel();
+    }
+}
+
+pub(crate) trait ErasedIdle {
+    fn cancel(&mut self);
+}
+
+impl<Data> ErasedIdle for Option<Box<FnMut(&mut Data)>> {
+    fn cancel(&mut self) {
+        self.take();
     }
 }
