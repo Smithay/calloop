@@ -84,7 +84,7 @@ extern crate mio_more;
 #[cfg(unix)]
 extern crate nix;
 
-pub use self::loop_logic::{EventLoop, LoopHandle};
+pub use self::loop_logic::{EventLoop, LoopHandle, LoopSignal};
 pub use self::sources::*;
 
 mod list;

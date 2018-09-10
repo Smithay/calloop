@@ -1,9 +1,11 @@
 use std::cell::RefCell;
 use std::io;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
-use mio::{Events, Poll};
+use mio::{Events, Poll, PollOpt, Ready, Registration, SetReadiness};
 
 use list::SourceList;
 use sources::{EventSource, Idle, Source};
@@ -78,21 +80,37 @@ impl<Data: 'static> LoopHandle<Data> {
 pub struct EventLoop<Data> {
     handle: LoopHandle<Data>,
     events_buffer: Events,
+    stop_signal: Arc<AtomicBool>,
+    wakeup: SetReadiness,
 }
 
-impl<Data> EventLoop<Data> {
+impl<Data: 'static> EventLoop<Data> {
     /// Create a new event loop
     ///
     /// It is backed by an `mio` provided machinnery, and will fail if the `mio`
     /// initialization fails.
     pub fn new() -> io::Result<EventLoop<Data>> {
+        let handle = LoopHandle {
+            poll: Rc::new(Poll::new()?),
+            list: Rc::new(RefCell::new(SourceList::new())),
+            idles: Rc::new(RefCell::new(Vec::new())),
+        };
+        // create a wakeup event source
+        let (wakeup_registration, wakeup_readiness) = Registration::new2();
+        let mut wakeup_source = ::sources::generic::Generic::new(wakeup_registration);
+        wakeup_source.set_interest(Ready::readable());
+        wakeup_source.set_pollopts(PollOpt::edge());
+        let readiness2 = wakeup_readiness.clone();
+        handle.insert_source(wakeup_source, move |_, _| {
+            // unmark the readiness so that the wakeup source is not
+            // processed in a loop
+            readiness2.set_readiness(Ready::empty()).unwrap();
+        })?;
         Ok(EventLoop {
-            handle: LoopHandle {
-                poll: Rc::new(Poll::new()?),
-                list: Rc::new(RefCell::new(SourceList::new())),
-                idles: Rc::new(RefCell::new(Vec::new())),
-            },
+            handle,
             events_buffer: Events::with_capacity(32),
+            stop_signal: Arc::new(AtomicBool::new(false)),
+            wakeup: wakeup_readiness,
         })
     }
 
@@ -150,6 +168,72 @@ impl<Data> EventLoop<Data> {
 
         Ok(())
     }
+
+    /// Get a signal to stop this event loop from running
+    ///
+    /// To be used in conjunction with the `run()` method.
+    pub fn get_signal(&self) -> LoopSignal {
+        LoopSignal {
+            signal: self.stop_signal.clone(),
+            wakeup: self.wakeup.clone(),
+        }
+    }
+
+    /// Run this event loop
+    ///
+    /// This will repeatedly try to dispatch events (see the `dispatch()` method) on
+    /// this event loop, waiting at most `timeout` every time.
+    ///
+    /// Between each dispatch wait, your provided callback will be called.
+    ///
+    /// You can use the `get_signal()` method to retrieve a way to stop or wakeup
+    /// the event loop from anywhere.
+    pub fn run<F>(
+        &mut self,
+        timeout: Option<Duration>,
+        data: &mut Data,
+        mut cb: F,
+    ) -> io::Result<()>
+    where
+        F: FnMut(&mut Data),
+    {
+        self.stop_signal.store(false, Ordering::Release);
+        while !self.stop_signal.load(Ordering::Acquire) {
+            self.dispatch(timeout, data)?;
+            cb(data);
+        }
+        Ok(())
+    }
+}
+
+/// A signal that can be shared between thread to stop or wakeup a running
+/// event loop
+#[derive(Clone)]
+pub struct LoopSignal {
+    signal: Arc<AtomicBool>,
+    wakeup: SetReadiness,
+}
+
+impl LoopSignal {
+    /// Stop the event loop
+    ///
+    /// Once this method is called, the next time the event loop has finished
+    /// waiting for events, it will return rather than starting to wait again.
+    ///
+    /// This is only usefull if you are using the `EventLoop::run()` method.
+    pub fn stop(&self) {
+        self.signal.store(true, Ordering::Release);
+    }
+
+    /// Wake up the event loop
+    ///
+    /// This sends a dummy event to the event loop to simulate the reception
+    /// of an event, making the wait return early. Called after `stop()`, this
+    /// ensures the event loop will terminate quickly if you specified a long
+    /// timeout (or no timeout at all) to the `dispatch` or `run` method.
+    pub fn wakeup(&self) {
+        self.wakeup.set_readiness(Ready::readable()).unwrap();
+    }
 }
 
 #[cfg(test)]
@@ -192,5 +276,36 @@ mod tests {
             .unwrap();
 
         assert!(!dispatched);
+    }
+
+    #[test]
+    fn wakeup() {
+        let mut event_loop = EventLoop::new().unwrap();
+
+        let signal = event_loop.get_signal();
+
+        ::std::thread::spawn(move || {
+            ::std::thread::sleep(Duration::from_millis(500));
+            signal.wakeup();
+        });
+
+        // the test should return
+        event_loop.dispatch(None, &mut ()).unwrap();
+    }
+
+    #[test]
+    fn wakeup_stop() {
+        let mut event_loop = EventLoop::new().unwrap();
+
+        let signal = event_loop.get_signal();
+
+        ::std::thread::spawn(move || {
+            ::std::thread::sleep(Duration::from_millis(500));
+            signal.stop();
+            signal.wakeup();
+        });
+
+        // the test should return
+        event_loop.run(None, &mut (), |_| {}).unwrap();
     }
 }
