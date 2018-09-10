@@ -129,7 +129,8 @@ impl<Data: 'static> EventLoop<Data> {
             }
 
             for event in &self.events_buffer {
-                if let Some(dispatcher) = self.handle.list.borrow().get_dispatcher(event.token()) {
+                let opt_dispatcher = self.handle.list.borrow().get_dispatcher(event.token());
+                if let Some(dispatcher) = opt_dispatcher {
                     dispatcher.borrow_mut().ready(event.readiness(), data);
                 }
             }

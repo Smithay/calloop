@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fixed a bug where inserting an event source from within a callback caused a panic.
 - **[breaking]** Erase the `Data` type parameter from `Source` and `Idle`, for
   improved ergonomics.
 
