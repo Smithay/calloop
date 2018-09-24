@@ -86,6 +86,7 @@ extern crate nix;
 
 pub use self::loop_logic::{EventLoop, LoopHandle, LoopSignal};
 pub use self::sources::*;
+pub use mio::{PollOpt, Ready};
 
 mod list;
 mod loop_logic;

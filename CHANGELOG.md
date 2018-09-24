@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- introduce `EventedRawFd` as a special case for the `Generic` event source, for when
+  you really have to manipulate raw fds
+
 ## 0.3.0 -- 2018-09-10
 
 - Fixed a bug where inserting an event source from within a callback caused a panic.
