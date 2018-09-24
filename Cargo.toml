@@ -16,6 +16,9 @@ codecov = { repository = "Smithay/calloop" }
 mio = "0.6"
 mio-more = "0.1"
 
+[dev-dependencies]
+lazycell = "=1.0.0"
+
 [target.'cfg(unix)'.dependencies]
 nix = "0.11"
 
