@@ -45,8 +45,7 @@ mod test {
                     assert!(evt.signal() == Signal::SIGUSR1);
                     *rcv = true;
                 },
-            )
-            .unwrap();
+            ).unwrap();
 
         // send ourselves a SIGUSR1
         kill(Pid::this(), Signal::SIGUSR1).unwrap();
@@ -70,8 +69,7 @@ mod test {
                 move |evt, rcv| {
                     *rcv = Some(evt.signal());
                 },
-            )
-            .unwrap();
+            ).unwrap();
 
         signal_source.add_signals(&[Signal::SIGUSR2]).unwrap();
 
@@ -97,8 +95,7 @@ mod test {
                 move |evt, rcv| {
                     *rcv = Some(evt.signal());
                 },
-            )
-            .unwrap();
+            ).unwrap();
 
         signal_source.remove_signals(&[Signal::SIGUSR2]).unwrap();
 

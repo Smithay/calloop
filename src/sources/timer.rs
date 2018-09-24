@@ -201,8 +201,7 @@ mod tests {
         let timer = evl_handle
             .insert_source(Timer::<()>::new(), move |((), _), f| {
                 *f = true;
-            })
-            .unwrap();
+            }).unwrap();
 
         timer
             .handle()
@@ -235,8 +234,7 @@ mod tests {
         let timer = evl_handle
             .insert_source(Timer::new(), |(val, _), fired: &mut Vec<u32>| {
                 fired.push(val);
-            })
-            .unwrap();
+            }).unwrap();
 
         timer
             .handle()
@@ -283,8 +281,7 @@ mod tests {
         let timer = evl_handle
             .insert_source(Timer::new(), |(val, _), fired: &mut Vec<u32>| {
                 fired.push(val)
-            })
-            .unwrap();
+            }).unwrap();
 
         let timeout1 = timer
             .handle()

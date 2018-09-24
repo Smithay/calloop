@@ -260,8 +260,7 @@ mod test {
                 assert_eq!(&buffer[..6], &[1, 2, 3, 4, 5, 6]);
 
                 *d = true;
-            })
-            .unwrap();
+            }).unwrap();
 
         event_loop
             .dispatch(Some(::std::time::Duration::from_millis(0)), &mut dispached)
