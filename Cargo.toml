@@ -1,6 +1,6 @@
 [package]
 name = "calloop"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Victor Berger <victor.berger@m4x.org>"]
 documentation = "https://docs.rs/calloop/"
 repository = "https://github.com/Smithay/calloop"
