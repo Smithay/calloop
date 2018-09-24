@@ -37,17 +37,25 @@ impl<Data> SourceList<Data> {
         }
     }
 
-    pub(crate) fn del_source(&mut self, token: Token) {
-        self.sources[token.0] = None;
+    // this method returns the removed dispatcher to ensure it is not dropped
+    // while the refcell containing the list is borrowed, as dropping a dispatcher
+    // can trigger the removal of an other source
+    pub(crate) fn del_source(
+        &mut self,
+        token: Token,
+    ) -> Option<Rc<RefCell<EventDispatcher<Data>>>> {
+        ::std::mem::replace(&mut self.sources[token.0], None)
     }
 }
 
 pub(crate) trait ErasedList {
-    fn del_source(&mut self, token: Token);
+    // this returs a value for the same reason as above, but we must erase its type
+    // due to the `Data` parameter, hence Box<Any>
+    fn del_source(&mut self, token: Token) -> Box<::std::any::Any>;
 }
 
-impl<Data> ErasedList for SourceList<Data> {
-    fn del_source(&mut self, token: Token) {
-        self.del_source(token);
+impl<Data: 'static> ErasedList for SourceList<Data> {
+    fn del_source(&mut self, token: Token) -> Box<::std::any::Any> {
+        Box::new(self.del_source(token))
     }
 }

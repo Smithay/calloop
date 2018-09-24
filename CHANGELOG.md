@@ -4,6 +4,7 @@
 
 - introduce `EventedRawFd` as a special case for the `Generic` event source, for when
   you really have to manipulate raw fds
+- Don't panic when the removal of an event source trigger the removal of an other one
 
 ## 0.3.0 -- 2018-09-10
 

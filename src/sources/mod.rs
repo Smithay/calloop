@@ -79,7 +79,7 @@ impl<E: EventSource> Source<E> {
     /// You are given the evented object back.
     pub fn remove(self) -> E {
         let _ = self.poll.deregister(&self.source);
-        self.list.borrow_mut().del_source(self.token);
+        let _dispatcher = self.list.borrow_mut().del_source(self.token);
         self.source
     }
 }
