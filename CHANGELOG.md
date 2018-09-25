@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.2 -- 2018-09-25
+
 - Fix the contents of `EventedRawFd` which was erroneously not public.
 
 ## 0.3.1 -- 2018-09-25
