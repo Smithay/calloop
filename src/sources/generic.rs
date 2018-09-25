@@ -131,7 +131,7 @@ impl<F: AsRawFd> Evented for EventedFd<F> {
 /// It does _not_ take ownership of the file descriptor, you are
 /// responsible for ensuring its correct lifetime.
 #[cfg(unix)]
-pub struct EventedRawFd(RawFd);
+pub struct EventedRawFd(pub RawFd);
 
 impl Evented for EventedRawFd {
     fn register(

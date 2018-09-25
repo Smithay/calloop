@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix the contents of `EventedRawFd` which was erroneously not public.
+
 ## 0.3.1 -- 2018-09-25
 
 - introduce `EventedRawFd` as a special case for the `Generic` event source, for when
