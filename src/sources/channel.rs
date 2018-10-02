@@ -15,8 +15,8 @@ use std::sync::mpsc::TryRecvError;
 
 use mio::{Evented, Poll, PollOpt, Ready, Token};
 
-use mio_more::channel::{self as miochan, Receiver};
-pub use mio_more::channel::{SendError, Sender, SyncSender, TrySendError};
+use mio_extras::channel::{self as miochan, Receiver};
+pub use mio_extras::channel::{SendError, Sender, SyncSender, TrySendError};
 
 use {EventDispatcher, EventSource};
 

@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use mio::{Evented, Poll, PollOpt, Ready, Token};
 
-use mio_more::timer as mio_timer;
+use mio_extras::timer as mio_timer;
 
 pub use self::mio_timer::Timeout;
 
@@ -89,12 +89,11 @@ impl<T> TimerHandle<T> {
     ///
     /// This method can fail if the timer already has too many pending timeouts, currently
     /// capacity is `2^16`.
-    pub fn add_timeout(&self, delay_from_now: Duration, data: T) -> Result<Timeout, ()> {
+    pub fn add_timeout(&self, delay_from_now: Duration, data: T) -> Timeout {
         self.inner
             .lock()
             .unwrap()
             .set_timeout(delay_from_now, data)
-            .map_err(|_| ())
     }
 
     /// Cancel a previsouly set timeout and retrieve the associated data
@@ -205,8 +204,7 @@ mod tests {
 
         timer
             .handle()
-            .add_timeout(Duration::from_millis(300), ())
-            .unwrap();
+            .add_timeout(Duration::from_millis(300), ());
 
         event_loop
             .dispatch(Some(::std::time::Duration::from_millis(100)), &mut fired)
@@ -238,16 +236,13 @@ mod tests {
 
         timer
             .handle()
-            .add_timeout(Duration::from_millis(300), 1)
-            .unwrap();
+            .add_timeout(Duration::from_millis(300), 1);
         timer
             .handle()
-            .add_timeout(Duration::from_millis(100), 2)
-            .unwrap();
+            .add_timeout(Duration::from_millis(100), 2);
         timer
             .handle()
-            .add_timeout(Duration::from_millis(600), 3)
-            .unwrap();
+            .add_timeout(Duration::from_millis(600), 3);
 
         // 3 dispatches as each returns once at least one event occured
 
@@ -285,16 +280,13 @@ mod tests {
 
         let timeout1 = timer
             .handle()
-            .add_timeout(Duration::from_millis(300), 1)
-            .unwrap();
+            .add_timeout(Duration::from_millis(300), 1);
         let timeout2 = timer
             .handle()
-            .add_timeout(Duration::from_millis(100), 2)
-            .unwrap();
+            .add_timeout(Duration::from_millis(100), 2);
         let timeout3 = timer
             .handle()
-            .add_timeout(Duration::from_millis(600), 3)
-            .unwrap();
+            .add_timeout(Duration::from_millis(600), 3);
 
         // 3 dispatches as each returns once at least one event occured
         //

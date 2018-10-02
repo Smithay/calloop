@@ -80,7 +80,7 @@
 #![warn(missing_docs)]
 
 extern crate mio;
-extern crate mio_more;
+extern crate mio_extras;
 #[cfg(unix)]
 extern crate nix;
 

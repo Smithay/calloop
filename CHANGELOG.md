@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Breaking** Use `mio-extras` instead of `mio-more` which is not maintained.
+
 ## 0.3.2 -- 2018-09-25
 
 - Fix the contents of `EventedRawFd` which was erroneously not public.
