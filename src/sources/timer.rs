@@ -90,10 +90,7 @@ impl<T> TimerHandle<T> {
     /// This method can fail if the timer already has too many pending timeouts, currently
     /// capacity is `2^16`.
     pub fn add_timeout(&self, delay_from_now: Duration, data: T) -> Timeout {
-        self.inner
-            .lock()
-            .unwrap()
-            .set_timeout(delay_from_now, data)
+        self.inner.lock().unwrap().set_timeout(delay_from_now, data)
     }
 
     /// Cancel a previsouly set timeout and retrieve the associated data
@@ -202,9 +199,7 @@ mod tests {
                 *f = true;
             }).unwrap();
 
-        timer
-            .handle()
-            .add_timeout(Duration::from_millis(300), ());
+        timer.handle().add_timeout(Duration::from_millis(300), ());
 
         event_loop
             .dispatch(Some(::std::time::Duration::from_millis(100)), &mut fired)
@@ -234,15 +229,9 @@ mod tests {
                 fired.push(val);
             }).unwrap();
 
-        timer
-            .handle()
-            .add_timeout(Duration::from_millis(300), 1);
-        timer
-            .handle()
-            .add_timeout(Duration::from_millis(100), 2);
-        timer
-            .handle()
-            .add_timeout(Duration::from_millis(600), 3);
+        timer.handle().add_timeout(Duration::from_millis(300), 1);
+        timer.handle().add_timeout(Duration::from_millis(100), 2);
+        timer.handle().add_timeout(Duration::from_millis(600), 3);
 
         // 3 dispatches as each returns once at least one event occured
 
@@ -278,15 +267,9 @@ mod tests {
                 fired.push(val)
             }).unwrap();
 
-        let timeout1 = timer
-            .handle()
-            .add_timeout(Duration::from_millis(300), 1);
-        let timeout2 = timer
-            .handle()
-            .add_timeout(Duration::from_millis(100), 2);
-        let timeout3 = timer
-            .handle()
-            .add_timeout(Duration::from_millis(600), 3);
+        let timeout1 = timer.handle().add_timeout(Duration::from_millis(300), 1);
+        let timeout2 = timer.handle().add_timeout(Duration::from_millis(100), 2);
+        let timeout3 = timer.handle().add_timeout(Duration::from_millis(600), 3);
 
         // 3 dispatches as each returns once at least one event occured
         //
