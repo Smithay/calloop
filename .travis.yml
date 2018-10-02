@@ -52,6 +52,7 @@ before_script:
         # sanity check, tarpaulin may fail to run after a rust upgrade and then needs recompilation
         cargo tarpaulin --version || env RUSTFLAGS="--cfg procmacro2_semver_exempt" cargo install cargo-tarpaulin --force
       elif [ -n "$BUILD_DOC" ]; then
+        export RUST_BACKTRACE=1
         which cargo-install-update || cargo install cargo-update
         cargo install-update cargo-update
         cargo install-update -i cargo-readme
