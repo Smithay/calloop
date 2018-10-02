@@ -79,14 +79,13 @@
 
 #![warn(missing_docs)]
 
-extern crate mio;
+pub extern crate mio;
 extern crate mio_extras;
 #[cfg(unix)]
 extern crate nix;
 
 pub use self::loop_logic::{EventLoop, LoopHandle, LoopSignal};
 pub use self::sources::*;
-pub use mio::{PollOpt, Ready};
 
 mod list;
 mod loop_logic;
