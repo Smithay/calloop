@@ -235,7 +235,7 @@ impl<Data, E: Evented + 'static, F: FnMut(Event<E>, &mut Data)> EventDispatcher<
 
 #[cfg(test)]
 mod test {
-    use std::io::{Read, Write};
+    use std::io::{self, Read, Write};
 
     use super::{Event, Generic};
     #[cfg(unix)]
@@ -265,7 +265,8 @@ mod test {
                 assert_eq!(&buffer[..6], &[1, 2, 3, 4, 5, 6]);
 
                 *d = true;
-            }).unwrap();
+            }).map_err(Into::<io::Error>::into)
+            .unwrap();
 
         event_loop
             .dispatch(Some(::std::time::Duration::from_millis(0)), &mut dispached)

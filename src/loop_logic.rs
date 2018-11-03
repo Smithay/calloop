@@ -31,6 +31,20 @@ impl<Data> Clone for LoopHandle<Data> {
     }
 }
 
+/// An error generated when trying to insert an event source
+pub struct InsertError<E> {
+    /// The source that could not be inserted
+    pub source: E,
+    /// The generated error
+    pub error: io::Error,
+}
+
+impl<E> From<InsertError<E>> for io::Error {
+    fn from(e: InsertError<E>) -> io::Error {
+        e.error
+    }
+}
+
 impl<Data: 'static> LoopHandle<Data> {
     /// Insert an new event source in the loop
     ///
@@ -40,7 +54,7 @@ impl<Data: 'static> LoopHandle<Data> {
         &self,
         source: E,
         callback: F,
-    ) -> io::Result<Source<E>> {
+    ) -> Result<Source<E>, InsertError<E>> {
         let dispatcher = source.make_dispatcher(callback);
 
         let token = self.list.borrow_mut().add_source(dispatcher);
@@ -48,7 +62,9 @@ impl<Data: 'static> LoopHandle<Data> {
         let interest = source.interest();
         let opt = source.pollopts();
 
-        self.poll.register(&source, token, interest, opt)?;
+        if let Err(e) = self.poll.register(&source, token, interest, opt) {
+            return Err(InsertError { source, error: e });
+        }
 
         Ok(Source {
             source,

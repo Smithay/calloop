@@ -153,7 +153,8 @@ mod tests {
                 Event::Closed => {
                     got.1 = true;
                 }
-            }).unwrap();
+            }).map_err(Into::<io::Error>::into)
+            .unwrap();
 
         // nothing is sent, nothing is received
         event_loop
