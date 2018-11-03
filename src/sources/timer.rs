@@ -182,6 +182,7 @@ impl<Data, T, F: FnMut((T, TimerHandle<T>), &mut Data)> EventDispatcher<Data>
 
 #[cfg(test)]
 mod tests {
+    use std::io;
     use std::time::Duration;
 
     use super::*;
@@ -197,7 +198,8 @@ mod tests {
         let timer = evl_handle
             .insert_source(Timer::<()>::new(), move |((), _), f| {
                 *f = true;
-            }).unwrap();
+            }).map_err(Into::<io::Error>::into)
+            .unwrap();
 
         timer.handle().add_timeout(Duration::from_millis(300), ());
 
@@ -227,7 +229,8 @@ mod tests {
         let timer = evl_handle
             .insert_source(Timer::new(), |(val, _), fired: &mut Vec<u32>| {
                 fired.push(val);
-            }).unwrap();
+            }).map_err(Into::<io::Error>::into)
+            .unwrap();
 
         timer.handle().add_timeout(Duration::from_millis(300), 1);
         timer.handle().add_timeout(Duration::from_millis(100), 2);
@@ -265,7 +268,8 @@ mod tests {
         let timer = evl_handle
             .insert_source(Timer::new(), |(val, _), fired: &mut Vec<u32>| {
                 fired.push(val)
-            }).unwrap();
+            }).map_err(Into::<io::Error>::into)
+            .unwrap();
 
         let timeout1 = timer.handle().add_timeout(Duration::from_millis(300), 1);
         let timeout2 = timer.handle().add_timeout(Duration::from_millis(100), 2);

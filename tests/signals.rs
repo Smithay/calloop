@@ -18,6 +18,7 @@ mod test {
     extern crate calloop;
     extern crate nix;
 
+    use std::io;
     use std::time::Duration;
 
     use self::calloop::signals::{Signal, Signals};
@@ -45,7 +46,8 @@ mod test {
                     assert!(evt.signal() == Signal::SIGUSR1);
                     *rcv = true;
                 },
-            ).unwrap();
+            ).map_err(Into::<io::Error>::into)
+            .unwrap();
 
         // send ourselves a SIGUSR1
         kill(Pid::this(), Signal::SIGUSR1).unwrap();
@@ -69,7 +71,8 @@ mod test {
                 move |evt, rcv| {
                     *rcv = Some(evt.signal());
                 },
-            ).unwrap();
+            ).map_err(Into::<io::Error>::into)
+            .unwrap();
 
         signal_source.add_signals(&[Signal::SIGUSR2]).unwrap();
 
@@ -95,7 +98,8 @@ mod test {
                 move |evt, rcv| {
                     *rcv = Some(evt.signal());
                 },
-            ).unwrap();
+            ).map_err(Into::<io::Error>::into)
+            .unwrap();
 
         signal_source.remove_signals(&[Signal::SIGUSR2]).unwrap();
 
