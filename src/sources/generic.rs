@@ -54,6 +54,11 @@ impl<E: Evented + 'static> Generic<E> {
         self.pollopts = pollopts;
     }
 
+    /// Get a clone of the inner `Rc` wrapping your event source
+    pub fn clone_inner(&self) -> Rc<RefCell<E>> {
+        self.inner.clone()
+    }
+
     /// Unwrap the `Generic` source to retrieve the underlying `Evented`.
     ///
     /// If you didn't clone the `Rc<RefCell<E>>` from the `Event<E>` you received,
