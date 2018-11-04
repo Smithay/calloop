@@ -22,7 +22,7 @@ pub struct Generic<E: Evented + 'static> {
 }
 
 impl<E: Evented + 'static> Generic<E> {
-    /// Wrap a `Evented` type into a `Generic` event source
+    /// Wrap an `Evented` type into a `Generic` event source
     ///
     /// It is initialized with no interest nor poll options,
     /// as such you should set them using the `set_interest`
@@ -31,6 +31,20 @@ impl<E: Evented + 'static> Generic<E> {
     pub fn new(source: E) -> Generic<E> {
         Generic {
             inner: Rc::new(RefCell::new(source)),
+            interest: Ready::empty(),
+            pollopts: PollOpt::empty(),
+        }
+    }
+
+    /// Wrap an `Evented` type from an `Rc` into a `Generic` event source
+    ///
+    /// Same as the `new` method, but you can provide a source that is alreay
+    /// in a reference counted pointer, so that `Generic` won't add a new
+    /// layer. This is useful if you need to share this source accross multiple
+    /// modules, and `calloop` is not the first one to be initialized.
+    pub fn from_rc(source: Rc<RefCell<E>>) -> Generic<E> {
+        Generic {
+            inner: source,
             interest: Ready::empty(),
             pollopts: PollOpt::empty(),
         }
