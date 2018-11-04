@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.0 -- 2018-11-04
+
 - **Breaking** Use `mio-extras` instead of `mio-more` which is not maintained.
 - **Breaking** Reexport `mio` rather than selectively re-exporting some of its types.
 - Add methods to `Generic` to retrive the inner `Rc` and construct it from an `Rc`
