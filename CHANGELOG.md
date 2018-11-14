@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Implement `Debug` for `InsertError`, `Generic` and `EventedRawFd`.
+
 ## 0.4.0 -- 2018-11-04
 
 - **Breaking** Use `mio-extras` instead of `mio-more` which is not maintained.
