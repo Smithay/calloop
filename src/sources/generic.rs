@@ -15,6 +15,7 @@ use {EventDispatcher, EventSource};
 /// It will simply forward the readiness and an acces to
 /// the wrapped `Evented` type to the suer callback. See
 /// the `Event` type in this module.
+#[derive(Debug)]
 pub struct Generic<E: Evented + 'static> {
     inner: Rc<RefCell<E>>,
     interest: Ready,
@@ -150,6 +151,7 @@ impl<F: AsRawFd> Evented for EventedFd<F> {
 /// It does _not_ take ownership of the file descriptor, you are
 /// responsible for ensuring its correct lifetime.
 #[cfg(unix)]
+#[derive(Debug)]
 pub struct EventedRawFd(pub RawFd);
 
 impl Evented for EventedRawFd {

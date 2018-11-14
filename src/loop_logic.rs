@@ -32,6 +32,7 @@ impl<Data> Clone for LoopHandle<Data> {
 }
 
 /// An error generated when trying to insert an event source
+#[derive(Debug)]
 pub struct InsertError<E> {
     /// The source that could not be inserted
     pub source: E,
