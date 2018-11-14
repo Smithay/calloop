@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.1 -- 2018-11-14
+
 - Disable the `sources::signal` module on FreeBSD so that the library can be built on this
   platform.
 
