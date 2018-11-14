@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Disable the `sources::signal` module on FreeBSD so that the library can be built on this
+  platform.
+
 ## 0.4.0 -- 2018-11-04
 
 - **Breaking** Use `mio-extras` instead of `mio-more` which is not maintained.

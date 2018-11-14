@@ -8,7 +8,7 @@ use list::ErasedList;
 
 pub mod channel;
 pub mod generic;
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 pub mod signals;
 pub mod timer;
 
