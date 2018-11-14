@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Implement `Debug` for `InsertError`, `Generic` and `EventedRawFd`.
+- Implement `Debug` for `InsertError`.
 
 ## 0.4.0 -- 2018-11-04
 
