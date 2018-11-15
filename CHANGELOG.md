@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.2 -- 2018-11-15
+
 - Implement `Debug` for `InsertError`.
 
 ## 0.4.1 -- 2018-11-14
