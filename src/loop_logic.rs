@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::fmt::{self, Debug, Formatter};
 use std::io;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -37,6 +38,12 @@ pub struct InsertError<E> {
     pub source: E,
     /// The generated error
     pub error: io::Error,
+}
+
+impl<E> Debug for InsertError<E> {
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(formatter, "{:?}", self.error)
+    }
 }
 
 impl<E> From<InsertError<E>> for io::Error {
