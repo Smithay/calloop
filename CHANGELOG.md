@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Update `mio` dependency
+
 ## 0.4.2 -- 2018-11-15
 
 - Implement `Debug` for `InsertError`.
