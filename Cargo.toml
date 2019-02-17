@@ -1,11 +1,12 @@
 [package]
 name = "calloop"
-version = "0.4.2"
+version = "0.4.3"
 authors = ["Victor Berger <victor.berger@m4x.org>"]
 documentation = "https://docs.rs/calloop/"
 repository = "https://github.com/Smithay/calloop"
 license = "MIT"
 description = "A callback-based event loop"
+keywords = [ "events", "loop", "callback" ]
 autotests = false
 
 [badges]
@@ -20,7 +21,7 @@ mio-extras = "2.0"
 lazycell = "=1.0.0"
 
 [target.'cfg(unix)'.dependencies]
-nix = "0.12"
+nix = "0.13"
 
 [[test]]
 name = "signals"
