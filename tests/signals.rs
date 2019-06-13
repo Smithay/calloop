@@ -46,7 +46,8 @@ mod test {
                     assert!(evt.signal() == Signal::SIGUSR1);
                     *rcv = true;
                 },
-            ).map_err(Into::<io::Error>::into)
+            )
+            .map_err(Into::<io::Error>::into)
             .unwrap();
 
         // send ourselves a SIGUSR1
@@ -71,7 +72,8 @@ mod test {
                 move |evt, rcv| {
                     *rcv = Some(evt.signal());
                 },
-            ).map_err(Into::<io::Error>::into)
+            )
+            .map_err(Into::<io::Error>::into)
             .unwrap();
 
         signal_source.add_signals(&[Signal::SIGUSR2]).unwrap();
@@ -98,7 +100,8 @@ mod test {
                 move |evt, rcv| {
                     *rcv = Some(evt.signal());
                 },
-            ).map_err(Into::<io::Error>::into)
+            )
+            .map_err(Into::<io::Error>::into)
             .unwrap();
 
         signal_source.remove_signals(&[Signal::SIGUSR2]).unwrap();
