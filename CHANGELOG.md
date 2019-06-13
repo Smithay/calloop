@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.4.4 -- 2019-06-13
+
+- Update `nix` dependency to `0.14`
+
 ## 0.4.3 -- 2019-02-17
 
 - Update `mio` dependency
