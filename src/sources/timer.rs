@@ -198,7 +198,8 @@ mod tests {
         let timer = evl_handle
             .insert_source(Timer::<()>::new(), move |((), _), f| {
                 *f = true;
-            }).map_err(Into::<io::Error>::into)
+            })
+            .map_err(Into::<io::Error>::into)
             .unwrap();
 
         timer.handle().add_timeout(Duration::from_millis(300), ());
@@ -229,7 +230,8 @@ mod tests {
         let timer = evl_handle
             .insert_source(Timer::new(), |(val, _), fired: &mut Vec<u32>| {
                 fired.push(val);
-            }).map_err(Into::<io::Error>::into)
+            })
+            .map_err(Into::<io::Error>::into)
             .unwrap();
 
         timer.handle().add_timeout(Duration::from_millis(300), 1);
@@ -268,7 +270,8 @@ mod tests {
         let timer = evl_handle
             .insert_source(Timer::new(), |(val, _), fired: &mut Vec<u32>| {
                 fired.push(val)
-            }).map_err(Into::<io::Error>::into)
+            })
+            .map_err(Into::<io::Error>::into)
             .unwrap();
 
         let timeout1 = timer.handle().add_timeout(Duration::from_millis(300), 1);

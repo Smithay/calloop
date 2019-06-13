@@ -279,7 +279,8 @@ mod test {
                 assert_eq!(&buffer[..6], &[1, 2, 3, 4, 5, 6]);
 
                 *d = true;
-            }).map_err(Into::<io::Error>::into)
+            })
+            .map_err(Into::<io::Error>::into)
             .unwrap();
 
         event_loop
