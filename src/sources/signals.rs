@@ -11,6 +11,7 @@
 //! they'll inherit their parent signal mask.
 
 use std::cell::RefCell;
+use std::convert::TryFrom;
 use std::io;
 use std::os::raw::c_int;
 use std::os::unix::io::AsRawFd;
@@ -34,7 +35,7 @@ pub struct Event {
 impl Event {
     /// Retrieve the signal number that was receive
     pub fn signal(&self) -> Signal {
-        Signal::from_c_int(self.info.ssi_signo as c_int).unwrap()
+        Signal::try_from(self.info.ssi_signo as c_int).unwrap()
     }
 
     /// Access the full `siginfo_t` associated with this signal event

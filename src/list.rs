@@ -26,7 +26,10 @@ impl<Data> SourceList<Data> {
         }
     }
 
-    pub(crate) fn add_source(&mut self, dispatcher: Rc<RefCell<dyn EventDispatcher<Data>>>) -> Token {
+    pub(crate) fn add_source(
+        &mut self,
+        dispatcher: Rc<RefCell<dyn EventDispatcher<Data>>>,
+    ) -> Token {
         let free_id = self.sources.iter().position(Option::is_none);
         if let Some(id) = free_id {
             self.sources[id] = Some(dispatcher);

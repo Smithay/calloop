@@ -22,7 +22,7 @@ mio-extras = "2.0"
 lazycell = "=1.0.0"
 
 [target.'cfg(unix)'.dependencies]
-nix = "0.14.1"
+nix = "0.16"
 
 [[test]]
 name = "signals"

@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Update to 2018 edition
+- Update `nix` dependency to `0.16`
 
 ## 0.4.4 -- 2019-06-13
 
