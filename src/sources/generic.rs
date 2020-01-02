@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 use mio::{Evented, Poll, PollOpt, Ready, Token};
 
-use {EventDispatcher, EventSource};
+use crate::{EventDispatcher, EventSource};
 
 /// A generic event source wrapping an `Evented` type
 ///
@@ -218,7 +218,7 @@ impl<E: Evented + 'static> EventSource for Generic<E> {
     fn make_dispatcher<Data: 'static, F: FnMut(Event<E>, &mut Data) + 'static>(
         &self,
         callback: F,
-    ) -> Rc<RefCell<EventDispatcher<Data>>> {
+    ) -> Rc<RefCell<dyn EventDispatcher<Data>>> {
         Rc::new(RefCell::new(Dispatcher {
             _data: ::std::marker::PhantomData,
             inner: self.inner.clone(),
@@ -257,7 +257,7 @@ mod test {
     fn dispatch_unix() {
         use std::os::unix::net::UnixStream;
 
-        let mut event_loop = ::EventLoop::new().unwrap();
+        let mut event_loop = crate::EventLoop::new().unwrap();
 
         let handle = event_loop.handle();
 

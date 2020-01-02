@@ -22,7 +22,7 @@ use mio_extras::timer as mio_timer;
 
 pub use self::mio_timer::Timeout;
 
-use {EventDispatcher, EventSource};
+use crate::{EventDispatcher, EventSource};
 
 /// A Timer event source
 ///
@@ -148,7 +148,7 @@ impl<T: 'static> EventSource for Timer<T> {
     fn make_dispatcher<Data: 'static, F: FnMut((T, TimerHandle<T>), &mut Data) + 'static>(
         &self,
         callback: F,
-    ) -> Rc<RefCell<EventDispatcher<Data>>> {
+    ) -> Rc<RefCell<dyn EventDispatcher<Data>>> {
         Rc::new(RefCell::new(Dispatcher {
             _data: ::std::marker::PhantomData,
             timer: self.inner.clone(),
@@ -189,7 +189,7 @@ mod tests {
 
     #[test]
     fn single_timer() {
-        let mut event_loop = ::EventLoop::new().unwrap();
+        let mut event_loop = crate::EventLoop::new().unwrap();
 
         let evl_handle = event_loop.handle();
 
@@ -221,7 +221,7 @@ mod tests {
 
     #[test]
     fn multi_timout_order() {
-        let mut event_loop = ::EventLoop::new().unwrap();
+        let mut event_loop = crate::EventLoop::new().unwrap();
 
         let evl_handle = event_loop.handle();
 
@@ -261,7 +261,7 @@ mod tests {
 
     #[test]
     fn timer_cancel() {
-        let mut event_loop = ::EventLoop::new().unwrap();
+        let mut event_loop = crate::EventLoop::new().unwrap();
 
         let evl_handle = event_loop.handle();
 

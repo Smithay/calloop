@@ -8,8 +8,8 @@ use std::time::Duration;
 
 use mio::{Events, Poll, PollOpt, Ready, Registration, SetReadiness};
 
-use list::SourceList;
-use sources::{EventSource, Idle, Source};
+use crate::list::SourceList;
+use crate::sources::{EventSource, Idle, Source};
 
 /// An handle to an event loop
 ///
@@ -19,7 +19,7 @@ use sources::{EventSource, Idle, Source};
 pub struct LoopHandle<Data> {
     poll: Rc<Poll>,
     list: Rc<RefCell<SourceList<Data>>>,
-    idles: Rc<RefCell<Vec<Rc<RefCell<Option<Box<FnMut(&mut Data)>>>>>>>,
+    idles: Rc<RefCell<Vec<Rc<RefCell<Option<Box<dyn FnMut(&mut Data)>>>>>>>,
 }
 
 impl<Data> Clone for LoopHandle<Data> {
@@ -91,7 +91,7 @@ impl<Data: 'static> LoopHandle<Data> {
             if let Some(cb) = opt_cb.take() {
                 cb(data);
             }
-        }) as Box<FnMut(&mut Data)>)));
+        }) as Box<dyn FnMut(&mut Data)>)));
         self.idles.borrow_mut().push(callback.clone());
         Idle { callback }
     }
@@ -120,7 +120,7 @@ impl<Data: 'static> EventLoop<Data> {
         };
         // create a wakeup event source
         let (wakeup_registration, wakeup_readiness) = Registration::new2();
-        let mut wakeup_source = ::sources::generic::Generic::new(wakeup_registration);
+        let mut wakeup_source = crate::sources::generic::Generic::new(wakeup_registration);
         wakeup_source.set_interest(Ready::readable());
         wakeup_source.set_pollopts(PollOpt::edge());
         let readiness2 = wakeup_readiness.clone();

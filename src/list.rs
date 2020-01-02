@@ -3,10 +3,10 @@ use std::rc::Rc;
 
 use mio::Token;
 
-use sources::EventDispatcher;
+use crate::sources::EventDispatcher;
 
 pub(crate) struct SourceList<Data> {
-    sources: Vec<Option<Rc<RefCell<EventDispatcher<Data>>>>>,
+    sources: Vec<Option<Rc<RefCell<dyn EventDispatcher<Data>>>>>,
 }
 
 impl<Data> SourceList<Data> {
@@ -19,14 +19,14 @@ impl<Data> SourceList<Data> {
     pub(crate) fn get_dispatcher(
         &self,
         token: Token,
-    ) -> Option<Rc<RefCell<EventDispatcher<Data>>>> {
+    ) -> Option<Rc<RefCell<dyn EventDispatcher<Data>>>> {
         match self.sources.get(token.0) {
             Some(&Some(ref dispatcher)) => Some(dispatcher.clone()),
             _ => None,
         }
     }
 
-    pub(crate) fn add_source(&mut self, dispatcher: Rc<RefCell<EventDispatcher<Data>>>) -> Token {
+    pub(crate) fn add_source(&mut self, dispatcher: Rc<RefCell<dyn EventDispatcher<Data>>>) -> Token {
         let free_id = self.sources.iter().position(Option::is_none);
         if let Some(id) = free_id {
             self.sources[id] = Some(dispatcher);
@@ -43,7 +43,7 @@ impl<Data> SourceList<Data> {
     pub(crate) fn del_source(
         &mut self,
         token: Token,
-    ) -> Option<Rc<RefCell<EventDispatcher<Data>>>> {
+    ) -> Option<Rc<RefCell<dyn EventDispatcher<Data>>>> {
         ::std::mem::replace(&mut self.sources[token.0], None)
     }
 }
@@ -51,11 +51,11 @@ impl<Data> SourceList<Data> {
 pub(crate) trait ErasedList {
     // this returs a value for the same reason as above, but we must erase its type
     // due to the `Data` parameter, hence Box<Any>
-    fn del_source(&mut self, token: Token) -> Box<::std::any::Any>;
+    fn del_source(&mut self, token: Token) -> Box<dyn (::std::any::Any)>;
 }
 
 impl<Data: 'static> ErasedList for SourceList<Data> {
-    fn del_source(&mut self, token: Token) -> Box<::std::any::Any> {
+    fn del_source(&mut self, token: Token) -> Box<dyn (::std::any::Any)> {
         Box::new(self.del_source(token))
     }
 }

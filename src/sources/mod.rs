@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use mio::{Evented, Poll, PollOpt, Ready, Token};
 
-use list::ErasedList;
+use crate::list::ErasedList;
 
 pub mod channel;
 pub mod generic;
@@ -31,7 +31,7 @@ pub trait EventSource: Evented {
     fn make_dispatcher<Data: 'static, F: FnMut(Self::Event, &mut Data) + 'static>(
         &self,
         callback: F,
-    ) -> Rc<RefCell<EventDispatcher<Data>>>;
+    ) -> Rc<RefCell<dyn EventDispatcher<Data>>>;
 }
 
 /// An event dispatcher
@@ -56,7 +56,7 @@ pub trait EventDispatcher<Data> {
 pub struct Source<E: EventSource> {
     pub(crate) source: E,
     pub(crate) poll: Rc<Poll>,
-    pub(crate) list: Rc<RefCell<ErasedList>>,
+    pub(crate) list: Rc<RefCell<dyn ErasedList>>,
     pub(crate) token: Token,
 }
 
@@ -102,7 +102,7 @@ impl<E: EventSource> ::std::ops::DerefMut for Source<E> {
 /// This handle allows you to cancel the callback. Dropping
 /// it will *not* cancel it.
 pub struct Idle {
-    pub(crate) callback: Rc<RefCell<ErasedIdle>>,
+    pub(crate) callback: Rc<RefCell<dyn ErasedIdle>>,
 }
 
 impl Idle {
@@ -116,7 +116,7 @@ pub(crate) trait ErasedIdle {
     fn cancel(&mut self);
 }
 
-impl<Data> ErasedIdle for Option<Box<FnMut(&mut Data)>> {
+impl<Data> ErasedIdle for Option<Box<dyn FnMut(&mut Data)>> {
     fn cancel(&mut self) {
         self.take();
     }

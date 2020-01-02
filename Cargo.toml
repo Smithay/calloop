@@ -8,6 +8,7 @@ license = "MIT"
 description = "A callback-based event loop"
 keywords = [ "events", "loop", "callback" ]
 autotests = false
+edition = "2018"
 
 [badges]
 travis-ci = { repository = "Smithay/calloop" }
