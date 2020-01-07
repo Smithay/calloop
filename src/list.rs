@@ -49,6 +49,10 @@ impl<Data> SourceList<Data> {
     ) -> Option<Rc<RefCell<dyn EventDispatcher<Data>>>> {
         ::std::mem::replace(&mut self.sources[token.0], None)
     }
+
+    pub(crate) fn all(&self) -> Vec<Rc<RefCell<dyn EventDispatcher<Data>>>> {
+        self.sources.iter().flat_map(|x| x).cloned().collect()
+    }
 }
 
 pub(crate) trait ErasedList {

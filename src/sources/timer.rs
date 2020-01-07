@@ -11,16 +11,19 @@
 //! [`mio_more::timer`](https://docs.rs/mio-more/*/mio_more/timer/index.html).
 
 use std::cell::RefCell;
+use std::collections::BinaryHeap;
 use std::io;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
+use std::time::{Duration, Instant};
 
-use mio::{Evented, Poll, PollOpt, Ready, Token};
-
-use mio_extras::timer as mio_timer;
-
-pub use self::mio_timer::Timeout;
+use mio::{
+    event::{Event as MioEvent, Source as MioSource},
+    Interest, Waker,
+};
 
 use crate::{EventDispatcher, EventSource};
 
@@ -30,7 +33,7 @@ use crate::{EventDispatcher, EventSource};
 /// an handle inside the event callback, allowing you to set new timeouts
 /// as a response to a timeout being reached (for reccuring ticks for example).
 pub struct Timer<T> {
-    inner: Arc<Mutex<mio_timer::Timer<T>>>,
+    inner: Arc<Mutex<TimerInner<T>>>,
 }
 
 impl<T> Timer<T> {
@@ -39,18 +42,7 @@ impl<T> Timer<T> {
     /// Default time resolution is 100ms
     pub fn new() -> Timer<T> {
         Timer {
-            inner: Arc::new(Mutex::new(mio_timer::Builder::default().build())),
-        }
-    }
-
-    /// Create a new timer with a specific time resolution
-    pub fn with_resolution(resolution: Duration) -> Timer<T> {
-        Timer {
-            inner: Arc::new(Mutex::new(
-                mio_timer::Builder::default()
-                    .tick_duration(resolution)
-                    .build(),
-            )),
+            inner: Arc::new(Mutex::new(TimerInner::new())),
         }
     }
 
@@ -67,7 +59,7 @@ impl<T> Timer<T> {
 /// This handle can be cloned, and can be sent accross thread as long
 /// as `T: Send`.
 pub struct TimerHandle<T> {
-    inner: Arc<Mutex<mio_timer::Timer<T>>>,
+    inner: Arc<Mutex<TimerInner<T>>>,
 }
 
 // Manual impl of `Clone` as #[derive(Clone)] adds a `T: Clone` bound
@@ -79,6 +71,11 @@ impl<T> Clone for TimerHandle<T> {
     }
 }
 
+/// An itentifier to cancel a timeout if necessary
+pub struct Timeout {
+    counter: u32,
+}
+
 impl<T> TimerHandle<T> {
     /// Set a new timeout
     ///
@@ -86,11 +83,11 @@ impl<T> TimerHandle<T> {
     ///
     /// The returned `Timeout` can be used to cancel it. You can drop it if you don't
     /// plan to cancel this timeout.
-    ///
-    /// This method can fail if the timer already has too many pending timeouts, currently
-    /// capacity is `2^16`.
     pub fn add_timeout(&self, delay_from_now: Duration, data: T) -> Timeout {
-        self.inner.lock().unwrap().set_timeout(delay_from_now, data)
+        self.inner
+            .lock()
+            .unwrap()
+            .insert(Instant::now() + delay_from_now, data)
     }
 
     /// Cancel a previsouly set timeout and retrieve the associated data
@@ -98,60 +95,37 @@ impl<T> TimerHandle<T> {
     /// This method returns `None` if the timeout does not exist (it has already fired
     /// or has already been cancelled).
     pub fn cancel_timeout(&self, timeout: &Timeout) -> Option<T> {
-        self.inner.lock().unwrap().cancel_timeout(timeout)
-    }
-}
-
-impl<T> Evented for Timer<T> {
-    fn register(
-        &self,
-        poll: &Poll,
-        token: Token,
-        interest: Ready,
-        opts: PollOpt,
-    ) -> io::Result<()> {
-        self.inner
-            .lock()
-            .unwrap()
-            .register(poll, token, interest, opts)
-    }
-
-    fn reregister(
-        &self,
-        poll: &Poll,
-        token: Token,
-        interest: Ready,
-        opts: PollOpt,
-    ) -> io::Result<()> {
-        self.inner
-            .lock()
-            .unwrap()
-            .reregister(poll, token, interest, opts)
-    }
-
-    fn deregister(&self, poll: &Poll) -> io::Result<()> {
-        self.inner.lock().unwrap().deregister(poll)
+        self.inner.lock().unwrap().cancel(timeout)
     }
 }
 
 impl<T: 'static> EventSource for Timer<T> {
     type Event = (T, TimerHandle<T>);
 
-    fn interest(&self) -> Ready {
-        Ready::readable()
+    fn interest(&self) -> Interest {
+        Interest::READABLE
     }
 
-    fn pollopts(&self) -> PollOpt {
-        PollOpt::edge()
+    fn as_mio_source(&mut self) -> Option<&mut dyn MioSource> {
+        None
     }
 
     fn make_dispatcher<Data: 'static, F: FnMut((T, TimerHandle<T>), &mut Data) + 'static>(
-        &self,
+        &mut self,
         callback: F,
+        waker: &Arc<Waker>,
     ) -> Rc<RefCell<dyn EventDispatcher<Data>>> {
+        {
+            let mut inner = self.inner.lock().unwrap();
+            inner.scheduler = Some(
+                TimerScheduler::new(waker.clone())
+                    .expect("[calloop] Failed to initialize the timer scheduler"),
+            );
+            inner.reschedule();
+        }
         Rc::new(RefCell::new(Dispatcher {
             _data: ::std::marker::PhantomData,
-            timer: self.inner.clone(),
+            inner: self.inner.clone(),
             callback,
         }))
     }
@@ -159,26 +133,210 @@ impl<T: 'static> EventSource for Timer<T> {
 
 struct Dispatcher<Data, T, F: FnMut((T, TimerHandle<T>), &mut Data)> {
     _data: ::std::marker::PhantomData<fn(&mut Data)>,
-    timer: Arc<Mutex<mio_timer::Timer<T>>>,
+    inner: Arc<Mutex<TimerInner<T>>>,
     callback: F,
 }
 
 impl<Data, T, F: FnMut((T, TimerHandle<T>), &mut Data)> EventDispatcher<Data>
     for Dispatcher<Data, T, F>
 {
-    fn ready(&mut self, _: Ready, data: &mut Data) {
-        let handle = TimerHandle {
-            inner: self.timer.clone(),
+    fn ready(&mut self, _event: Option<&MioEvent>, data: &mut Data) {
+        // unlock the inner between each user callback, so that they can
+        // insert new timers from inside the callback
+        while let Some(val) = self.inner.lock().unwrap().next_expired() {
+            (self.callback)(
+                (
+                    val,
+                    TimerHandle {
+                        inner: self.inner.clone(),
+                    },
+                ),
+                data,
+            );
+        }
+        // now compute the next timeout and signal if necessary
+        self.inner.lock().unwrap().reschedule();
+    }
+}
+
+/*
+ * Timer logic
+ */
+
+struct TimeoutData<T> {
+    deadline: Instant,
+    data: RefCell<Option<T>>,
+    counter: u32,
+}
+
+struct TimerInner<T> {
+    heap: BinaryHeap<TimeoutData<T>>,
+    scheduler: Option<TimerScheduler>,
+    counter: u32,
+}
+
+impl<T> TimerInner<T> {
+    fn new() -> TimerInner<T> {
+        TimerInner {
+            heap: BinaryHeap::new(),
+            scheduler: None,
+            counter: 0,
+        }
+    }
+
+    fn insert(&mut self, deadline: Instant, value: T) -> Timeout {
+        self.heap.push(TimeoutData {
+            deadline,
+            data: RefCell::new(Some(value)),
+            counter: self.counter,
+        });
+        let ret = Timeout {
+            counter: self.counter,
         };
+        self.counter += 1;
+        self.reschedule();
+        ret
+    }
+
+    fn cancel(&mut self, timeout: &Timeout) -> Option<T> {
+        for data in self.heap.iter() {
+            if data.counter == timeout.counter {
+                return data.data.borrow_mut().take();
+            }
+        }
+        None
+    }
+
+    fn next_expired(&mut self) -> Option<T> {
+        let now = Instant::now();
         loop {
-            let opt_evt = self.timer.lock().unwrap().poll();
-            match opt_evt {
-                Some(val) => (self.callback)((val, handle.clone()), data),
-                None => break,
+            // check if there is an expired item
+            if let Some(ref data) = self.heap.peek() {
+                if data.deadline > now {
+                    return None;
+                }
+            // there is an expired timeout, continue the
+            // loop body
+            } else {
+                return None;
+            }
+
+            // There is an item in the heap, this unwrap cannot blow
+            let data = self.heap.pop().unwrap();
+            if let Some(val) = data.data.into_inner() {
+                return Some(val);
+            }
+            // otherwise this timeout was cancelled, continue looping
+        }
+    }
+
+    fn reschedule(&mut self) {
+        if let Some(ref mut scheduler) = self.scheduler {
+            if let Some(next_deadline) = self.heap.peek().map(|data| data.deadline) {
+                scheduler.reschedule(next_deadline);
             }
         }
     }
 }
+
+// trait implementations for TimeoutData
+
+impl<T> std::cmp::Ord for TimeoutData<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // earlier values have priority
+        self.deadline.cmp(&other.deadline).reverse()
+    }
+}
+
+impl<T> std::cmp::PartialOrd for TimeoutData<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        // earlier values have priority
+        Some(self.deadline.cmp(&other.deadline).reverse())
+    }
+}
+
+impl<T> std::cmp::PartialEq for TimeoutData<T> {
+    fn eq(&self, other: &Self) -> bool {
+        // earlier values have priority
+        self.deadline == other.deadline
+    }
+}
+
+impl<T> std::cmp::Eq for TimeoutData<T> {}
+
+/*
+ * Scheduling
+ */
+
+struct TimerScheduler {
+    current_deadline: Arc<Mutex<Option<Instant>>>,
+    kill_switch: Arc<AtomicBool>,
+    thread: std::thread::JoinHandle<()>,
+}
+
+impl TimerScheduler {
+    fn new(waker: Arc<Waker>) -> io::Result<TimerScheduler> {
+        let current_deadline = Arc::new(Mutex::new(None::<Instant>));
+        let thread_deadline = current_deadline.clone();
+
+        let kill_switch = Arc::new(AtomicBool::new(false));
+        let thread_kill = kill_switch.clone();
+
+        let thread = std::thread::Builder::new()
+            .name("calloop timer".into())
+            .spawn(move || loop {
+                // stop if requested
+                if thread_kill.load(Ordering::Acquire) {
+                    return;
+                }
+                // otherwise check the timeout
+                let opt_deadline: Option<Instant> = {
+                    // subscope to ensure the mutex does not remain locked while the thread is parked
+                    let guard = thread_deadline.lock().unwrap();
+                    (*guard).clone()
+                };
+                if let Some(deadline) = opt_deadline {
+                    if let Some(remaining) = deadline.checked_duration_since(Instant::now()) {
+                        // it is not yet expired, go to sleep until it
+                        std::thread::park_timeout(remaining);
+                    } else {
+                        // it is expired, wake the event loop and go to sleep
+                        let _ = waker.wake();
+                        std::thread::park();
+                    }
+                } else {
+                    // there is none, got to sleep
+                    std::thread::park();
+                }
+            })?;
+
+        Ok(TimerScheduler {
+            current_deadline,
+            kill_switch,
+            thread,
+        })
+    }
+
+    fn reschedule(&mut self, new_deadline: Instant) {
+        let mut deadline_guard = self.current_deadline.lock().unwrap();
+        if let Some(current_deadline) = deadline_guard.clone() {
+            if new_deadline < current_deadline {
+                *deadline_guard = Some(new_deadline);
+                self.thread.thread().unpark();
+            }
+        }
+    }
+}
+
+impl Drop for TimerScheduler {
+    fn drop(&mut self) {
+        self.kill_switch.store(true, Ordering::Release);
+    }
+}
+
+/*
+ * Tests
+ */
 
 #[cfg(test)]
 mod tests {

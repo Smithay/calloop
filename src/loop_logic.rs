@@ -6,10 +6,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use mio::{Events, Poll, PollOpt, Ready, Registration, SetReadiness};
+use mio::{Events, Poll, Registry, Token, Waker};
 
 use crate::list::SourceList;
 use crate::sources::{EventSource, Idle, Source};
+
+const WAKER_TOKEN: Token = Token(std::usize::MAX);
 
 /// An handle to an event loop
 ///
@@ -17,17 +19,21 @@ use crate::sources::{EventSource, Idle, Source};
 /// it can be cloned, and it is possible to insert new sources from within a source
 /// callback.
 pub struct LoopHandle<Data> {
-    poll: Rc<Poll>,
-    list: Rc<RefCell<SourceList<Data>>>,
+    registry: Rc<Registry>,
+    mio_list: Rc<RefCell<SourceList<Data>>>,
+    user_list: Rc<RefCell<SourceList<Data>>>,
     idles: Rc<RefCell<Vec<Rc<RefCell<Option<Box<dyn FnMut(&mut Data)>>>>>>>,
+    waker: Arc<Waker>,
 }
 
 impl<Data> Clone for LoopHandle<Data> {
     fn clone(&self) -> LoopHandle<Data> {
         LoopHandle {
-            poll: self.poll.clone(),
-            list: self.list.clone(),
+            registry: self.registry.clone(),
+            mio_list: self.mio_list.clone(),
+            user_list: self.user_list.clone(),
             idles: self.idles.clone(),
+            waker: self.waker.clone(),
         }
     }
 }
@@ -59,24 +65,29 @@ impl<Data: 'static> LoopHandle<Data> {
     /// associated source generates events, see `EventLoop::dispatch(..)` for details.
     pub fn insert_source<E: EventSource, F: FnMut(E::Event, &mut Data) + 'static>(
         &self,
-        source: E,
+        mut source: E,
         callback: F,
     ) -> Result<Source<E>, InsertError<E>> {
-        let dispatcher = source.make_dispatcher(callback);
-
-        let token = self.list.borrow_mut().add_source(dispatcher);
+        let dispatcher = source.make_dispatcher(callback, &self.waker);
 
         let interest = source.interest();
-        let opt = source.pollopts();
 
-        if let Err(e) = self.poll.register(&source, token, interest, opt) {
-            return Err(InsertError { source, error: e });
-        }
+        let (list, token) = if let Some(mio_source) = source.as_mio_source() {
+            let token = self.mio_list.borrow_mut().add_source(dispatcher);
+
+            if let Err(e) = self.registry.register(mio_source, token, interest) {
+                return Err(InsertError { source, error: e });
+            }
+            (self.mio_list.clone(), token)
+        } else {
+            let token = self.user_list.borrow_mut().add_source(dispatcher);
+            (self.user_list.clone(), token)
+        };
 
         Ok(Source {
             source,
-            poll: self.poll.clone(),
-            list: self.list.clone(),
+            registry: self.registry.clone(),
+            list,
             token,
         })
     }
@@ -101,10 +112,10 @@ impl<Data: 'static> LoopHandle<Data> {
 ///
 /// This loop can host several event sources, that can be dynamically added or removed.
 pub struct EventLoop<Data> {
+    poll: Poll,
     handle: LoopHandle<Data>,
     events_buffer: Events,
     stop_signal: Arc<AtomicBool>,
-    wakeup: SetReadiness,
 }
 
 impl<Data: 'static> EventLoop<Data> {
@@ -113,27 +124,20 @@ impl<Data: 'static> EventLoop<Data> {
     /// It is backed by an `mio` provided machinnery, and will fail if the `mio`
     /// initialization fails.
     pub fn new() -> io::Result<EventLoop<Data>> {
+        let poll = Poll::new()?;
+        let waker = Arc::new(Waker::new(poll.registry(), WAKER_TOKEN)?);
         let handle = LoopHandle {
-            poll: Rc::new(Poll::new()?),
-            list: Rc::new(RefCell::new(SourceList::new())),
+            registry: Rc::new(poll.registry().try_clone()?),
+            mio_list: Rc::new(RefCell::new(SourceList::new())),
+            user_list: Rc::new(RefCell::new(SourceList::new())),
             idles: Rc::new(RefCell::new(Vec::new())),
+            waker,
         };
-        // create a wakeup event source
-        let (wakeup_registration, wakeup_readiness) = Registration::new2();
-        let mut wakeup_source = crate::sources::generic::Generic::new(wakeup_registration);
-        wakeup_source.set_interest(Ready::readable());
-        wakeup_source.set_pollopts(PollOpt::edge());
-        let readiness2 = wakeup_readiness.clone();
-        handle.insert_source(wakeup_source, move |_, _| {
-            // unmark the readiness so that the wakeup source is not
-            // processed in a loop
-            readiness2.set_readiness(Ready::empty()).unwrap();
-        })?;
         Ok(EventLoop {
+            poll,
             handle,
             events_buffer: Events::with_capacity(32),
             stop_signal: Arc::new(AtomicBool::new(false)),
-            wakeup: wakeup_readiness,
         })
     }
 
@@ -144,7 +148,7 @@ impl<Data: 'static> EventLoop<Data> {
 
     fn dispatch_events(&mut self, timeout: Option<Duration>, data: &mut Data) -> io::Result<()> {
         self.events_buffer.clear();
-        self.handle.poll.poll(&mut self.events_buffer, timeout)?;
+        self.poll.poll(&mut self.events_buffer, timeout)?;
 
         loop {
             if self.events_buffer.is_empty() {
@@ -152,17 +156,20 @@ impl<Data: 'static> EventLoop<Data> {
             }
 
             for event in &self.events_buffer {
-                let opt_dispatcher = self.handle.list.borrow().get_dispatcher(event.token());
+                let opt_dispatcher = self.handle.mio_list.borrow().get_dispatcher(event.token());
                 if let Some(dispatcher) = opt_dispatcher {
-                    dispatcher.borrow_mut().ready(event.readiness(), data);
+                    dispatcher.borrow_mut().ready(Some(event), data);
                 }
             }
 
             // process remaining events if any
             self.events_buffer.clear();
-            self.handle
-                .poll
+            self.poll
                 .poll(&mut self.events_buffer, Some(Duration::from_millis(0)))?;
+        }
+
+        for dispatcher in self.handle.user_list.borrow().all() {
+            dispatcher.borrow_mut().ready(None, data);
         }
 
         Ok(())
@@ -199,7 +206,7 @@ impl<Data: 'static> EventLoop<Data> {
     pub fn get_signal(&self) -> LoopSignal {
         LoopSignal {
             signal: self.stop_signal.clone(),
-            wakeup: self.wakeup.clone(),
+            waker: self.handle.waker.clone(),
         }
     }
 
@@ -235,7 +242,7 @@ impl<Data: 'static> EventLoop<Data> {
 #[derive(Clone)]
 pub struct LoopSignal {
     signal: Arc<AtomicBool>,
-    wakeup: SetReadiness,
+    waker: Arc<Waker>,
 }
 
 impl LoopSignal {
@@ -255,8 +262,8 @@ impl LoopSignal {
     /// of an event, making the wait return early. Called after `stop()`, this
     /// ensures the event loop will terminate quickly if you specified a long
     /// timeout (or no timeout at all) to the `dispatch` or `run` method.
-    pub fn wakeup(&self) {
-        self.wakeup.set_readiness(Ready::readable()).unwrap();
+    pub fn wakeup(&self) -> io::Result<()> {
+        self.waker.wake()
     }
 }
 
@@ -310,7 +317,7 @@ mod tests {
 
         ::std::thread::spawn(move || {
             ::std::thread::sleep(Duration::from_millis(500));
-            signal.wakeup();
+            signal.wakeup().unwrap();
         });
 
         // the test should return
@@ -326,7 +333,7 @@ mod tests {
         ::std::thread::spawn(move || {
             ::std::thread::sleep(Duration::from_millis(500));
             signal.stop();
-            signal.wakeup();
+            signal.wakeup().unwrap();
         });
 
         // the test should return

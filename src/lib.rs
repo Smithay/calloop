@@ -80,9 +80,6 @@
 #![warn(missing_docs)]
 
 pub extern crate mio;
-extern crate mio_extras;
-#[cfg(unix)]
-extern crate nix;
 
 pub use self::loop_logic::{EventLoop, InsertError, LoopHandle, LoopSignal};
 pub use self::sources::*;

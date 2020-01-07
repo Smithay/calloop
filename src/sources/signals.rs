@@ -16,8 +16,12 @@ use std::io;
 use std::os::raw::c_int;
 use std::os::unix::io::AsRawFd;
 use std::rc::Rc;
+use std::sync::Arc;
 
-use mio::{Evented, Poll, PollOpt, Ready, Token};
+use mio::{
+    event::{Event as MioEvent, Source as MioSource},
+    Interest, Registry, Token, Waker,
+};
 
 use nix::sys::signal::SigSet;
 pub use nix::sys::signal::Signal;
@@ -142,47 +146,45 @@ fn no_nix_err(err: ::nix::Error) -> io::Error {
     }
 }
 
-impl Evented for Signals {
+impl MioSource for Signals {
     fn register(
-        &self,
-        poll: &Poll,
+        &mut self,
+        registry: &Registry,
         token: Token,
-        interest: Ready,
-        opts: PollOpt,
+        interest: Interest,
     ) -> io::Result<()> {
-        ::mio::unix::EventedFd(&self.sfd.borrow().as_raw_fd()).register(poll, token, interest, opts)
+        mio::unix::SourceFd(&self.sfd.borrow().as_raw_fd()).register(registry, token, interest)
     }
 
     fn reregister(
-        &self,
-        poll: &Poll,
+        &mut self,
+        registry: &Registry,
         token: Token,
-        interest: Ready,
-        opts: PollOpt,
+        interest: Interest,
     ) -> io::Result<()> {
-        ::mio::unix::EventedFd(&self.sfd.borrow().as_raw_fd())
-            .reregister(poll, token, interest, opts)
+        mio::unix::SourceFd(&self.sfd.borrow().as_raw_fd()).reregister(registry, token, interest)
     }
 
-    fn deregister(&self, poll: &Poll) -> io::Result<()> {
-        ::mio::unix::EventedFd(&self.sfd.borrow().as_raw_fd()).deregister(poll)
+    fn deregister(&mut self, registry: &Registry) -> io::Result<()> {
+        mio::unix::SourceFd(&self.sfd.borrow().as_raw_fd()).deregister(registry)
     }
 }
 
 impl EventSource for Signals {
     type Event = Event;
 
-    fn interest(&self) -> Ready {
-        Ready::readable()
+    fn interest(&self) -> Interest {
+        Interest::READABLE
     }
 
-    fn pollopts(&self) -> PollOpt {
-        PollOpt::edge()
+    fn as_mio_source(&mut self) -> Option<&mut dyn MioSource> {
+        Some(self)
     }
 
     fn make_dispatcher<Data: 'static, F: FnMut(Event, &mut Data) + 'static>(
-        &self,
+        &mut self,
         callback: F,
+        _: &Arc<Waker>,
     ) -> Rc<RefCell<dyn EventDispatcher<Data>>> {
         Rc::new(RefCell::new(Dispatcher {
             _data: ::std::marker::PhantomData,
@@ -199,7 +201,7 @@ struct Dispatcher<Data, F: FnMut(Event, &mut Data) + 'static> {
 }
 
 impl<Data, F: FnMut(Event, &mut Data) + 'static> EventDispatcher<Data> for Dispatcher<Data, F> {
-    fn ready(&mut self, _: Ready, data: &mut Data) {
+    fn ready(&mut self, _: Option<&MioEvent>, data: &mut Data) {
         loop {
             let ret = self.sfd.borrow_mut().read_signal();
             match ret {

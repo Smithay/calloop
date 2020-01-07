@@ -4,6 +4,9 @@
 
 - Update to 2018 edition
 - Update `nix` dependency to `0.16`
+- **Breaking** Update `mio` dependency to `0.7.0-alpha.1`. The API of `calloop` for custom
+  event sources significantly changed, and the channel and timer event sources are now
+  implemented in `calloop` rather than pulled from `mio-extras`.
 
 ## 0.4.4 -- 2019-06-13
 

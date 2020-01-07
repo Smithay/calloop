@@ -4,19 +4,12 @@
 //! `Sender<T>` that can be cloned and sent accross threads if `T: Send`,
 //! and a `Channel<T>` that can be inserted into an `EventLoop`. It will generate
 //! one event per message.
-//!
-//! This implementation is based on
-//! [`mio_more::channel`](https://docs.rs/mio-more/*/mio_more/channel/index.html).
 
 use std::cell::RefCell;
-use std::io;
 use std::rc::Rc;
-use std::sync::mpsc::TryRecvError;
+use std::sync::{mpsc, Arc, Mutex};
 
-use mio::{Evented, Poll, PollOpt, Ready, Token};
-
-use mio_extras::channel::{self as miochan, Receiver};
-pub use mio_extras::channel::{SendError, Sender, SyncSender, TrySendError};
+use mio::{event::Event as MioEvent, Waker};
 
 use crate::{EventDispatcher, EventSource};
 
@@ -31,76 +24,134 @@ pub enum Event<T> {
     Closed,
 }
 
+/// The sender end of a channel
+///
+/// It can be cloned and sent accross threads (if `T` is).
+pub struct Sender<T> {
+    sender: mpsc::Sender<T>,
+    waker: Arc<Mutex<Option<Arc<Waker>>>>,
+}
+
+impl<T> Clone for Sender<T> {
+    fn clone(&self) -> Sender<T> {
+        Sender {
+            sender: self.sender.clone(),
+            waker: self.waker.clone(),
+        }
+    }
+}
+
+impl<T> Sender<T> {
+    /// Send a message to the channel
+    ///
+    /// This will wake the event loop and deliver an `Event::Msg` to
+    /// it containing the provided value.
+    pub fn send(&self, t: T) -> Result<(), mpsc::SendError<T>> {
+        let g = self.waker.lock().unwrap();
+        if let Some(ref w) = *g {
+            let _ = w.wake();
+        }
+        self.sender.send(t)
+    }
+}
+
+/// The sender end of a synchronous channel
+///
+/// It can be cloned and sent accross threads (if `T` is).
+pub struct SyncSender<T> {
+    sender: mpsc::SyncSender<T>,
+    waker: Arc<Mutex<Option<Arc<Waker>>>>,
+}
+
+impl<T> Clone for SyncSender<T> {
+    fn clone(&self) -> SyncSender<T> {
+        SyncSender {
+            sender: self.sender.clone(),
+            waker: self.waker.clone(),
+        }
+    }
+}
+
+impl<T> SyncSender<T> {
+    /// Send a message to the synchronous channel
+    ///
+    /// This will wake the event loop and deliver an `Event::Msg` to
+    /// it containing the provided value. If the channel is full, this
+    /// function will block until the event loop empties it and it can
+    /// deliver the message. Readiness is signalled to the event loop
+    /// *before* blocking.
+    pub fn send(&self, t: T) -> Result<(), mpsc::SendError<T>> {
+        let g = self.waker.lock().unwrap();
+        if let Some(ref w) = *g {
+            let _ = w.wake();
+        }
+        self.sender.send(t)
+    }
+
+    /// Send a message to the synchronous channel
+    ///
+    /// This will wake the event loop and deliver an `Event::Msg` to
+    /// it containing the provided value. If the channel is full, this
+    /// function will return an error. The event loop will be signalled
+    /// for readinnes in all cases.
+    pub fn try_send(&self, t: T) -> Result<(), mpsc::TrySendError<T>> {
+        let g = self.waker.lock().unwrap();
+        if let Some(ref w) = *g {
+            let _ = w.wake();
+        }
+        self.sender.try_send(t)
+    }
+}
+
 /// The receiving end of the channel
 ///
 /// This is the event source to be inserted into your `EventLoop`.
 pub struct Channel<T> {
-    receiver: Rc<Receiver<T>>,
+    receiver: Rc<mpsc::Receiver<T>>,
+    waker: Arc<Mutex<Option<Arc<Waker>>>>,
 }
 
 /// Create a new asynchronous channel
 pub fn channel<T>() -> (Sender<T>, Channel<T>) {
-    let (sender, receiver) = miochan::channel();
+    let (sender, receiver) = mpsc::channel();
+    let waker = Arc::new(Mutex::new(None));
     (
-        sender,
+        Sender {
+            sender,
+            waker: waker.clone(),
+        },
         Channel {
             receiver: Rc::new(receiver),
+            waker,
         },
     )
 }
 
 /// Create a new synchronous, bounded channel
 pub fn sync_channel<T>(bound: usize) -> (SyncSender<T>, Channel<T>) {
-    let (sender, receiver) = miochan::sync_channel(bound);
+    let (sender, receiver) = mpsc::sync_channel(bound);
+    let waker = Arc::new(Mutex::new(None));
     (
-        sender,
+        SyncSender {
+            sender,
+            waker: waker.clone(),
+        },
         Channel {
             receiver: Rc::new(receiver),
+            waker,
         },
     )
-}
-
-impl<T> Evented for Channel<T> {
-    fn register(
-        &self,
-        poll: &Poll,
-        token: Token,
-        interest: Ready,
-        opts: PollOpt,
-    ) -> io::Result<()> {
-        self.receiver.register(poll, token, interest, opts)
-    }
-
-    fn reregister(
-        &self,
-        poll: &Poll,
-        token: Token,
-        interest: Ready,
-        opts: PollOpt,
-    ) -> io::Result<()> {
-        self.receiver.reregister(poll, token, interest, opts)
-    }
-
-    fn deregister(&self, poll: &Poll) -> io::Result<()> {
-        self.receiver.deregister(poll)
-    }
 }
 
 impl<T: 'static> EventSource for Channel<T> {
     type Event = Event<T>;
 
-    fn interest(&self) -> Ready {
-        Ready::readable()
-    }
-
-    fn pollopts(&self) -> PollOpt {
-        PollOpt::edge()
-    }
-
     fn make_dispatcher<Data: 'static, F: FnMut(Event<T>, &mut Data) + 'static>(
-        &self,
+        &mut self,
         callback: F,
+        waker: &Arc<Waker>,
     ) -> Rc<RefCell<dyn EventDispatcher<Data>>> {
+        *(self.waker.lock().unwrap()) = Some(waker.clone());
         Rc::new(RefCell::new(Dispatcher {
             _data: ::std::marker::PhantomData,
             receiver: self.receiver.clone(),
@@ -110,18 +161,18 @@ impl<T: 'static> EventSource for Channel<T> {
 }
 
 struct Dispatcher<Data, T, F: FnMut(Event<T>, &mut Data)> {
-    _data: ::std::marker::PhantomData<fn(&mut Data)>,
-    receiver: Rc<Receiver<T>>,
+    _data: std::marker::PhantomData<fn(&mut Data)>,
+    receiver: Rc<mpsc::Receiver<T>>,
     callback: F,
 }
 
 impl<Data, T, F: FnMut(Event<T>, &mut Data)> EventDispatcher<Data> for Dispatcher<Data, T, F> {
-    fn ready(&mut self, _: Ready, data: &mut Data) {
+    fn ready(&mut self, _: Option<&MioEvent>, data: &mut Data) {
         loop {
             match self.receiver.try_recv() {
                 Ok(val) => (self.callback)(Event::Msg(val), data),
-                Err(TryRecvError::Empty) => break,
-                Err(TryRecvError::Disconnected) => {
+                Err(mpsc::TryRecvError::Empty) => break,
+                Err(mpsc::TryRecvError::Disconnected) => {
                     (self.callback)(Event::Closed, data);
                     break;
                 }
@@ -154,7 +205,7 @@ mod tests {
                     got.1 = true;
                 }
             })
-            .map_err(Into::<io::Error>::into)
+            .map_err(Into::<std::io::Error>::into)
             .unwrap();
 
         // nothing is sent, nothing is received
