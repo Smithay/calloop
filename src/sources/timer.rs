@@ -97,6 +97,13 @@ impl<T> TimerHandle<T> {
     pub fn cancel_timeout(&self, timeout: &Timeout) -> Option<T> {
         self.inner.lock().unwrap().cancel(timeout)
     }
+
+    /// Cancel all planned timeouts for this timer
+    ///
+    /// All associated data will be dropped.
+    pub fn cancel_all_timeouts(&self) {
+        self.inner.lock().unwrap().cancel_all();
+    }
 }
 
 impl<T: 'static> EventSource for Timer<T> {
@@ -205,6 +212,10 @@ impl<T> TimerInner<T> {
             }
         }
         None
+    }
+
+    fn cancel_all(&mut self) {
+        self.heap.clear();
     }
 
     fn next_expired(&mut self) -> Option<T> {
