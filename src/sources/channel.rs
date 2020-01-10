@@ -32,6 +32,7 @@ pub struct Sender<T> {
     waker: Arc<Mutex<Option<Arc<Waker>>>>,
 }
 
+#[cfg_attr(tarpaulin, skip)]
 impl<T> Clone for Sender<T> {
     fn clone(&self) -> Sender<T> {
         Sender {
@@ -63,6 +64,7 @@ pub struct SyncSender<T> {
     waker: Arc<Mutex<Option<Arc<Waker>>>>,
 }
 
+#[cfg_attr(tarpaulin, skip)]
 impl<T> Clone for SyncSender<T> {
     fn clone(&self) -> SyncSender<T> {
         SyncSender {
@@ -230,5 +232,61 @@ mod tests {
             .unwrap();
 
         assert_eq!(got, (true, true));
+    }
+
+    #[test]
+    fn basic_sync_channel() {
+        let mut event_loop = crate::EventLoop::new().unwrap();
+
+        let handle = event_loop.handle();
+
+        let (tx, rx) = sync_channel::<()>(2);
+
+        let mut received = (0, false);
+
+        let _source = handle
+            .insert_source(rx, move |evt, received: &mut (u32, bool)| match evt {
+                Event::Msg(()) => {
+                    received.0 += 1;
+                }
+                Event::Closed => {
+                    received.1 = true;
+                }
+            })
+            .map_err(Into::<std::io::Error>::into)
+            .unwrap();
+
+        // nothing is sent, nothing is received
+        event_loop
+            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut received)
+            .unwrap();
+
+        assert_eq!(received.0, 0);
+        assert!(!received.1);
+
+        // fill the channel
+        tx.send(()).unwrap();
+        tx.send(()).unwrap();
+        assert!(tx.try_send(()).is_err());
+
+        // empty it
+        event_loop
+            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut received)
+            .unwrap();
+
+        assert_eq!(received.0, 2);
+        assert!(!received.1);
+
+        // send a final message and drop the sender
+        tx.send(()).unwrap();
+        std::mem::drop(tx);
+
+        // final read of the channel
+        event_loop
+            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut received)
+            .unwrap();
+
+        assert_eq!(received.0, 3);
+        assert!(received.1);
     }
 }

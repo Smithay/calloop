@@ -32,10 +32,7 @@ impl<E: MioSource + 'static> Generic<E> {
     /// and `set_pollopts` methods before inserting it in the
     /// event loop.
     pub fn new(source: E) -> Generic<E> {
-        Generic {
-            inner: Rc::new(RefCell::new(source)),
-            interest: Interest::READABLE,
-        }
+        Self::from_rc(Rc::new(RefCell::new(source)))
     }
 
     /// Wrap an `Evented` type from an `Rc` into a `Generic` event source
@@ -289,7 +286,7 @@ mod test {
 
         let mut dispached = false;
 
-        handle
+        let _source = handle
             .insert_source(generic, move |Event { source, readiness }, d| {
                 assert!(readiness.readable);
                 // we have not registered for writability
@@ -317,6 +314,72 @@ mod test {
             .dispatch(Some(::std::time::Duration::from_millis(0)), &mut dispached)
             .unwrap();
 
+        assert!(dispached);
+    }
+
+    #[test]
+    fn register_deregister_unix() {
+        use std::os::unix::net::UnixStream;
+
+        let mut event_loop = crate::EventLoop::new().unwrap();
+
+        let handle = event_loop.handle();
+
+        let (mut tx, rx) = UnixStream::pair().unwrap();
+
+        let mut generic = Generic::from_fd_source(rx);
+        generic.set_interest(mio::Interest::READABLE);
+
+        let mut dispached = false;
+
+        let source = handle
+            .insert_source(generic, move |Event { .. }, d| {
+                *d = true;
+            })
+            .map_err(Into::<io::Error>::into)
+            .unwrap();
+
+        event_loop
+            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut dispached)
+            .unwrap();
+
+        assert!(!dispached);
+
+        // remove the source, and then write something
+
+        let generic = source.remove();
+
+        tx.write(&[1, 2, 3, 4, 5, 6]).unwrap();
+        tx.flush().unwrap();
+
+        event_loop
+            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut dispached)
+            .unwrap();
+
+        // the source has not been dispatched, as the source is no longer here
+        assert!(!dispached);
+
+        // insert it again
+        let _source = handle
+            .insert_source(generic, move |Event { source, readiness }, d| {
+                assert!(readiness.readable);
+                // we have not registered for writability
+                assert!(!readiness.writable);
+                let mut buffer = vec![0; 10];
+                let ret = source.borrow_mut().0.read(&mut buffer).unwrap();
+                assert_eq!(ret, 6);
+                assert_eq!(&buffer[..6], &[1, 2, 3, 4, 5, 6]);
+
+                *d = true;
+            })
+            .map_err(Into::<io::Error>::into)
+            .unwrap();
+
+        event_loop
+            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut dispached)
+            .unwrap();
+
+        // the has now been properly dispatched
         assert!(dispached);
     }
 }

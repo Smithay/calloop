@@ -339,4 +339,52 @@ mod tests {
         // the test should return
         event_loop.run(None, &mut (), |_| {}).unwrap();
     }
+
+    #[test]
+    fn insert_remove() {
+        use crate::mio::Waker;
+        use std::{cell::RefCell, rc::Rc, sync::Arc};
+
+        // A dummy EventSource to test insertion and removal of sources
+        struct DummySource;
+
+        struct Dispatcher<F>(F);
+
+        impl<Data, F: FnMut((), &mut Data) + 'static> crate::EventDispatcher<Data> for Dispatcher<F> {
+            fn ready(&mut self, _ready: Option<&crate::mio::event::Event>, data: &mut Data) {
+                (self.0)((), data)
+            }
+        }
+
+        impl crate::EventSource for DummySource {
+            type Event = ();
+            fn make_dispatcher<Data: 'static, F: FnMut(Self::Event, &mut Data) + 'static>(
+                &mut self,
+                callback: F,
+                _waker: &Arc<Waker>,
+            ) -> Rc<RefCell<dyn crate::EventDispatcher<Data>>> {
+                Rc::new(RefCell::new(Dispatcher(callback)))
+            }
+        }
+
+        // the actual test
+        let event_loop = EventLoop::<()>::new().unwrap();
+        let source_1 = event_loop
+            .handle()
+            .insert_source(DummySource, |_, _| {})
+            .unwrap();
+        assert_eq!(source_1.token.0, 0);
+        let source_2 = event_loop
+            .handle()
+            .insert_source(DummySource, |_, _| {})
+            .unwrap();
+        assert_eq!(source_2.token.0, 1);
+        // ensure token reuse on source removal
+        source_1.remove();
+        let source_3 = event_loop
+            .handle()
+            .insert_source(DummySource, |_, _| {})
+            .unwrap();
+        assert_eq!(source_3.token.0, 0);
+    }
 }
