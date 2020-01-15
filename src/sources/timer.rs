@@ -150,19 +150,31 @@ impl<Data, T, F: FnMut((T, TimerHandle<T>), &mut Data)> EventDispatcher<Data>
     fn ready(&mut self, _event: Option<&MioEvent>, data: &mut Data) {
         // unlock the inner between each user callback, so that they can
         // insert new timers from inside the callback
-        while let Some(val) = self.inner.lock().unwrap().next_expired() {
-            (self.callback)(
-                (
-                    val,
-                    TimerHandle {
-                        inner: self.inner.clone(),
-                    },
-                ),
-                data,
-            );
+        let mut some_expired = false;
+        loop {
+            let next_expired: Option<T> = {
+                let mut guard = self.inner.lock().unwrap();
+                guard.next_expired()
+            };
+            if let Some(val) = next_expired {
+                some_expired = true;
+                (self.callback)(
+                    (
+                        val,
+                        TimerHandle {
+                            inner: self.inner.clone(),
+                        },
+                    ),
+                    data,
+                );
+            } else {
+                break;
+            }
         }
         // now compute the next timeout and signal if necessary
-        self.inner.lock().unwrap().reschedule();
+        if some_expired {
+            self.inner.lock().unwrap().reschedule();
+        }
     }
 }
 
@@ -211,11 +223,13 @@ impl<T> TimerInner<T> {
                 return data.data.borrow_mut().take();
             }
         }
+        self.reschedule();
         None
     }
 
     fn cancel_all(&mut self) {
         self.heap.clear();
+        self.reschedule();
     }
 
     fn next_expired(&mut self) -> Option<T> {
@@ -245,6 +259,8 @@ impl<T> TimerInner<T> {
         if let Some(ref mut scheduler) = self.scheduler {
             if let Some(next_deadline) = self.heap.peek().map(|data| data.deadline) {
                 scheduler.reschedule(next_deadline);
+            } else {
+                scheduler.deschedule();
             }
         }
     }
@@ -331,11 +347,18 @@ impl TimerScheduler {
     fn reschedule(&mut self, new_deadline: Instant) {
         let mut deadline_guard = self.current_deadline.lock().unwrap();
         if let Some(current_deadline) = deadline_guard.clone() {
-            if new_deadline < current_deadline {
+            if new_deadline < current_deadline || current_deadline <= Instant::now() {
                 *deadline_guard = Some(new_deadline);
                 self.thread.thread().unpark();
             }
+        } else {
+            *deadline_guard = Some(new_deadline);
+            self.thread.thread().unpark();
         }
+    }
+
+    fn deschedule(&mut self) {
+        *(self.current_deadline.lock().unwrap()) = None;
     }
 }
 
@@ -380,9 +403,7 @@ mod tests {
         // it should not have fired yet
         assert!(!fired);
 
-        event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(300)), &mut fired)
-            .unwrap();
+        event_loop.dispatch(None, &mut fired).unwrap();
 
         // it should have fired now
         assert!(fired);
