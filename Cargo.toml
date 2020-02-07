@@ -1,6 +1,6 @@
 [package]
 name = "calloop"
-version = "0.4.4"
+version = "0.5.0"
 authors = ["Victor Berger <victor.berger@m4x.org>"]
 documentation = "https://docs.rs/calloop/"
 repository = "https://github.com/Smithay/calloop"
@@ -15,14 +15,13 @@ travis-ci = { repository = "Smithay/calloop" }
 codecov = { repository = "Smithay/calloop" }
 
 [dependencies]
-mio = { version = "0.7.0-alpha.1", features = ["os-poll", "os-util"] }
-#mio-extras = "2.0"
+mio = { version = "=0.7.0-alpha.1", features = ["os-poll", "os-util"] }
 
 [dev-dependencies]
 lazycell = "=1.0.0"
 
 [target.'cfg(unix)'.dependencies]
-nix = "0.16"
+nix = "0.17"
 
 [[test]]
 name = "signals"
