@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.5.1 -- 2020-03-14
+
+- Update `mio` to `0.7`
+
 ## 0.5.0 -- 2020-02-07
 
 - Update to 2018 edition
