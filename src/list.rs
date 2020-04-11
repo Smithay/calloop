@@ -51,7 +51,7 @@ impl<Data> SourceList<Data> {
     }
 
     pub(crate) fn all(&self) -> Vec<Rc<RefCell<dyn EventDispatcher<Data>>>> {
-        self.sources.iter().flat_map(|x| x).cloned().collect()
+        self.sources.iter().flatten().cloned().collect()
     }
 }
 

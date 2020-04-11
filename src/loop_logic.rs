@@ -13,6 +13,8 @@ use crate::sources::{EventSource, Idle, Source};
 
 const WAKER_TOKEN: Token = Token(std::usize::MAX);
 
+type IdleCallback<Data> = Rc<RefCell<Option<Box<dyn FnMut(&mut Data)>>>>;
+
 /// An handle to an event loop
 ///
 /// This handle allows you to insert new sources and idles in this event loop,
@@ -22,7 +24,7 @@ pub struct LoopHandle<Data> {
     registry: Rc<Registry>,
     mio_list: Rc<RefCell<SourceList<Data>>>,
     user_list: Rc<RefCell<SourceList<Data>>>,
-    idles: Rc<RefCell<Vec<Rc<RefCell<Option<Box<dyn FnMut(&mut Data)>>>>>>>,
+    idles: Rc<RefCell<Vec<IdleCallback<Data>>>>,
     waker: Arc<Waker>,
 }
 
