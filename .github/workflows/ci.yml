@@ -1,0 +1,65 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches:
+    - master
+  pull_request:
+
+jobs:
+  ci:
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: ['1.39.0', 'stable', 'beta']
+      
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Cargo cache
+        uses: actions/cache@v1
+        with:
+          path: ~/.cargo
+          key: cargo-${{ matrix.rust }}
+
+      - name: Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          override: true
+
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+
+      - name: Coverage
+        uses: actions-rs/tarpaulin@v0.1
+        with:
+          args: --ignore-tests
+      
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v1
+
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
+      
+      - name: Cargo fmt
+        run: cargo fmt --all -- --check
+      
+      - name: Clippy
+        run: cargo clippy -- -D warnings
