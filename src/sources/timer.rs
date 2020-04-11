@@ -54,6 +54,12 @@ impl<T> Timer<T> {
     }
 }
 
+impl<T> Default for Timer<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// An handle to a timer, used to set or cancel timeouts
 ///
 /// This handle can be cloned, and can be sent accross thread as long
@@ -320,7 +326,7 @@ impl TimerScheduler {
                 let opt_deadline: Option<Instant> = {
                     // subscope to ensure the mutex does not remain locked while the thread is parked
                     let guard = thread_deadline.lock().unwrap();
-                    (*guard).clone()
+                    *guard
                 };
                 if let Some(deadline) = opt_deadline {
                     if let Some(remaining) = deadline.checked_duration_since(Instant::now()) {
@@ -346,7 +352,7 @@ impl TimerScheduler {
 
     fn reschedule(&mut self, new_deadline: Instant) {
         let mut deadline_guard = self.current_deadline.lock().unwrap();
-        if let Some(current_deadline) = deadline_guard.clone() {
+        if let Some(current_deadline) = *deadline_guard {
             if new_deadline < current_deadline || current_deadline <= Instant::now() {
                 *deadline_guard = Some(new_deadline);
                 self.thread.thread().unpark();
