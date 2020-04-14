@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.5.2 -- 2020-04-14
+
 - `channel::Channel` is now `Send`, allowing you to create a channel in one thread and sending
   its receiving end to an other thread for event loop insertion.
 
