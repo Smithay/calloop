@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `channel::Channel` is now `Send`, allowing you to create a channel in one thread and sending
+  its receiving end to an other thread for event loop insertion.
+
 ## 0.5.1 -- 2020-03-14
 
 - Update `mio` to `0.7`

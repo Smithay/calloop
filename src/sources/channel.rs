@@ -109,9 +109,16 @@ impl<T> SyncSender<T> {
 ///
 /// This is the event source to be inserted into your `EventLoop`.
 pub struct Channel<T> {
-    receiver: Rc<mpsc::Receiver<T>>,
+    receiver: Arc<mpsc::Receiver<T>>,
     waker: Arc<Mutex<Option<Arc<Waker>>>>,
 }
+
+// This impl is safe because the Channel is only able to move around threads
+// when it is not inserted into an event loop. (Otherwise it is stuck into
+// a Source<_> and the internals of calloop, which are not Send).
+// At this point, the Arc<Receiver> has a count of 1, and it is obviously
+// safe to Send between threads.
+unsafe impl<T: Send> Send for Channel<T> {}
 
 /// Create a new asynchronous channel
 pub fn channel<T>() -> (Sender<T>, Channel<T>) {
@@ -123,7 +130,7 @@ pub fn channel<T>() -> (Sender<T>, Channel<T>) {
             waker: waker.clone(),
         },
         Channel {
-            receiver: Rc::new(receiver),
+            receiver: Arc::new(receiver),
             waker,
         },
     )
@@ -139,7 +146,7 @@ pub fn sync_channel<T>(bound: usize) -> (SyncSender<T>, Channel<T>) {
             waker: waker.clone(),
         },
         Channel {
-            receiver: Rc::new(receiver),
+            receiver: Arc::new(receiver),
             waker,
         },
     )
@@ -164,7 +171,7 @@ impl<T: 'static> EventSource for Channel<T> {
 
 struct Dispatcher<Data, T, F: FnMut(Event<T>, &mut Data)> {
     _data: std::marker::PhantomData<fn(&mut Data)>,
-    receiver: Rc<mpsc::Receiver<T>>,
+    receiver: Arc<mpsc::Receiver<T>>,
     callback: F,
 }
 
