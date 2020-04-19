@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Drop the `mio` dependency
+- **Breaking Change**: Significantly rework the `calloop` API, notably:
+  - Event sources are now owned by the `EventLoop`
+  - Users can now again set the polling mode (Level/Edge/OneShot)
+- Introduce the `Ping` event source
+
 ## 0.5.2 -- 2020-04-14
 
 - `channel::Channel` is now `Send`, allowing you to create a channel in one thread and sending

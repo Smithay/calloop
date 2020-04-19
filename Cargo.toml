@@ -15,12 +15,7 @@ travis-ci = { repository = "Smithay/calloop" }
 codecov = { repository = "Smithay/calloop" }
 
 [dependencies]
-mio = { version = "0.7", features = ["os-poll", "os-util"] }
-
-[dev-dependencies]
-lazycell = "=1.0.0"
-
-[target.'cfg(unix)'.dependencies]
+log = "0.4"
 nix = "0.17"
 
 [[test]]

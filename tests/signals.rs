@@ -42,7 +42,7 @@ mod test {
             .handle()
             .insert_source(
                 Signals::new(&[Signal::SIGUSR1]).unwrap(),
-                move |evt, rcv| {
+                move |evt, &mut (), rcv| {
                     assert!(evt.signal() == Signal::SIGUSR1);
                     *rcv = true;
                 },
@@ -65,18 +65,20 @@ mod test {
 
         let mut signal_received = None;
 
-        let mut signal_source = event_loop
+        let signal_source = event_loop
             .handle()
             .insert_source(
                 Signals::new(&[Signal::SIGUSR1]).unwrap(),
-                move |evt, rcv| {
+                move |evt, &mut (), rcv| {
                     *rcv = Some(evt.signal());
                 },
             )
             .map_err(Into::<io::Error>::into)
             .unwrap();
 
-        signal_source.add_signals(&[Signal::SIGUSR2]).unwrap();
+        event_loop.handle().with_source(&signal_source, |signals| {
+            signals.add_signals(&[Signal::SIGUSR2]).unwrap()
+        });
 
         // send ourselves a SIGUSR2
         kill(Pid::this(), Signal::SIGUSR2).unwrap();
@@ -93,18 +95,20 @@ mod test {
 
         let mut signal_received = None;
 
-        let mut signal_source = event_loop
+        let signal_source = event_loop
             .handle()
             .insert_source(
                 Signals::new(&[Signal::SIGUSR1, Signal::SIGUSR2]).unwrap(),
-                move |evt, rcv| {
+                move |evt, &mut (), rcv| {
                     *rcv = Some(evt.signal());
                 },
             )
             .map_err(Into::<io::Error>::into)
             .unwrap();
 
-        signal_source.remove_signals(&[Signal::SIGUSR2]).unwrap();
+        event_loop.handle().with_source(&signal_source, |signals| {
+            signals.remove_signals(&[Signal::SIGUSR2]).unwrap()
+        });
 
         // block sigusr2 anyway, to not be killed by it
         let mut set = SigSet::empty();
@@ -122,7 +126,9 @@ mod test {
         assert!(signal_received.is_none());
 
         // swap the signals from [SIGUSR1] to [SIGUSR2]
-        signal_source.set_signals(&[Signal::SIGUSR2]).unwrap();
+        event_loop.handle().with_source(&signal_source, |signals| {
+            signals.set_signals(&[Signal::SIGUSR2]).unwrap()
+        });
 
         event_loop
             .dispatch(Some(Duration::from_millis(10)), &mut signal_received)

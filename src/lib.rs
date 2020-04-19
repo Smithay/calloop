@@ -79,7 +79,9 @@
 
 #![warn(missing_docs)]
 
-pub extern crate mio;
+mod sys;
+
+pub use sys::{Interest, Mode, Poll, Readiness, Token};
 
 pub use self::loop_logic::{EventLoop, InsertError, LoopHandle, LoopSignal};
 pub use self::sources::*;
@@ -87,3 +89,10 @@ pub use self::sources::*;
 mod list;
 mod loop_logic;
 mod sources;
+
+fn no_nix_err(err: nix::Error) -> std::io::Error {
+    match err {
+        ::nix::Error::Sys(errno) => errno.into(),
+        _ => unreachable!(),
+    }
+}

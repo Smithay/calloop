@@ -6,26 +6,18 @@
 //! The `Timer<T>` event source provides an handle `TimerHandle<T>`, which is used
 //! to set or cancel timeouts. This handle is cloneable and can be send accross threads
 //! if `T: Send`, allowing you to setup timeouts from any point of your program.
-//!
-//! This implementation is based on
-//! [`mio_more::timer`](https://docs.rs/mio-more/*/mio_more/timer/index.html).
 
 use std::cell::RefCell;
 use std::collections::BinaryHeap;
 use std::io;
-use std::rc::Rc;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
 };
 use std::time::{Duration, Instant};
 
-use mio::{
-    event::{Event as MioEvent, Source as MioSource},
-    Interest, Waker,
-};
-
-use crate::{EventDispatcher, EventSource};
+use super::ping::{make_ping, PingSource};
+use crate::{EventSource, Poll, Readiness, Token};
 
 /// A Timer event source
 ///
@@ -34,16 +26,20 @@ use crate::{EventDispatcher, EventSource};
 /// as a response to a timeout being reached (for reccuring ticks for example).
 pub struct Timer<T> {
     inner: Arc<Mutex<TimerInner<T>>>,
+    source: TimerSource,
 }
 
 impl<T> Timer<T> {
     /// Create a new timer with default parameters
     ///
     /// Default time resolution is 100ms
-    pub fn new() -> Timer<T> {
-        Timer {
-            inner: Arc::new(Mutex::new(TimerInner::new())),
-        }
+    pub fn new() -> std::io::Result<Timer<T>> {
+        let (scheduler, source) = TimerScheduler::new()?;
+        let inner = TimerInner::new(scheduler);
+        Ok(Timer {
+            inner: Arc::new(Mutex::new(inner)),
+            source,
+        })
     }
 
     /// Get an handle for this timer
@@ -51,12 +47,6 @@ impl<T> Timer<T> {
         TimerHandle {
             inner: self.inner.clone(),
         }
-    }
-}
-
-impl<T> Default for Timer<T> {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -113,74 +103,54 @@ impl<T> TimerHandle<T> {
 }
 
 impl<T: 'static> EventSource for Timer<T> {
-    type Event = (T, TimerHandle<T>);
+    type Event = T;
+    type Metadata = TimerHandle<T>;
+    type Ret = ();
 
-    fn interest(&self) -> Interest {
-        Interest::READABLE
-    }
-
-    fn as_mio_source(&mut self) -> Option<&mut dyn MioSource> {
-        None
-    }
-
-    fn make_dispatcher<Data: 'static, F: FnMut((T, TimerHandle<T>), &mut Data) + 'static>(
+    fn process_events<C>(
         &mut self,
-        callback: F,
-        waker: &Arc<Waker>,
-    ) -> Rc<RefCell<dyn EventDispatcher<Data>>> {
-        {
-            let mut inner = self.inner.lock().unwrap();
-            inner.scheduler = Some(
-                TimerScheduler::new(waker.clone())
-                    .expect("[calloop] Failed to initialize the timer scheduler"),
-            );
-            inner.reschedule();
-        }
-        Rc::new(RefCell::new(Dispatcher {
-            _data: ::std::marker::PhantomData,
+        readiness: Readiness,
+        token: Token,
+        mut callback: C,
+    ) -> std::io::Result<()>
+    where
+        C: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+    {
+        let mut handle = TimerHandle {
             inner: self.inner.clone(),
-            callback,
-        }))
-    }
-}
-
-struct Dispatcher<Data, T, F: FnMut((T, TimerHandle<T>), &mut Data)> {
-    _data: ::std::marker::PhantomData<fn(&mut Data)>,
-    inner: Arc<Mutex<TimerInner<T>>>,
-    callback: F,
-}
-
-impl<Data, T, F: FnMut((T, TimerHandle<T>), &mut Data)> EventDispatcher<Data>
-    for Dispatcher<Data, T, F>
-{
-    fn ready(&mut self, _event: Option<&MioEvent>, data: &mut Data) {
-        // unlock the inner between each user callback, so that they can
-        // insert new timers from inside the callback
-        let mut some_expired = false;
-        loop {
-            let next_expired: Option<T> = {
-                let mut guard = self.inner.lock().unwrap();
-                guard.next_expired()
-            };
-            if let Some(val) = next_expired {
-                some_expired = true;
-                (self.callback)(
-                    (
-                        val,
-                        TimerHandle {
-                            inner: self.inner.clone(),
-                        },
-                    ),
-                    data,
-                );
-            } else {
-                break;
+        };
+        let inner = &self.inner;
+        self.source.process_events(readiness, token, |(), &mut ()| {
+            let mut some_expired = false;
+            loop {
+                let next_expired: Option<T> = {
+                    let mut guard = inner.lock().unwrap();
+                    guard.next_expired()
+                };
+                if let Some(val) = next_expired {
+                    some_expired = true;
+                    callback(val, &mut handle);
+                } else {
+                    break;
+                }
             }
-        }
-        // now compute the next timeout and signal if necessary
-        if some_expired {
-            self.inner.lock().unwrap().reschedule();
-        }
+            // now compute the next timeout and signal if necessary
+            if some_expired {
+                inner.lock().unwrap().reschedule();
+            }
+        })
+    }
+
+    fn register(&mut self, poll: &mut Poll, token: Token) -> std::io::Result<()> {
+        self.source.register(poll, token)
+    }
+
+    fn reregister(&mut self, poll: &mut Poll, token: Token) -> std::io::Result<()> {
+        self.source.reregister(poll, token)
+    }
+
+    fn unregister(&mut self, poll: &mut Poll) -> std::io::Result<()> {
+        self.source.unregister(poll)
     }
 }
 
@@ -196,15 +166,15 @@ struct TimeoutData<T> {
 
 struct TimerInner<T> {
     heap: BinaryHeap<TimeoutData<T>>,
-    scheduler: Option<TimerScheduler>,
+    scheduler: TimerScheduler,
     counter: u32,
 }
 
 impl<T> TimerInner<T> {
-    fn new() -> TimerInner<T> {
+    fn new(scheduler: TimerScheduler) -> TimerInner<T> {
         TimerInner {
             heap: BinaryHeap::new(),
-            scheduler: None,
+            scheduler,
             counter: 0,
         }
     }
@@ -262,12 +232,10 @@ impl<T> TimerInner<T> {
     }
 
     fn reschedule(&mut self) {
-        if let Some(ref mut scheduler) = self.scheduler {
-            if let Some(next_deadline) = self.heap.peek().map(|data| data.deadline) {
-                scheduler.reschedule(next_deadline);
-            } else {
-                scheduler.deschedule();
-            }
+        if let Some(next_deadline) = self.heap.peek().map(|data| data.deadline) {
+            self.scheduler.reschedule(next_deadline);
+        } else {
+            self.scheduler.deschedule();
         }
     }
 }
@@ -307,13 +275,17 @@ struct TimerScheduler {
     thread: std::thread::JoinHandle<()>,
 }
 
+type TimerSource = PingSource;
+
 impl TimerScheduler {
-    fn new(waker: Arc<Waker>) -> io::Result<TimerScheduler> {
+    fn new() -> io::Result<(TimerScheduler, TimerSource)> {
         let current_deadline = Arc::new(Mutex::new(None::<Instant>));
         let thread_deadline = current_deadline.clone();
 
         let kill_switch = Arc::new(AtomicBool::new(false));
         let thread_kill = kill_switch.clone();
+
+        let (ping, ping_source) = make_ping()?;
 
         let thread = std::thread::Builder::new()
             .name("calloop timer".into())
@@ -334,7 +306,7 @@ impl TimerScheduler {
                         std::thread::park_timeout(remaining);
                     } else {
                         // it is expired, wake the event loop and go to sleep
-                        let _ = waker.wake();
+                        ping.ping();
                         std::thread::park();
                     }
                 } else {
@@ -343,11 +315,12 @@ impl TimerScheduler {
                 }
             })?;
 
-        Ok(TimerScheduler {
+        let scheduler = TimerScheduler {
             current_deadline,
             kill_switch,
             thread,
-        })
+        };
+        Ok((scheduler, ping_source))
     }
 
     fn reschedule(&mut self, new_deadline: Instant) {
@@ -393,14 +366,16 @@ mod tests {
 
         let mut fired = false;
 
-        let timer = evl_handle
-            .insert_source(Timer::<()>::new(), move |((), _), f| {
+        let timer = Timer::<()>::new().unwrap();
+        let timer_handle = timer.handle();
+        evl_handle
+            .insert_source(timer, move |(), _, f| {
                 *f = true;
             })
             .map_err(Into::<io::Error>::into)
             .unwrap();
 
-        timer.handle().add_timeout(Duration::from_millis(300), ());
+        timer_handle.add_timeout(Duration::from_millis(300), ());
 
         event_loop
             .dispatch(Some(::std::time::Duration::from_millis(100)), &mut fired)
@@ -423,16 +398,19 @@ mod tests {
 
         let mut fired = Vec::new();
 
-        let timer = evl_handle
-            .insert_source(Timer::new(), |(val, _), fired: &mut Vec<u32>| {
+        let timer = Timer::<u32>::new().unwrap();
+        let timer_handle = timer.handle();
+
+        evl_handle
+            .insert_source(timer, |val, _, fired: &mut Vec<u32>| {
                 fired.push(val);
             })
             .map_err(Into::<io::Error>::into)
             .unwrap();
 
-        timer.handle().add_timeout(Duration::from_millis(300), 1);
-        timer.handle().add_timeout(Duration::from_millis(100), 2);
-        timer.handle().add_timeout(Duration::from_millis(600), 3);
+        timer_handle.add_timeout(Duration::from_millis(300), 1);
+        timer_handle.add_timeout(Duration::from_millis(100), 2);
+        timer_handle.add_timeout(Duration::from_millis(600), 3);
 
         // 3 dispatches as each returns once at least one event occured
 
@@ -463,16 +441,17 @@ mod tests {
 
         let mut fired = Vec::new();
 
-        let timer = evl_handle
-            .insert_source(Timer::new(), |(val, _), fired: &mut Vec<u32>| {
-                fired.push(val)
-            })
+        let timer = Timer::<u32>::new().unwrap();
+        let timer_handle = timer.handle();
+
+        evl_handle
+            .insert_source(timer, |val, _, fired: &mut Vec<u32>| fired.push(val))
             .map_err(Into::<io::Error>::into)
             .unwrap();
 
-        let timeout1 = timer.handle().add_timeout(Duration::from_millis(300), 1);
-        let timeout2 = timer.handle().add_timeout(Duration::from_millis(100), 2);
-        let timeout3 = timer.handle().add_timeout(Duration::from_millis(600), 3);
+        let timeout1 = timer_handle.add_timeout(Duration::from_millis(300), 1);
+        let timeout2 = timer_handle.add_timeout(Duration::from_millis(100), 2);
+        let timeout3 = timer_handle.add_timeout(Duration::from_millis(600), 3);
 
         // 3 dispatches as each returns once at least one event occured
         //
@@ -486,8 +465,8 @@ mod tests {
         assert_eq!(&fired, &[2]);
 
         // timeout2 has already fired, we cancel timeout1
-        assert_eq!(timer.handle().cancel_timeout(&timeout2), None);
-        assert_eq!(timer.handle().cancel_timeout(&timeout1), Some(1));
+        assert_eq!(timer_handle.cancel_timeout(&timeout2), None);
+        assert_eq!(timer_handle.cancel_timeout(&timeout1), Some(1));
 
         event_loop
             .dispatch(Some(::std::time::Duration::from_millis(300)), &mut fired)
@@ -496,7 +475,7 @@ mod tests {
         assert_eq!(&fired, &[2]);
 
         // cancel timeout3
-        assert_eq!(timer.handle().cancel_timeout(&timeout3), Some(3));
+        assert_eq!(timer_handle.cancel_timeout(&timeout3), Some(3));
 
         event_loop
             .dispatch(Some(::std::time::Duration::from_millis(600)), &mut fired)

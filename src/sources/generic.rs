@@ -1,267 +1,87 @@
-//! A generic event source wrapping an `Evented` type
+//! A generic event source wrapping a file descriptor
+//!
+//! You can use this general purpose adapter around file descriptor
+//! to insert your own file descriptors into an event loop.
+//!
+//! It can also help you implementing your own event sources: just have
+//! these `Generic<_>` as fields of your event source, and delegate the
+//! `EventSource` implementation to them.
 
-use std::cell::RefCell;
 use std::io;
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, RawFd};
-use std::rc::Rc;
-use std::sync::Arc;
 
-use mio::{
-    event::{Event as MioEvent, Source as MioSource},
-    Interest, Registry, Token, Waker,
-};
+use crate::{EventSource, Interest, Mode, Poll, Readiness, Token};
 
-use crate::{EventDispatcher, EventSource};
-
-/// A generic event source wrapping an `Evented` type
-///
-/// It will simply forward the readiness and an acces to
-/// the wrapped `Evented` type to the suer callback. See
-/// the `Event` type in this module.
-pub struct Generic<E: MioSource + 'static> {
-    inner: Rc<RefCell<E>>,
-    interest: Interest,
+/// A generic event source wrapping a FD-backed type
+pub struct Generic<F: AsRawFd> {
+    /// The wrapped FD-backed type
+    pub file: F,
+    /// The programmed interest
+    pub interest: Interest,
+    /// The programmed mode
+    pub mode: Mode,
 }
 
-impl<E: MioSource + 'static> Generic<E> {
-    /// Wrap an `Evented` type into a `Generic` event source
-    ///
-    /// It is initialized with no interest nor poll options,
-    /// as such you should set them using the `set_interest`
-    /// and `set_pollopts` methods before inserting it in the
-    /// event loop.
-    pub fn new(source: E) -> Generic<E> {
-        Self::from_rc(Rc::new(RefCell::new(source)))
-    }
+/// A wrapper to insert a raw file descriptor into a `Generic` event source
+pub struct Fd(pub RawFd);
 
-    /// Wrap an `Evented` type from an `Rc` into a `Generic` event source
-    ///
-    /// Same as the `new` method, but you can provide a source that is alreay
-    /// in a reference counted pointer, so that `Generic` won't add a new
-    /// layer. This is useful if you need to share this source accross multiple
-    /// modules, and `calloop` is not the first one to be initialized.
-    pub fn from_rc(source: Rc<RefCell<E>>) -> Generic<E> {
+impl AsRawFd for Fd {
+    fn as_raw_fd(&self) -> RawFd {
+        self.0
+    }
+}
+
+impl<F: AsRawFd + 'static> Generic<F> {
+    /// Wrap a FD-backed type into a `Generic` event source
+    pub fn new(file: F, interest: Interest, mode: Mode) -> Generic<F> {
         Generic {
-            inner: source,
-            interest: Interest::READABLE,
+            file,
+            interest,
+            mode,
         }
     }
 
-    /// Change the interest for this evented source
-    ///
-    /// If the source was already inserted in an event loop,
-    /// it needs to be re-registered for the change to take
-    /// effect.
-    pub fn set_interest(&mut self, interest: Interest) {
-        self.interest = interest;
-    }
-
-    /// Get a clone of the inner `Rc` wrapping your event source
-    pub fn clone_inner(&self) -> Rc<RefCell<E>> {
-        self.inner.clone()
-    }
-
-    /// Unwrap the `Generic` source to retrieve the underlying `Evented`.
-    ///
-    /// If you didn't clone the `Rc<RefCell<E>>` from the `Event<E>` you received,
-    /// the returned `Rc` should be unique.
-    pub fn unwrap(self) -> Rc<RefCell<E>> {
-        self.inner
+    /// Unwrap the `Generic` source to retrieve the underlying type
+    pub fn unwrap(self) -> F {
+        self.file
     }
 }
 
-impl<Fd: AsRawFd> Generic<SourceFd<Fd>> {
-    /// Wrap a file descriptor based source into a `Generic` event source.
-    ///
-    /// This will only work with poll-compatible file descriptors, which typically
-    /// not include basic files.
-    #[cfg(unix)]
-    pub fn from_fd_source(source: Fd) -> Generic<SourceFd<Fd>> {
-        Generic::new(SourceFd(source))
+impl Generic<Fd> {
+    /// Wrap a raw file descriptor into a `Generic` event source
+    pub fn from_fd(fd: RawFd, interest: Interest, mode: Mode) -> Generic<Fd> {
+        Self::new(Fd(fd), interest, mode)
     }
 }
 
-impl Generic<SourceRawFd> {
-    /// Wrap a raw file descriptor into a `Generic` event source.
-    ///
-    /// This will only work with poll-compatible file descriptors, which typically
-    /// not include basic files.
-    ///
-    /// This does _not_ take ownership of the file descriptor, hence you are responsible
-    /// of its correct lifetime.
-    #[cfg(unix)]
-    pub fn from_raw_fd(fd: RawFd) -> Generic<SourceRawFd> {
-        Generic::new(SourceRawFd(fd))
-    }
-}
+impl<F: AsRawFd> EventSource for Generic<F> {
+    type Event = Readiness;
+    type Metadata = F;
+    type Ret = io::Result<()>;
 
-/// The possible readiness flags associated with the generic event source
-#[derive(Copy, Clone, Debug)]
-pub struct Readiness {
-    /// The source is readable
-    pub readable: bool,
-    /// The source is writable
-    pub writable: bool,
-    /// The source has an error
-    ///
-    /// This flag is only indicative, and may be absent even if the source
-    /// actually has an error, which will be signalled at the next attempt
-    /// to read or write it, depending on the error.
-    pub error: bool,
-}
-
-impl Readiness {
-    fn empty() -> Readiness {
-        Readiness {
-            readable: false,
-            writable: false,
-            error: false,
-        }
-    }
-}
-
-/// An event generated by the `Generic` source
-pub struct Event<E: MioSource + 'static> {
-    /// An access to the source that generated this event
-    pub source: Rc<RefCell<E>>,
-    /// The associated rediness
-    pub readiness: Readiness,
-}
-
-/// An owning wrapper implementing Evented for any file descriptor based type in Unix
-#[cfg(unix)]
-pub struct SourceFd<F: AsRawFd>(pub F);
-
-impl<F: AsRawFd> MioSource for SourceFd<F> {
-    fn register(
+    fn process_events<C>(
         &mut self,
-        registry: &Registry,
-        token: Token,
-        interest: Interest,
-    ) -> io::Result<()> {
-        mio::unix::SourceFd(&self.0.as_raw_fd()).register(registry, token, interest)
+        readiness: Readiness,
+        _: Token,
+        mut callback: C,
+    ) -> std::io::Result<()>
+    where
+        C: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+    {
+        callback(readiness, &mut self.file)
     }
 
-    fn reregister(
-        &mut self,
-        registry: &Registry,
-        token: Token,
-        interest: Interest,
-    ) -> io::Result<()> {
-        mio::unix::SourceFd(&self.0.as_raw_fd()).reregister(registry, token, interest)
+    fn register(&mut self, poll: &mut Poll, token: Token) -> std::io::Result<()> {
+        poll.register(self.file.as_raw_fd(), self.interest, self.mode, token)
     }
 
-    fn deregister(&mut self, registry: &Registry) -> io::Result<()> {
-        mio::unix::SourceFd(&self.0.as_raw_fd()).deregister(registry)
-    }
-}
-
-/// A wrapper implementing Evented for any raw file descriptor.
-///
-/// It does _not_ take ownership of the file descriptor, you are
-/// responsible for ensuring its correct lifetime.
-#[cfg(unix)]
-pub struct SourceRawFd(pub RawFd);
-
-impl MioSource for SourceRawFd {
-    fn register(
-        &mut self,
-        registry: &Registry,
-        token: Token,
-        interest: Interest,
-    ) -> io::Result<()> {
-        mio::unix::SourceFd(&self.0).register(registry, token, interest)
+    fn reregister(&mut self, poll: &mut Poll, token: Token) -> std::io::Result<()> {
+        poll.reregister(self.file.as_raw_fd(), self.interest, self.mode, token)
     }
 
-    fn reregister(
-        &mut self,
-        registry: &Registry,
-        token: Token,
-        interest: Interest,
-    ) -> io::Result<()> {
-        mio::unix::SourceFd(&self.0).reregister(registry, token, interest)
-    }
-
-    fn deregister(&mut self, registry: &Registry) -> io::Result<()> {
-        mio::unix::SourceFd(&self.0).deregister(registry)
-    }
-}
-
-impl<E: MioSource + 'static> MioSource for Generic<E> {
-    fn register(
-        &mut self,
-        registry: &Registry,
-        token: Token,
-        interest: Interest,
-    ) -> io::Result<()> {
-        self.inner.borrow_mut().register(registry, token, interest)
-    }
-
-    fn reregister(
-        &mut self,
-        registry: &Registry,
-        token: Token,
-        interest: Interest,
-    ) -> io::Result<()> {
-        self.inner
-            .borrow_mut()
-            .reregister(registry, token, interest)
-    }
-
-    fn deregister(&mut self, registry: &Registry) -> io::Result<()> {
-        self.inner.borrow_mut().deregister(registry)
-    }
-}
-
-impl<E: MioSource + 'static> EventSource for Generic<E> {
-    type Event = Event<E>;
-
-    fn interest(&self) -> Interest {
-        self.interest
-    }
-
-    fn as_mio_source(&mut self) -> Option<&mut dyn MioSource> {
-        Some(self)
-    }
-
-    fn make_dispatcher<Data: 'static, F: FnMut(Event<E>, &mut Data) + 'static>(
-        &mut self,
-        callback: F,
-        _: &Arc<Waker>,
-    ) -> Rc<RefCell<dyn EventDispatcher<Data>>> {
-        Rc::new(RefCell::new(Dispatcher {
-            _data: ::std::marker::PhantomData,
-            inner: self.inner.clone(),
-            callback,
-        }))
-    }
-}
-
-struct Dispatcher<Data, E: MioSource + 'static, F: FnMut(Event<E>, &mut Data)> {
-    _data: ::std::marker::PhantomData<fn(&mut Data)>,
-    inner: Rc<RefCell<E>>,
-    callback: F,
-}
-
-impl<Data, E: MioSource + 'static, F: FnMut(Event<E>, &mut Data)> EventDispatcher<Data>
-    for Dispatcher<Data, E, F>
-{
-    fn ready(&mut self, event: Option<&MioEvent>, data: &mut Data) {
-        let readiness = event
-            .map(|event| Readiness {
-                readable: event.is_readable(),
-                writable: event.is_writable(),
-                error: event.is_error(),
-            })
-            .unwrap_or_else(Readiness::empty);
-        (self.callback)(
-            Event {
-                source: self.inner.clone(),
-                readiness,
-            },
-            data,
-        )
+    fn unregister(&mut self, poll: &mut Poll) -> std::io::Result<()> {
+        poll.unregister(self.file.as_raw_fd())
     }
 }
 
@@ -269,7 +89,8 @@ impl<Data, E: MioSource + 'static, F: FnMut(Event<E>, &mut Data)> EventDispatche
 mod test {
     use std::io::{self, Read, Write};
 
-    use super::{Event, Generic};
+    use super::Generic;
+    use crate::{Interest, Mode};
     #[cfg(unix)]
     #[test]
     fn dispatch_unix() {
@@ -281,22 +102,22 @@ mod test {
 
         let (mut tx, rx) = UnixStream::pair().unwrap();
 
-        let mut generic = Generic::from_fd_source(rx);
-        generic.set_interest(mio::Interest::READABLE);
+        let generic = Generic::new(rx, Interest::Readable, Mode::Level);
 
         let mut dispached = false;
 
         let _source = handle
-            .insert_source(generic, move |Event { source, readiness }, d| {
+            .insert_source(generic, move |readiness, file, d| {
                 assert!(readiness.readable);
                 // we have not registered for writability
                 assert!(!readiness.writable);
                 let mut buffer = vec![0; 10];
-                let ret = source.borrow_mut().0.read(&mut buffer).unwrap();
+                let ret = file.read(&mut buffer).unwrap();
                 assert_eq!(ret, 6);
                 assert_eq!(&buffer[..6], &[1, 2, 3, 4, 5, 6]);
 
                 *d = true;
+                Ok(())
             })
             .map_err(Into::<io::Error>::into)
             .unwrap();
@@ -327,14 +148,14 @@ mod test {
 
         let (mut tx, rx) = UnixStream::pair().unwrap();
 
-        let mut generic = Generic::from_fd_source(rx);
-        generic.set_interest(mio::Interest::READABLE);
+        let generic = Generic::new(rx, Interest::Readable, Mode::Level);
 
         let mut dispached = false;
 
         let source = handle
-            .insert_source(generic, move |Event { .. }, d| {
+            .insert_source(generic, move |_, _, d| {
                 *d = true;
+                Ok(())
             })
             .map_err(Into::<io::Error>::into)
             .unwrap();
@@ -347,7 +168,7 @@ mod test {
 
         // remove the source, and then write something
 
-        let generic = source.remove();
+        let generic = event_loop.handle().remove(source);
 
         tx.write(&[1, 2, 3, 4, 5, 6]).unwrap();
         tx.flush().unwrap();
@@ -361,16 +182,17 @@ mod test {
 
         // insert it again
         let _source = handle
-            .insert_source(generic, move |Event { source, readiness }, d| {
+            .insert_source(generic, move |readiness, file, d| {
                 assert!(readiness.readable);
                 // we have not registered for writability
                 assert!(!readiness.writable);
                 let mut buffer = vec![0; 10];
-                let ret = source.borrow_mut().0.read(&mut buffer).unwrap();
+                let ret = file.read(&mut buffer).unwrap();
                 assert_eq!(ret, 6);
                 assert_eq!(&buffer[..6], &[1, 2, 3, 4, 5, 6]);
 
                 *d = true;
+                Ok(())
             })
             .map_err(Into::<io::Error>::into)
             .unwrap();
