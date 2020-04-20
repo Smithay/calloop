@@ -1,7 +1,7 @@
 //! Calloop, a Callback-based Event Loop
 //!
 //! This crate provides an `EventLoop` type, which is a small abstraction
-//! over an `mio`-based event loop. The main difference between this crate
+//! over a polling system. The main difference between this crate
 //! and other traditional rust event loops is that it is based on callbacks:
 //! you can register several event sources, each being associated with a callback
 //! closure that will be invoked whenever the associated event source generates
