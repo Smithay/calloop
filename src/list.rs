@@ -46,15 +46,3 @@ impl<Data> SourceList<Data> {
         ::std::mem::replace(&mut self.sources[token.id as usize], None)
     }
 }
-
-pub(crate) trait ErasedList {
-    // this returs a value for the same reason as above, but we must erase its type
-    // due to the `Data` parameter, hence Box<Any>
-    fn del_source(&mut self, token: Token) -> Box<dyn (::std::any::Any)>;
-}
-
-impl<Data: 'static> ErasedList for SourceList<Data> {
-    fn del_source(&mut self, token: Token) -> Box<dyn (::std::any::Any)> {
-        Box::new(self.del_source(token))
-    }
-}
