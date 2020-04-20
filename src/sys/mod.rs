@@ -65,7 +65,7 @@ pub(crate) struct PollEvent {
 /// It also contains a publc field that you can change. In case your event
 /// source needs to register more than one FD, you can register each with a
 /// different value of the `sub_id` field, to differentiate them. You can then
-/// know which of these FD si ready by reading the `sub_id` field of the
+/// know which of these FD is ready by reading the `sub_id` field of the
 /// token you'll be given in the `process_events` method of your source.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Token {
