@@ -73,15 +73,13 @@ impl<Data: 'static> LoopHandle<Data> {
         )));
         let token = sources.add_source(dispatcher);
 
-        if let Err(error) = sources
+        let ret = sources
             .get_dispatcher(token)
             .unwrap()
-            .register(&mut *poll, token)
-        {
-            let source = self
-                .inner
-                .sources
-                .borrow_mut()
+            .register(&mut *poll, token);
+
+        if let Err(error) = ret {
+            let source = sources
                 .del_source(token)
                 .expect("Source was just inserted?!")
                 .into_source_any()
@@ -283,8 +281,12 @@ impl<Data: 'static> EventLoop<Data> {
     ///
     /// Once pending events have been processed or the timeout is reached, all pending
     /// idle callbacks will be fired before this method returns.
-    pub fn dispatch(&mut self, timeout: Option<Duration>, data: &mut Data) -> io::Result<()> {
-        self.dispatch_events(timeout, data)?;
+    pub fn dispatch<D: Into<Option<Duration>>>(
+        &mut self,
+        timeout: D,
+        data: &mut Data,
+    ) -> io::Result<()> {
+        self.dispatch_events(timeout.into(), data)?;
 
         self.dispatch_idles(data);
 
@@ -362,6 +364,8 @@ impl LoopSignal {
 mod tests {
     use std::time::Duration;
 
+    use crate::{Interest, Mode};
+
     use super::EventLoop;
 
     #[test]
@@ -394,7 +398,7 @@ mod tests {
         idle.cancel();
 
         event_loop
-            .dispatch(Some(Duration::from_millis(0)), &mut dispatched)
+            .dispatch(Duration::from_millis(0), &mut dispatched)
             .unwrap();
 
         assert!(!dispatched);
@@ -485,7 +489,7 @@ mod tests {
         event_loop.handle().remove(source_1);
 
         event_loop
-            .dispatch(Some(std::time::Duration::from_millis(0)), &mut ())
+            .dispatch(Duration::from_millis(0), &mut ())
             .unwrap();
 
         let source_3 = event_loop
@@ -493,5 +497,58 @@ mod tests {
             .insert_source(DummySource, |_, _, _| {})
             .unwrap();
         assert_eq!(source_3.token.id, 1);
+    }
+
+    #[test]
+    fn insert_bad_source() {
+        let event_loop = EventLoop::<()>::new().unwrap();
+        let ret = event_loop.handle().insert_source(
+            crate::sources::generic::Generic::from_fd(42, Interest::Readable, Mode::Level),
+            |_, _, _| Ok(()),
+        );
+        assert!(ret.is_err());
+    }
+
+    #[test]
+    fn disarm_rearm() {
+        let mut event_loop = EventLoop::<bool>::new().unwrap();
+        let (ping, ping_source) = crate::sources::ping::make_ping().unwrap();
+
+        let ping_source = event_loop
+            .handle()
+            .insert_source(ping_source, |(), &mut (), dispatched| {
+                *dispatched = true;
+            })
+            .unwrap();
+
+        ping.ping();
+        let mut dispatched = false;
+        event_loop
+            .dispatch(Duration::from_millis(0), &mut dispatched)
+            .unwrap();
+        assert_eq!(dispatched, true);
+
+        // disable the source
+        ping.ping();
+        event_loop.handle().disable(&ping_source).unwrap();
+        let mut dispatched = false;
+        event_loop
+            .dispatch(Duration::from_millis(0), &mut dispatched)
+            .unwrap();
+        assert_eq!(dispatched, false);
+
+        // disabling it again is an error
+        event_loop.handle().disable(&ping_source).unwrap_err();
+
+        // reenable it, the previous ping now gets dispatched
+        event_loop.handle().enable(&ping_source).unwrap();
+        let mut dispatched = false;
+        event_loop
+            .dispatch(Duration::from_millis(0), &mut dispatched)
+            .unwrap();
+        assert_eq!(dispatched, true);
+
+        // enabling it again is an error
+        event_loop.handle().enable(&ping_source).unwrap_err();
     }
 }
