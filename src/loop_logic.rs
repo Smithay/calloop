@@ -364,7 +364,7 @@ impl LoopSignal {
 mod tests {
     use std::time::Duration;
 
-    use crate::{Interest, Mode};
+    use crate::{generic::Generic, sources::ping::*, Interest, Mode, Poll, Readiness, Token};
 
     use super::EventLoop;
 
@@ -437,8 +437,6 @@ mod tests {
 
     #[test]
     fn insert_remove() {
-        use crate::{Poll, Readiness, Token};
-
         // A dummy EventSource to test insertion and removal of sources
         struct DummySource;
 
@@ -512,7 +510,7 @@ mod tests {
     #[test]
     fn disarm_rearm() {
         let mut event_loop = EventLoop::<bool>::new().unwrap();
-        let (ping, ping_source) = crate::sources::ping::make_ping().unwrap();
+        let (ping, ping_source) = make_ping().unwrap();
 
         let ping_source = event_loop
             .handle()
@@ -550,5 +548,188 @@ mod tests {
 
         // enabling it again is an error
         event_loop.handle().enable(&ping_source).unwrap_err();
+    }
+
+    #[test]
+    fn multiple_tokens() {
+        struct DoubleSource {
+            ping1: PingSource,
+            ping2: PingSource,
+        }
+
+        impl crate::EventSource for DoubleSource {
+            type Event = u32;
+            type Metadata = ();
+            type Ret = ();
+
+            fn process_events<F>(
+                &mut self,
+                readiness: Readiness,
+                token: Token,
+                mut callback: F,
+            ) -> std::io::Result<()>
+            where
+                F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+            {
+                if token.sub_id == 1 {
+                    self.ping1
+                        .process_events(readiness, token, |(), &mut ()| callback(1, &mut ()))
+                } else if token.sub_id == 2 {
+                    self.ping2
+                        .process_events(readiness, token, |(), &mut ()| callback(2, &mut ()))
+                } else {
+                    Ok(())
+                }
+            }
+
+            fn register(&mut self, poll: &mut Poll, token: Token) -> std::io::Result<()> {
+                self.ping1.register(poll, Token { sub_id: 1, ..token })?;
+                self.ping2.register(poll, Token { sub_id: 2, ..token })?;
+                Ok(())
+            }
+
+            fn reregister(&mut self, poll: &mut Poll, token: Token) -> std::io::Result<()> {
+                self.ping1.reregister(poll, Token { sub_id: 1, ..token })?;
+                self.ping2.reregister(poll, Token { sub_id: 2, ..token })?;
+                Ok(())
+            }
+
+            fn unregister(&mut self, poll: &mut Poll) -> std::io::Result<()> {
+                self.ping1.unregister(poll)?;
+                self.ping2.unregister(poll)?;
+                Ok(())
+            }
+        }
+
+        let mut event_loop = EventLoop::<u32>::new().unwrap();
+
+        let (ping1, source1) = make_ping().unwrap();
+        let (ping2, source2) = make_ping().unwrap();
+
+        let source = DoubleSource {
+            ping1: source1,
+            ping2: source2,
+        };
+
+        event_loop
+            .handle()
+            .insert_source(source, |i, _, d| {
+                eprintln!("Dispatching {}", i);
+                *d += i
+            })
+            .unwrap();
+
+        let mut dispatched = 0;
+        ping1.ping();
+        event_loop
+            .dispatch(Duration::from_millis(0), &mut dispatched)
+            .unwrap();
+        assert_eq!(dispatched, 1);
+
+        dispatched = 0;
+        ping2.ping();
+        event_loop
+            .dispatch(Duration::from_millis(0), &mut dispatched)
+            .unwrap();
+        assert_eq!(dispatched, 2);
+
+        dispatched = 0;
+        ping1.ping();
+        ping2.ping();
+        event_loop
+            .dispatch(Duration::from_millis(0), &mut dispatched)
+            .unwrap();
+        assert_eq!(dispatched, 3);
+    }
+
+    #[test]
+    fn change_interests() {
+        use nix::sys::socket::{socketpair, AddressFamily, SockFlag, SockType};
+        use nix::unistd::{read, write};
+        let mut event_loop = EventLoop::<bool>::new().unwrap();
+
+        let (sock1, sock2) = socketpair(
+            AddressFamily::Unix,
+            SockType::Stream,
+            None,
+            SockFlag::SOCK_NONBLOCK,
+        )
+        .unwrap();
+
+        let source = Generic::from_fd(sock1, Interest::Readable, Mode::Level);
+
+        let sock1 = event_loop
+            .handle()
+            .insert_source(source, |_, fd, dispatched| {
+                *dispatched = true;
+                // read all contents available to drain the socket
+                let mut buf = [0u8; 32];
+                loop {
+                    match read(fd.0, &mut buf) {
+                        Ok(0) => break, // closed pipe, we are now inert
+                        Ok(_) => {}
+                        Err(e) => {
+                            let e = crate::no_nix_err(e);
+                            if e.kind() == std::io::ErrorKind::WouldBlock {
+                                break;
+                            // nothing more to read
+                            } else {
+                                // propagate error
+                                return Err(e);
+                            }
+                        }
+                    }
+                }
+                Ok(())
+            })
+            .unwrap();
+
+        // first dispatch, nothing is readable
+        let mut dispatched = false;
+        event_loop
+            .dispatch(Duration::from_millis(0), &mut dispatched)
+            .unwrap();
+        assert!(!dispatched);
+
+        // write something, the socket becomes readable
+        write(sock2, &[1, 2, 3]).unwrap();
+        dispatched = false;
+        event_loop
+            .dispatch(Duration::from_millis(0), &mut dispatched)
+            .unwrap();
+        assert!(dispatched);
+
+        // All has been read, no longer readable
+        dispatched = false;
+        event_loop
+            .dispatch(Duration::from_millis(0), &mut dispatched)
+            .unwrap();
+        assert!(!dispatched);
+
+        // change the interests for writability instead
+        event_loop
+            .handle()
+            .with_source(&sock1, |g| g.interest = Interest::Writable);
+        event_loop.handle().update(&sock1).unwrap();
+
+        // the socket is writable
+        dispatched = false;
+        event_loop
+            .dispatch(Duration::from_millis(0), &mut dispatched)
+            .unwrap();
+        assert!(dispatched);
+
+        // change back to readable
+        event_loop
+            .handle()
+            .with_source(&sock1, |g| g.interest = Interest::Readable);
+        event_loop.handle().update(&sock1).unwrap();
+
+        // the socket is not readable
+        dispatched = false;
+        event_loop
+            .dispatch(Duration::from_millis(0), &mut dispatched)
+            .unwrap();
+        assert!(!dispatched);
     }
 }
