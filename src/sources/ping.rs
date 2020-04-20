@@ -133,3 +133,35 @@ impl Drop for CloseOnDrop {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ping() {
+        let mut event_loop = crate::EventLoop::<bool>::new().unwrap();
+
+        let (ping, source) = make_ping().unwrap();
+
+        event_loop
+            .handle()
+            .insert_source(source, |(), &mut (), dispatched| *dispatched = true)
+            .unwrap();
+
+        ping.ping();
+
+        let mut dispatched = false;
+        event_loop
+            .dispatch(std::time::Duration::from_millis(0), &mut dispatched)
+            .unwrap();
+        assert!(dispatched);
+
+        // Ping has been drained an no longer generates events
+        let mut dispatched = false;
+        event_loop
+            .dispatch(std::time::Duration::from_millis(0), &mut dispatched)
+            .unwrap();
+        assert!(!dispatched);
+    }
+}
