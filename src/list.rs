@@ -15,6 +15,13 @@ impl<Data> SourceList<Data> {
         }
     }
 
+    pub(crate) fn contains(&self, token: Token) -> bool {
+        self.sources
+            .get(token.id as usize)
+            .map(Option::is_some)
+            .unwrap_or(false)
+    }
+
     pub(crate) fn get_dispatcher(&self, token: Token) -> Option<Rc<dyn EventDispatcher<Data>>> {
         match self.sources.get(token.id as usize) {
             Some(&Some(ref dispatcher)) => Some(dispatcher.clone()),

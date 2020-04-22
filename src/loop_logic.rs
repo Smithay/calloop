@@ -206,6 +206,15 @@ impl<Data: 'static> LoopHandle<Data> {
             .map(|s| *s)
             .unwrap_or_else(|_| panic!("Downcasting failed!"))
     }
+
+    /// Remove this event source from the event loop and drop it
+    ///
+    /// The source is not given back to you but instead dropped
+    ///
+    /// **Note**: This *can* be done from within the callback of the same source
+    pub fn kill<S: EventSource + 'static>(&self, source: Source<S>) {
+        self.inner.sources.borrow_mut().del_source(source.token);
+    }
 }
 
 /// An event loop
@@ -248,14 +257,25 @@ impl<Data: 'static> EventLoop<Data> {
         let events = self.handle.inner.poll.borrow_mut().poll(timeout)?;
 
         for event in events {
-            if let Some(disp) = self
+            let opt_disp = self
                 .handle
                 .inner
                 .sources
                 .borrow()
-                .get_dispatcher(event.token)
-            {
+                .get_dispatcher(event.token);
+
+            if let Some(disp) = opt_disp {
                 disp.process_events(event.readiness, event.token, data)?;
+
+                if !self.handle.inner.sources.borrow().contains(event.token) {
+                    // the source has been removed from within its callback, unregister it
+                    if let Err(e) = disp.unregister(&mut *self.handle.inner.poll.borrow_mut()) {
+                        log::warn!(
+                            "[calloop] Failed to unregister source from the polling system: {:?}",
+                            e
+                        );
+                    }
+                }
             } else {
                 log::warn!(
                     "[calloop] Received an event for non-existence source: {}",
@@ -367,7 +387,9 @@ impl LoopSignal {
 mod tests {
     use std::time::Duration;
 
-    use crate::{generic::Generic, sources::ping::*, Interest, Mode, Poll, Readiness, Token};
+    use crate::{
+        generic::Generic, sources::ping::*, Interest, Mode, Poll, Readiness, Source, Token,
+    };
 
     use super::EventLoop;
 
@@ -440,41 +462,6 @@ mod tests {
 
     #[test]
     fn insert_remove() {
-        // A dummy EventSource to test insertion and removal of sources
-        struct DummySource;
-
-        impl crate::EventSource for DummySource {
-            type Event = ();
-            type Metadata = ();
-            type Ret = ();
-
-            fn process_events<F>(
-                &mut self,
-                _: Readiness,
-                _: Token,
-                mut callback: F,
-            ) -> std::io::Result<()>
-            where
-                F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
-            {
-                callback((), &mut ());
-                Ok(())
-            }
-
-            fn register(&mut self, _: &mut Poll, _: Token) -> std::io::Result<()> {
-                Ok(())
-            }
-
-            fn reregister(&mut self, _: &mut Poll, _: Token) -> std::io::Result<()> {
-                Ok(())
-            }
-
-            fn unregister(&mut self, _: &mut Poll) -> std::io::Result<()> {
-                Ok(())
-            }
-        }
-
-        // the actual test
         let mut event_loop = EventLoop::<()>::new().unwrap();
         let source_1 = event_loop
             .handle()
@@ -731,5 +718,65 @@ mod tests {
             .dispatch(Duration::from_millis(0), &mut dispatched)
             .unwrap();
         assert!(!dispatched);
+    }
+
+    #[test]
+    fn kill_source() {
+        let mut event_loop = EventLoop::<Option<Source<PingSource>>>::new().unwrap();
+
+        let handle = event_loop.handle();
+        let (ping, ping_source) = make_ping().unwrap();
+        let source = event_loop
+            .handle()
+            .insert_source(ping_source, move |(), &mut (), opt_src| {
+                if let Some(src) = opt_src.take() {
+                    handle.kill(src);
+                }
+            })
+            .unwrap();
+
+        ping.ping();
+
+        let mut opt_src = Some(source);
+
+        event_loop
+            .dispatch(Duration::from_millis(0), &mut opt_src)
+            .unwrap();
+
+        assert!(opt_src.is_none());
+    }
+
+    // A dummy EventSource to test insertion and removal of sources
+    struct DummySource;
+
+    impl crate::EventSource for DummySource {
+        type Event = ();
+        type Metadata = ();
+        type Ret = ();
+
+        fn process_events<F>(
+            &mut self,
+            _: Readiness,
+            _: Token,
+            mut callback: F,
+        ) -> std::io::Result<()>
+        where
+            F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+        {
+            callback((), &mut ());
+            Ok(())
+        }
+
+        fn register(&mut self, _: &mut Poll, _: Token) -> std::io::Result<()> {
+            Ok(())
+        }
+
+        fn reregister(&mut self, _: &mut Poll, _: Token) -> std::io::Result<()> {
+            Ok(())
+        }
+
+        fn unregister(&mut self, _: &mut Poll) -> std::io::Result<()> {
+            Ok(())
+        }
     }
 }
