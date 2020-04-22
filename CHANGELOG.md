@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.6.0 -- 2020-04-22
+
 - Drop the `mio` dependency
 - **Breaking Change**: Significantly rework the `calloop` API, notably:
   - Event sources are now owned by the `EventLoop`
