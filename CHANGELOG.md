@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.6.1 -- 2020-04-22
+
 - Introduce `LoopHandle::kill` to allow dropping a source from within its callback
 
 ## 0.6.0 -- 2020-04-22
