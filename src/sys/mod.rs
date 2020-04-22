@@ -5,6 +5,11 @@ mod epoll;
 #[cfg(target_os = "linux")]
 use epoll::Epoll as Poller;
 
+#[cfg(target_os = "freebsd")]
+mod kqueue;
+#[cfg(target_os = "freebsd")]
+use kqueue::Kqueue as Poller;
+
 /// Possible modes for registering a file descriptor
 #[derive(Copy, Clone, Debug)]
 pub enum Mode {
@@ -41,6 +46,25 @@ pub enum Interest {
     Both,
 }
 
+#[allow(dead_code)]
+impl Interest {
+    fn contains_read(self) -> bool {
+        match self {
+            Interest::Readable => true,
+            Interest::Writable => false,
+            Interest::Both => true,
+        }
+    }
+
+    fn contains_write(self) -> bool {
+        match self {
+            Interest::Readable => false,
+            Interest::Writable => true,
+            Interest::Both => false,
+        }
+    }
+}
+
 /// Readiness for a file descriptor notification
 #[derive(Copy, Clone, Debug)]
 pub struct Readiness {
@@ -74,6 +98,7 @@ pub struct Token {
     pub sub_id: u32,
 }
 
+#[allow(dead_code)]
 impl Token {
     pub(crate) fn to_u64(self) -> u64 {
         ((self.id as u64) << 32) + self.sub_id as u64
@@ -84,6 +109,37 @@ impl Token {
             id: (i >> 32) as u32,
             sub_id: (i & std::u32::MAX as u64) as u32,
         }
+    }
+
+    pub(crate) fn to_u32(self) -> u32 {
+        (self.id << 16) + self.sub_id
+    }
+
+    pub(crate) fn from_u32(i: u32) -> Token {
+        Token {
+            id: (i >> 16),
+            sub_id: (i & std::u16::MAX as u32),
+        }
+    }
+
+    #[cfg(target_pointer_width = "64")]
+    pub(crate) fn to_usize(self) -> usize {
+        self.to_u64() as usize
+    }
+
+    #[cfg(target_pointer_width = "32")]
+    pub(crate) fn to_usize(self) -> usize {
+        self.to_u32() as usize
+    }
+
+    #[cfg(target_pointer_width = "64")]
+    pub(crate) fn from_usize(i: usize) -> Token {
+        Self::from_u64(i as u64)
+    }
+
+    #[cfg(target_pointer_width = "32")]
+    pub(crate) fn from_usize(i: usize) -> Token {
+        Self::from_u64(i as u64)
     }
 }
 
