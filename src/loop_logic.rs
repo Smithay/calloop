@@ -548,9 +548,6 @@ mod tests {
             .dispatch(Duration::from_millis(0), &mut dispatched)
             .unwrap();
         assert_eq!(dispatched, true);
-
-        // enabling it again is an error
-        event_loop.handle().enable(&ping_source).unwrap_err();
     }
 
     #[test]
