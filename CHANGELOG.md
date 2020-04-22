@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Introduce `LoopHandle::kill` to allow dropping a source from within its callback
+
 ## 0.6.0 -- 2020-04-22
 
 - Drop the `mio` dependency
