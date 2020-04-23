@@ -6,7 +6,7 @@ documentation = "https://docs.rs/calloop/"
 repository = "https://github.com/Smithay/calloop"
 license = "MIT"
 description = "A callback-based event loop"
-keywords = [ "events", "loop", "callback" ]
+keywords = [ "events", "loop", "callback", "event loop", "unix" ]
 autotests = false
 edition = "2018"
 
