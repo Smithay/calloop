@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.6.2 -- 2020-04-23
+
+- Update the README and keywords for crates.io
+
 ## 0.6.1 -- 2020-04-22
 
 - Introduce `LoopHandle::kill` to allow dropping a source from within its callback

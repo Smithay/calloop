@@ -1,14 +1,15 @@
 [package]
 name = "calloop"
-version = "0.6.1"
+version = "0.6.2"
 authors = ["Victor Berger <victor.berger@m4x.org>"]
 documentation = "https://docs.rs/calloop/"
 repository = "https://github.com/Smithay/calloop"
 license = "MIT"
 description = "A callback-based event loop"
-keywords = [ "events", "loop", "callback", "event loop", "unix" ]
+keywords = [ "events", "loop", "callback", "eventloop", "unix" ]
 autotests = false
 edition = "2018"
+readme = "README.md"
 
 [badges]
 travis-ci = { repository = "Smithay/calloop" }
