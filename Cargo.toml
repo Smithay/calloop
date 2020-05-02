@@ -12,7 +12,6 @@ edition = "2018"
 readme = "README.md"
 
 [badges]
-travis-ci = { repository = "Smithay/calloop" }
 codecov = { repository = "Smithay/calloop" }
 
 [dependencies]
