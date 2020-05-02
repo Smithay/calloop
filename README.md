@@ -1,6 +1,6 @@
 [![crates.io](http://meritbadge.herokuapp.com/calloop)](https://crates.io/crates/calloop)
 [![docs.rs](https://docs.rs/calloop/badge.svg)](https://docs.rs/calloop)
-[![Build Status](https://travis-ci.org/Smithay/calloop.svg?branch=master)](https://travis-ci.org/Smithay/calloop)
+[![Continuous Integration](https://github.com/Smithay/calloop/workflows/Continuous%20Integration/badge.svg)](https://github.com/Smithay/calloop/actions?query=workflow%3A%22Continuous+Integration%22)
 [![Coverage Status](https://codecov.io/gh/Smithay/calloop/branch/master/graph/badge.svg)](https://codecov.io/gh/Smithay/calloop)
 
 # calloop
