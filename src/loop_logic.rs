@@ -7,10 +7,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::list::SourceList;
-use crate::sources::{EventSource, Idle, Source};
+use crate::sources::{EventSource, Idle, IdleDispatcher, Source};
 use crate::Poll;
 
-type IdleCallback<Data> = Rc<RefCell<Option<Box<dyn FnMut(&mut Data)>>>>;
+type IdleCallback<Data> = Rc<RefCell<dyn IdleDispatcher<Data>>>;
 
 struct LoopInner<Data> {
     poll: RefCell<Poll>,
@@ -58,7 +58,7 @@ impl<E> From<InsertError<E>> for io::Error {
     }
 }
 
-impl<Data: 'static> LoopHandle<Data> {
+impl<Data> LoopHandle<Data> {
     /// Insert an new event source in the loop
     ///
     /// The provided callback will be called during the dispatching cycles whenever the
@@ -71,7 +71,7 @@ impl<Data: 'static> LoopHandle<Data> {
         let mut sources = self.inner.sources.borrow_mut();
         let mut poll = self.inner.poll.borrow_mut();
 
-        let dispatcher = Rc::new(RefCell::new(crate::sources::Dispatcher::<Data, S, F>::new(
+        let dispatcher = Rc::new(RefCell::new(crate::sources::Dispatcher::<S, F>::new(
             source, callback,
         )));
         let token = sources.add_source(dispatcher);
@@ -104,11 +104,11 @@ impl<Data: 'static> LoopHandle<Data> {
     /// finished processing all pending events from the sources and becomes idle.
     pub fn insert_idle<F: FnOnce(&mut Data) + 'static>(&self, callback: F) -> Idle {
         let mut opt_cb = Some(callback);
-        let callback = Rc::new(RefCell::new(Some(Box::new(move |data: &mut Data| {
+        let callback = Rc::new(RefCell::new(Some(move |data: &mut Data| {
             if let Some(cb) = opt_cb.take() {
                 cb(data);
             }
-        }) as Box<dyn FnMut(&mut Data)>)));
+        })));
         self.inner.idles.borrow_mut().push(callback.clone());
         Idle { callback }
     }
@@ -226,7 +226,7 @@ pub struct EventLoop<Data> {
     ping: crate::sources::ping::Ping,
 }
 
-impl<Data: 'static> EventLoop<Data> {
+impl<Data> EventLoop<Data> {
     /// Create a new event loop
     ///
     /// Fails if the initialization of the polling system failed.
@@ -290,9 +290,7 @@ impl<Data: 'static> EventLoop<Data> {
     fn dispatch_idles(&mut self, data: &mut Data) {
         let idles = ::std::mem::replace(&mut *self.handle.inner.idles.borrow_mut(), Vec::new());
         for idle in idles {
-            if let Some(ref mut callback) = *idle.borrow_mut() {
-                callback(data);
-            }
+            idle.borrow_mut().dispatch(data);
         }
     }
 
@@ -744,6 +742,39 @@ mod tests {
             .unwrap();
 
         assert!(opt_src.is_none());
+    }
+
+    #[test]
+    fn non_static_data() {
+        use std::sync::mpsc;
+
+        let (sender, receiver) = mpsc::channel();
+
+        {
+            struct RefSender<'a>(&'a mpsc::Sender<()>);
+
+            let mut event_loop = EventLoop::<RefSender<'_>>::new().unwrap();
+            let (ping, ping_source) = make_ping().unwrap();
+            let _source = event_loop
+                .handle()
+                .insert_source(ping_source, |_, _, ref_sender| {
+                    ref_sender.0.send(()).unwrap();
+                })
+                .unwrap();
+
+            ping.ping();
+
+            {
+                let mut ref_sender = RefSender(&sender);
+                event_loop
+                    .dispatch(Duration::from_millis(0), &mut ref_sender)
+                    .unwrap();
+            }
+        }
+
+        receiver.recv().unwrap();
+        // sender still usable (e.g. for another EventLoop)
+        drop(sender);
     }
 
     // A dummy EventSource to test insertion and removal of sources
