@@ -83,27 +83,18 @@ pub trait EventSource {
     fn unregister(&mut self, poll: &mut Poll) -> std::io::Result<()>;
 }
 
-pub(crate) struct Dispatcher<Data, S, F> {
+pub(crate) struct Dispatcher<S, F> {
     source: S,
     callback: F,
-    _data: std::marker::PhantomData<fn(&mut Data)>,
 }
 
-impl<Data, S, F> Dispatcher<Data, S, F>
-where
-    S: EventSource,
-    F: FnMut(S::Event, &mut S::Metadata, &mut Data) -> S::Ret,
-{
-    pub fn new(source: S, callback: F) -> Dispatcher<Data, S, F> {
-        Dispatcher {
-            source,
-            callback,
-            _data: std::marker::PhantomData,
-        }
+impl<S, F> Dispatcher<S, F> {
+    pub fn new(source: S, callback: F) -> Self {
+        Dispatcher { source, callback }
     }
 }
 
-impl<Data, S, F> EventDispatcher<Data> for RefCell<Dispatcher<Data, S, F>>
+impl<Data, S, F> EventDispatcher<Data> for RefCell<Dispatcher<S, F>>
 where
     S: EventSource + 'static,
     F: FnMut(S::Event, &mut S::Metadata, &mut Data) -> S::Ret,
@@ -191,8 +182,23 @@ pub(crate) trait ErasedIdle {
     fn cancel(&mut self);
 }
 
-impl<Data> ErasedIdle for Option<Box<dyn FnMut(&mut Data)>> {
+impl<F> ErasedIdle for Option<F> {
     fn cancel(&mut self) {
         self.take();
+    }
+}
+
+pub(crate) trait IdleDispatcher<Data> {
+    fn dispatch(&mut self, data: &mut Data);
+}
+
+impl<Data, F> IdleDispatcher<Data> for Option<F>
+where
+    F: FnMut(&mut Data),
+{
+    fn dispatch(&mut self, data: &mut Data) {
+        if let Some(callabck) = self.as_mut() {
+            callabck(data);
+        }
     }
 }
