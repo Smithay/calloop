@@ -168,7 +168,7 @@ pub struct Source<S: EventSource> {
 /// This handle allows you to cancel the callback. Dropping
 /// it will *not* cancel it.
 pub struct Idle {
-    pub(crate) callback: Rc<RefCell<dyn ErasedIdle>>,
+    pub(crate) callback: Rc<RefCell<dyn CancellableIdle>>,
 }
 
 impl Idle {
@@ -178,11 +178,11 @@ impl Idle {
     }
 }
 
-pub(crate) trait ErasedIdle {
+pub(crate) trait CancellableIdle {
     fn cancel(&mut self);
 }
 
-impl<F> ErasedIdle for Option<F> {
+impl<F> CancellableIdle for Option<F> {
     fn cancel(&mut self) {
         self.take();
     }
