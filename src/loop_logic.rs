@@ -752,6 +752,7 @@ mod tests {
 
         {
             struct RefSender<'a>(&'a mpsc::Sender<()>);
+            let mut ref_sender = RefSender(&sender);
 
             let mut event_loop = EventLoop::<RefSender<'_>>::new().unwrap();
             let (ping, ping_source) = make_ping().unwrap();
@@ -764,12 +765,9 @@ mod tests {
 
             ping.ping();
 
-            {
-                let mut ref_sender = RefSender(&sender);
-                event_loop
-                    .dispatch(Duration::from_millis(0), &mut ref_sender)
-                    .unwrap();
-            }
+            event_loop
+                .dispatch(Duration::from_millis(0), &mut ref_sender)
+                .unwrap();
         }
 
         receiver.recv().unwrap();
