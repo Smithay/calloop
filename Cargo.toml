@@ -16,7 +16,7 @@ codecov = { repository = "Smithay/calloop" }
 
 [dependencies]
 log = "0.4"
-nix = "0.17"
+nix = "0.18"
 
 [[test]]
 name = "signals"
