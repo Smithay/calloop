@@ -27,7 +27,7 @@ pub struct LoopHandle<Data> {
     inner: Rc<LoopInner<Data>>,
 }
 
-#[cfg_attr(tarpaulin, skip)]
+#[cfg(not(tarpaulin_include))]
 impl<Data> Clone for LoopHandle<Data> {
     fn clone(&self) -> LoopHandle<Data> {
         LoopHandle {
@@ -44,14 +44,14 @@ pub struct InsertError<E> {
     pub error: io::Error,
 }
 
-#[cfg_attr(tarpaulin, skip)]
+#[cfg(not(tarpaulin_include))]
 impl<E> Debug for InsertError<E> {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
         write!(formatter, "{:?}", self.error)
     }
 }
 
-#[cfg_attr(tarpaulin, skip)]
+#[cfg(not(tarpaulin_include))]
 impl<E> From<InsertError<E>> for io::Error {
     fn from(e: InsertError<E>) -> io::Error {
         e.error
