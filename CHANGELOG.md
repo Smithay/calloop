@@ -5,6 +5,7 @@
 - Allow non-`'static` dispatch `Data`. `Data` is passed as an argument to the
   `callback`s while dispatching. This change allows defining `Data` types which
   can hold references to other values.
+- Add support for `openbsd`, `netbsd`, and `dragonfly`.
 
 ## 0.6.2 -- 2020-04-23
 

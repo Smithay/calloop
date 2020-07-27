@@ -5,9 +5,19 @@ mod epoll;
 #[cfg(target_os = "linux")]
 use epoll::Epoll as Poller;
 
-#[cfg(target_os = "freebsd")]
+#[cfg(any(
+    target_os = "dragonfly",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd"
+))]
 mod kqueue;
-#[cfg(target_os = "freebsd")]
+#[cfg(any(
+    target_os = "dragonfly",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd"
+))]
 use kqueue::Kqueue as Poller;
 
 /// Possible modes for registering a file descriptor
