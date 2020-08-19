@@ -7,6 +7,7 @@
   can hold references to other values.
 - Add support for `openbsd`, `netbsd`, and `dragonfly`.
 - `InsertError<E>` now implements `std::error::Error`.
+- `dispatch` now will retry on `EINTR`.
 
 ## 0.6.2 -- 2020-04-23
 
