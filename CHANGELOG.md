@@ -6,6 +6,7 @@
   `callback`s while dispatching. This change allows defining `Data` types which
   can hold references to other values.
 - Add support for `openbsd`, `netbsd`, and `dragonfly`.
+- `InsertError<E>` now implements `std::error::Error`.
 
 ## 0.6.2 -- 2020-04-23
 
