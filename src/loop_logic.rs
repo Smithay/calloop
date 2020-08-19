@@ -52,9 +52,23 @@ impl<E> Debug for InsertError<E> {
 }
 
 #[cfg(not(tarpaulin_include))]
+impl<E> std::fmt::Display for InsertError<E> {
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(formatter, "{}", self.error)
+    }
+}
+
+#[cfg(not(tarpaulin_include))]
 impl<E> From<InsertError<E>> for io::Error {
     fn from(e: InsertError<E>) -> io::Error {
         e.error
+    }
+}
+
+#[cfg(not(tarpaulin_include))]
+impl<E> std::error::Error for InsertError<E> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.error.source()
     }
 }
 
