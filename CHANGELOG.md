@@ -2,11 +2,18 @@
 
 ## Unreleased
 
+## 0.6.3 -- 2020-08-27
+
+#### Aditions
+
+- Add support for `openbsd`, `netbsd`, and `dragonfly`.
+- `InsertError<E>` now implements `std::error::Error`.
+
+#### Changes
+
 - Allow non-`'static` dispatch `Data`. `Data` is passed as an argument to the
   `callback`s while dispatching. This change allows defining `Data` types which
   can hold references to other values.
-- Add support for `openbsd`, `netbsd`, and `dragonfly`.
-- `InsertError<E>` now implements `std::error::Error`.
 - `dispatch` now will retry on `EINTR`.
 
 ## 0.6.2 -- 2020-04-23
