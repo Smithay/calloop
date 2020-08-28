@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix double borrow during dispatch when some event source is getting removed
+
 ## 0.6.3 -- 2020-08-27
 
 #### Aditions

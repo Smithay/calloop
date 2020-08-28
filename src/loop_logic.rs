@@ -272,26 +272,28 @@ impl<Data> EventLoop<Data> {
         mut timeout: Option<Duration>,
         data: &mut Data,
     ) -> io::Result<()> {
-        let mut poll = self.handle.inner.poll.borrow_mut();
-        let events = loop {
-            let now = std::time::Instant::now();
-            let result = poll.poll(timeout);
+        let events = {
+            let mut poll = self.handle.inner.poll.borrow_mut();
+            loop {
+                let now = std::time::Instant::now();
+                let result = poll.poll(timeout);
 
-            match result {
-                Ok(events) => break events,
-                Err(ref err) if err.kind() == io::ErrorKind::Interrupted => {
-                    // Interrupted by a signal. Update timeout and retry.
-                    if let Some(to) = timeout {
-                        let elapsed = now.elapsed();
-                        if elapsed >= to {
-                            return Ok(());
-                        } else {
-                            timeout = Some(to - elapsed);
+                match result {
+                    Ok(events) => break events,
+                    Err(ref err) if err.kind() == io::ErrorKind::Interrupted => {
+                        // Interrupted by a signal. Update timeout and retry.
+                        if let Some(to) = timeout {
+                            let elapsed = now.elapsed();
+                            if elapsed >= to {
+                                return Ok(());
+                            } else {
+                                timeout = Some(to - elapsed);
+                            }
                         }
                     }
-                }
-                Err(err) => return Err(err),
-            };
+                    Err(err) => return Err(err),
+                };
+            }
         };
 
         for event in events {
@@ -307,6 +309,7 @@ impl<Data> EventLoop<Data> {
 
                 if !self.handle.inner.sources.borrow().contains(event.token) {
                     // the source has been removed from within its callback, unregister it
+                    let mut poll = self.handle.inner.poll.borrow_mut();
                     if let Err(e) = disp.unregister(&mut *poll) {
                         log::warn!(
                             "[calloop] Failed to unregister source from the polling system: {:?}",
