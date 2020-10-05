@@ -7,6 +7,8 @@ use std::{
 use crate::{Poll, Readiness, Token};
 
 pub mod channel;
+#[cfg(feature = "executor")]
+pub mod futures;
 pub mod generic;
 pub mod ping;
 #[cfg(target_os = "linux")]

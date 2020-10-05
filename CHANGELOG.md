@@ -22,6 +22,11 @@
     its insertion in the loop.
 - `Interest` is changed into a struct to allow empty interest queries
 
+#### Additions
+
+- Introduce a futures executor as a new event source, behind the `executor` cargo
+  feature.
+
 ## 0.6.5 -- 2020-10-07
 
 #### Fixes
