@@ -24,7 +24,7 @@ use crate::{no_nix_err, EventSource, Interest, Mode, Poll, Readiness, Token};
 /// Create a new ping event source
 ///
 /// you are given a `Ping` instance, which can be cloned and used to ping the
-/// event loop, and a `PingSource`, which you can isnert in your event loop to
+/// event loop, and a `PingSource`, which you can insert in your event loop to
 /// receive the pings.
 pub fn make_ping() -> std::io::Result<(Ping, PingSource)> {
     let (read, write) = pipe2(OFlag::O_CLOEXEC | OFlag::O_NONBLOCK).map_err(no_nix_err)?;

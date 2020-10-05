@@ -17,6 +17,10 @@ codecov = { repository = "Smithay/calloop" }
 [dependencies]
 log = "0.4"
 nix = "0.18"
+futures-util = { version = "0.3.5", optional = true, default-features = false, features = ["std"]}
+
+[features]
+executor = ["futures-util"]
 
 [[test]]
 name = "signals"

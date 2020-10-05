@@ -35,11 +35,12 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
+          args: --all-features
 
       - name: Coverage
         uses: actions-rs/tarpaulin@v0.1
         with:
-          args: --ignore-tests
+          args: --ignore-tests --all-features
       
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1
