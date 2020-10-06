@@ -103,7 +103,7 @@ impl<T> TimerHandle<T> {
     }
 }
 
-impl<T: 'static> EventSource for Timer<T> {
+impl<T> EventSource for Timer<T> {
     type Event = T;
     type Metadata = TimerHandle<T>;
     type Ret = ();
@@ -361,7 +361,7 @@ mod tests {
 
     #[test]
     fn single_timer() {
-        let mut event_loop = crate::EventLoop::new().unwrap();
+        let mut event_loop = crate::EventLoop::try_new().unwrap();
 
         let evl_handle = event_loop.handle();
 
@@ -393,7 +393,7 @@ mod tests {
 
     #[test]
     fn multi_timout_order() {
-        let mut event_loop = crate::EventLoop::new().unwrap();
+        let mut event_loop = crate::EventLoop::try_new().unwrap();
 
         let evl_handle = event_loop.handle();
 
@@ -436,7 +436,7 @@ mod tests {
 
     #[test]
     fn timer_cancel() {
-        let mut event_loop = crate::EventLoop::new().unwrap();
+        let mut event_loop = crate::EventLoop::try_new().unwrap();
 
         let evl_handle = event_loop.handle();
 

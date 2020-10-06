@@ -4,12 +4,12 @@ use crate::Token;
 
 use crate::sources::EventDispatcher;
 
-pub(crate) struct SourceList<Data> {
-    sources: Vec<Option<Rc<dyn EventDispatcher<Data>>>>,
+pub(crate) struct SourceList<'sl, Data> {
+    sources: Vec<Option<Rc<dyn EventDispatcher<Data> + 'sl>>>,
 }
 
-impl<Data> SourceList<Data> {
-    pub(crate) fn new() -> SourceList<Data> {
+impl<'sl, Data> SourceList<'sl, Data> {
+    pub(crate) fn new() -> Self {
         SourceList {
             sources: Vec::new(),
         }
@@ -22,14 +22,17 @@ impl<Data> SourceList<Data> {
             .unwrap_or(false)
     }
 
-    pub(crate) fn get_dispatcher(&self, token: Token) -> Option<Rc<dyn EventDispatcher<Data>>> {
+    pub(crate) fn get_dispatcher(
+        &self,
+        token: Token,
+    ) -> Option<Rc<dyn EventDispatcher<Data> + 'sl>> {
         match self.sources.get(token.id as usize) {
             Some(&Some(ref dispatcher)) => Some(dispatcher.clone()),
             _ => None,
         }
     }
 
-    pub(crate) fn add_source(&mut self, dispatcher: Rc<dyn EventDispatcher<Data>>) -> Token {
+    pub(crate) fn add_source(&mut self, dispatcher: Rc<dyn EventDispatcher<Data> + 'sl>) -> Token {
         let free_id = self.sources.iter().position(Option::is_none);
         if let Some(id) = free_id {
             self.sources[id] = Some(dispatcher);
@@ -49,7 +52,10 @@ impl<Data> SourceList<Data> {
     // this method returns the removed dispatcher to ensure it is not dropped
     // while the refcell containing the list is borrowed, as dropping a dispatcher
     // can trigger the removal of an other source
-    pub(crate) fn del_source(&mut self, token: Token) -> Option<Rc<dyn EventDispatcher<Data>>> {
+    pub(crate) fn del_source(
+        &mut self,
+        token: Token,
+    ) -> Option<Rc<dyn EventDispatcher<Data> + 'sl>> {
         ::std::mem::replace(&mut self.sources[token.id as usize], None)
     }
 }

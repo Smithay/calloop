@@ -138,7 +138,7 @@ pub fn sync_channel<T>(bound: usize) -> (SyncSender<T>, Channel<T>) {
     (SyncSender { sender, ping }, Channel { receiver, source })
 }
 
-impl<T: 'static> EventSource for Channel<T> {
+impl<T> EventSource for Channel<T> {
     type Event = Event<T>;
     type Metadata = ();
     type Ret = ();
@@ -185,7 +185,7 @@ mod tests {
 
     #[test]
     fn basic_channel() {
-        let mut event_loop = crate::EventLoop::new().unwrap();
+        let mut event_loop = crate::EventLoop::try_new().unwrap();
 
         let handle = event_loop.handle();
 
@@ -194,7 +194,7 @@ mod tests {
         // (got_msg, got_closed)
         let mut got = (false, false);
 
-        let _source = handle
+        let _channel_token = handle
             .insert_source(rx, move |evt, &mut (), got: &mut (bool, bool)| match evt {
                 Event::Msg(()) => {
                     got.0 = true;
@@ -232,7 +232,7 @@ mod tests {
 
     #[test]
     fn basic_sync_channel() {
-        let mut event_loop = crate::EventLoop::new().unwrap();
+        let mut event_loop = crate::EventLoop::try_new().unwrap();
 
         let handle = event_loop.handle();
 
@@ -240,7 +240,7 @@ mod tests {
 
         let mut received = (0, false);
 
-        let _source = handle
+        let _channel_token = handle
             .insert_source(
                 rx,
                 move |evt, &mut (), received: &mut (u32, bool)| match evt {

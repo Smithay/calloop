@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+#### Changes
+
+- The return type for `LoopHandle::insert_source` was renamed as
+  `RegistrationToken` and can be used in `{enable,disable,update,remove,kill}`
+  just like before.
+- Allow non-`'static` event sources and callbacks, so they can hold references
+  to other values. **Breaking Changes**:
+  - `LoopHandle::with_source` was removed. To achieve the same behaviour, use a
+    `Dispatcher` and register it via the `LoopHandle::register_dispatcher`. The
+    `EventSource` will be available using `Dispatcher::as_source_{ref,mut}`.
+  - `LoopHandle::remove` doesn't return the event source any more. To achieve
+    the same behaviour, use a `Dispatcher` and register it via the
+    `LoopHandle::register_dispatcher`. After removing the `EventSource` with
+    `LoopHandle::remove`, you will be able to call
+    `Dispatcher::into_source_inner` to get ownership of the `EventSource`.
+  - `LoopHandle::register_dispatcher` can be used in place of
+    `LoopHandle::insert_source` when the source needs to be accessed after
+    its insertion in the loop.
+
 #### Fixes
 
 - Channel now signals readinnes after the event has actually been sent, fixing a race
