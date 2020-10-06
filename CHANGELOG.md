@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+#### Fixes
+
+- Channel now signals readinnes after the event has actually been sent, fixing a race
+  condition where the event loop would try to read the message before it has been
+  written.
+
 ## 0.6.4 -- 2020-08-30
 
 #### Fixes

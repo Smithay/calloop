@@ -46,8 +46,7 @@ impl<T> Sender<T> {
     /// This will wake the event loop and deliver an `Event::Msg` to
     /// it containing the provided value.
     pub fn send(&self, t: T) -> Result<(), mpsc::SendError<T>> {
-        self.ping.ping();
-        self.sender.send(t)
+        self.sender.send(t).map(|()| self.ping.ping())
     }
 }
 
@@ -82,22 +81,31 @@ impl<T> SyncSender<T> {
     /// This will wake the event loop and deliver an `Event::Msg` to
     /// it containing the provided value. If the channel is full, this
     /// function will block until the event loop empties it and it can
-    /// deliver the message. Readiness is signalled to the event loop
-    /// *before* blocking.
+    /// deliver the message.
+    ///
+    /// Due to the blocking behavior, this method should not be used on the
+    /// same thread as the one running the event loop, as it could cause deadlocks.
     pub fn send(&self, t: T) -> Result<(), mpsc::SendError<T>> {
-        self.ping.ping();
-        self.sender.send(t)
+        let ret = self.try_send(t);
+        match ret {
+            Ok(()) => Ok(()),
+            Err(mpsc::TrySendError::Full(t)) => self.sender.send(t).map(|()| self.ping.ping()),
+            Err(mpsc::TrySendError::Disconnected(t)) => Err(mpsc::SendError(t)),
+        }
     }
 
     /// Send a message to the synchronous channel
     ///
     /// This will wake the event loop and deliver an `Event::Msg` to
     /// it containing the provided value. If the channel is full, this
-    /// function will return an error. The event loop will be signalled
-    /// for readinnes in all cases.
+    /// function will return an error, but the event loop will still be
+    /// signaled for readiness.
     pub fn try_send(&self, t: T) -> Result<(), mpsc::TrySendError<T>> {
-        self.ping.ping();
-        self.sender.try_send(t)
+        let ret = self.sender.try_send(t);
+        if let Ok(()) | Err(mpsc::TrySendError::Full(_)) = ret {
+            self.ping.ping();
+        }
+        ret
     }
 }
 
