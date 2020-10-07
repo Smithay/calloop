@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.6.5 -- 2020-10-07
+
 #### Fixes
 
 - Channel now signals readinnes after the event has actually been sent, fixing a race
