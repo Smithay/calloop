@@ -22,7 +22,7 @@ mod test {
     use std::time::Duration;
 
     use self::calloop::signals::{Signal, Signals};
-    use self::calloop::EventLoop;
+    use self::calloop::{Dispatcher, EventLoop};
 
     use self::nix::sys::signal::{kill, SigSet};
     use self::nix::unistd::Pid;
@@ -34,7 +34,7 @@ mod test {
     }
 
     fn single_usr1() {
-        let mut event_loop = EventLoop::new().unwrap();
+        let mut event_loop = EventLoop::try_new().unwrap();
 
         let mut signal_received = false;
 
@@ -61,24 +61,24 @@ mod test {
     }
 
     fn usr2_added_afterwards() {
-        let mut event_loop = EventLoop::new().unwrap();
+        let mut event_loop = EventLoop::try_new().unwrap();
 
         let mut signal_received = None;
+        let mut dispatcher = Dispatcher::new(
+            Signals::new(&[Signal::SIGUSR1]).unwrap(),
+            move |evt, &mut (), rcv| {
+                *rcv = Some(evt.signal());
+            },
+        );
 
-        let signal_source = event_loop
+        let _signal_token = event_loop
             .handle()
-            .insert_source(
-                Signals::new(&[Signal::SIGUSR1]).unwrap(),
-                move |evt, &mut (), rcv| {
-                    *rcv = Some(evt.signal());
-                },
-            )
-            .map_err(Into::<io::Error>::into)
+            .register_dispatcher(dispatcher.clone())
             .unwrap();
-
-        event_loop.handle().with_source(&signal_source, |signals| {
-            signals.add_signals(&[Signal::SIGUSR2]).unwrap()
-        });
+        dispatcher
+            .as_source_mut()
+            .add_signals(&[Signal::SIGUSR2])
+            .unwrap();
 
         // send ourselves a SIGUSR2
         kill(Pid::this(), Signal::SIGUSR2).unwrap();
@@ -91,24 +91,24 @@ mod test {
     }
 
     fn usr2_signal_removed() {
-        let mut event_loop = EventLoop::new().unwrap();
+        let mut event_loop = EventLoop::try_new().unwrap();
 
         let mut signal_received = None;
+        let mut dispatcher = Dispatcher::new(
+            Signals::new(&[Signal::SIGUSR1, Signal::SIGUSR2]).unwrap(),
+            move |evt, &mut (), rcv| {
+                *rcv = Some(evt.signal());
+            },
+        );
 
-        let signal_source = event_loop
+        let _signal_token = event_loop
             .handle()
-            .insert_source(
-                Signals::new(&[Signal::SIGUSR1, Signal::SIGUSR2]).unwrap(),
-                move |evt, &mut (), rcv| {
-                    *rcv = Some(evt.signal());
-                },
-            )
-            .map_err(Into::<io::Error>::into)
+            .register_dispatcher(dispatcher.clone())
             .unwrap();
-
-        event_loop.handle().with_source(&signal_source, |signals| {
-            signals.remove_signals(&[Signal::SIGUSR2]).unwrap()
-        });
+        dispatcher
+            .as_source_mut()
+            .remove_signals(&[Signal::SIGUSR2])
+            .unwrap();
 
         // block sigusr2 anyway, to not be killed by it
         let mut set = SigSet::empty();
@@ -126,9 +126,10 @@ mod test {
         assert!(signal_received.is_none());
 
         // swap the signals from [SIGUSR1] to [SIGUSR2]
-        event_loop.handle().with_source(&signal_source, |signals| {
-            signals.set_signals(&[Signal::SIGUSR2]).unwrap()
-        });
+        dispatcher
+            .as_source_mut()
+            .set_signals(&[Signal::SIGUSR2])
+            .unwrap();
 
         event_loop
             .dispatch(Some(Duration::from_millis(10)), &mut signal_received)

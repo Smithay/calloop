@@ -1,4 +1,8 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::{Ref, RefCell, RefMut},
+    io,
+    rc::Rc,
+};
 
 use crate::{Poll, Readiness, Token};
 
@@ -68,35 +72,29 @@ pub trait EventSource {
     ///
     /// If you need to register more than one file descriptor, you can change the
     /// `sub_id` field of the `Token` to differentiate between them.
-    fn register(&mut self, poll: &mut Poll, token: Token) -> std::io::Result<()>;
+    fn register(&mut self, poll: &mut Poll, token: Token) -> io::Result<()>;
 
     /// Re-register your file descriptors
     ///
     /// Your should update the registration of all your relevant file descriptor to
     /// the provided `Poll` using its `Poll::reregister`, if necessary.
-    fn reregister(&mut self, poll: &mut Poll, token: Token) -> std::io::Result<()>;
+    fn reregister(&mut self, poll: &mut Poll, token: Token) -> io::Result<()>;
 
     /// Unregister your file descriptors
     ///
     /// You should unregister all your file descriptors from this `Poll` using its
     /// `Poll::unregister` method.
-    fn unregister(&mut self, poll: &mut Poll) -> std::io::Result<()>;
+    fn unregister(&mut self, poll: &mut Poll) -> io::Result<()>;
 }
 
-pub(crate) struct Dispatcher<S, F> {
+pub(crate) struct DispatcherInner<S, F> {
     source: S,
     callback: F,
 }
 
-impl<S, F> Dispatcher<S, F> {
-    pub fn new(source: S, callback: F) -> Self {
-        Dispatcher { source, callback }
-    }
-}
-
-impl<Data, S, F> EventDispatcher<Data> for RefCell<Dispatcher<S, F>>
+impl<Data, S, F> EventDispatcher<Data> for RefCell<DispatcherInner<S, F>>
 where
-    S: EventSource + 'static,
+    S: EventSource,
     F: FnMut(S::Event, &mut S::Metadata, &mut Data) -> S::Ret,
 {
     fn process_events(
@@ -106,7 +104,7 @@ where
         data: &mut Data,
     ) -> std::io::Result<()> {
         let mut disp = self.borrow_mut();
-        let Dispatcher {
+        let DispatcherInner {
             ref mut source,
             ref mut callback,
             ..
@@ -114,25 +112,16 @@ where
         source.process_events(readiness, token, |event, meta| callback(event, meta, data))
     }
 
-    fn register(&self, poll: &mut Poll, token: Token) -> std::io::Result<()> {
+    fn register(&self, poll: &mut Poll, token: Token) -> io::Result<()> {
         self.borrow_mut().source.register(poll, token)
     }
 
-    fn reregister(&self, poll: &mut Poll, token: Token) -> std::io::Result<()> {
+    fn reregister(&self, poll: &mut Poll, token: Token) -> io::Result<()> {
         self.borrow_mut().source.reregister(poll, token)
     }
 
-    fn unregister(&self, poll: &mut Poll) -> std::io::Result<()> {
+    fn unregister(&self, poll: &mut Poll) -> io::Result<()> {
         self.borrow_mut().source.unregister(poll)
-    }
-
-    fn as_source_any(&self) -> std::cell::RefMut<dyn std::any::Any> {
-        std::cell::RefMut::map(self.borrow_mut(), |disp| &mut disp.source)
-    }
-
-    fn into_source_any(self: Rc<Self>) -> Box<dyn std::any::Any> {
-        let me = Rc::try_unwrap(self).unwrap_or_else(|_| panic!("Unwrapping a shared source."));
-        Box::new(me.into_inner().source)
     }
 }
 
@@ -144,34 +133,81 @@ pub(crate) trait EventDispatcher<Data> {
         data: &mut Data,
     ) -> std::io::Result<()>;
 
-    fn register(&self, poll: &mut Poll, token: Token) -> std::io::Result<()>;
+    fn register(&self, poll: &mut Poll, token: Token) -> io::Result<()>;
 
-    fn reregister(&self, poll: &mut Poll, token: Token) -> std::io::Result<()>;
+    fn reregister(&self, poll: &mut Poll, token: Token) -> io::Result<()>;
 
-    fn unregister(&self, poll: &mut Poll) -> std::io::Result<()>;
-
-    fn as_source_any(&self) -> std::cell::RefMut<dyn std::any::Any>;
-
-    fn into_source_any(self: Rc<Self>) -> Box<dyn std::any::Any>;
+    fn unregister(&self, poll: &mut Poll) -> io::Result<()>;
 }
 
-/// A token representing an event source inserted in the event loop
+/// An event source with its callback.
 ///
-/// You'll need it to interact with your source via `LoopHandle`
-pub struct Source<S: EventSource> {
-    pub(crate) token: Token,
-    pub(crate) _type: std::marker::PhantomData<*const S>,
+/// The `Dispatcher` can be registered in an event loop.
+/// Use the `as_source_{ref,mut}` functions to interact with the event source.
+/// Use `into_source_inner` to get the event source back.
+pub struct Dispatcher<S, F>(Rc<RefCell<DispatcherInner<S, F>>>);
+
+impl<S, F> Dispatcher<S, F>
+where
+    S: EventSource,
+{
+    /// Builds a dispatcher.
+    ///
+    /// The resulting `Dispatcher`
+    pub fn new<Data>(source: S, callback: F) -> Self
+    where
+        F: FnMut(S::Event, &mut S::Metadata, &mut Data) -> S::Ret,
+    {
+        Dispatcher(Rc::new(RefCell::new(DispatcherInner { source, callback })))
+    }
+
+    /// Returns an immutable reference to the event source.
+    pub fn as_source_ref(&self) -> Ref<S> {
+        Ref::map(self.0.borrow(), |inner| &inner.source)
+    }
+
+    /// Returns a mutable reference to the event source.
+    pub fn as_source_mut(&mut self) -> RefMut<S> {
+        RefMut::map(self.0.borrow_mut(), |inner| &mut inner.source)
+    }
+
+    /// Consumes the Dispatcher and returns the inner event source.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `Dispatcher` is still registered.
+    pub fn into_source_inner(self) -> S {
+        if let Ok(ref_cell) = Rc::try_unwrap(self.0) {
+            ref_cell.into_inner().source
+        } else {
+            panic!("Dispatcher is still registered");
+        }
+    }
+
+    pub(crate) fn clone_as_event_dispatcher<'a, Data>(&self) -> Rc<dyn EventDispatcher<Data> + 'a>
+    where
+        S: 'a,
+        F: FnMut(S::Event, &mut S::Metadata, &mut Data) -> S::Ret + 'a,
+    {
+        Rc::clone(&self.0) as Rc<dyn EventDispatcher<Data> + 'a>
+    }
+}
+
+impl<S, F> Clone for Dispatcher<S, F> {
+    fn clone(&self) -> Dispatcher<S, F> {
+        Dispatcher(Rc::clone(&self.0))
+    }
 }
 
 /// An idle callback that was inserted in this loop
 ///
 /// This handle allows you to cancel the callback. Dropping
 /// it will *not* cancel it.
-pub struct Idle {
-    pub(crate) callback: Rc<RefCell<dyn CancellableIdle>>,
+pub struct Idle<'i> {
+    pub(crate) callback: Rc<RefCell<dyn CancellableIdle + 'i>>,
 }
 
-impl Idle {
+impl<'i> Idle<'i> {
     /// Cancel the idle callback if it was not already run
     pub fn cancel(self) {
         self.callback.borrow_mut().cancel();

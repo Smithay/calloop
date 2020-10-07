@@ -30,7 +30,7 @@ use std::time::Duration;
 
 fn main() {
     // Create the event loop
-    let mut event_loop = calloop::EventLoop::new().expect("Failed to initialize the event loop!");
+    let mut event_loop = calloop::EventLoop::try_new().expect("Failed to initialize the event loop!");
     // Retrieve an handle. It is used to insert new sources into the event loop
     // It can be cloned, allowing you to insert sources from within sources
     let handle = event_loop.handle();

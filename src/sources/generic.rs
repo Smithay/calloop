@@ -32,7 +32,7 @@ impl AsRawFd for Fd {
     }
 }
 
-impl<F: AsRawFd + 'static> Generic<F> {
+impl<F: AsRawFd> Generic<F> {
     /// Wrap a FD-backed type into a `Generic` event source
     pub fn new(file: F, interest: Interest, mode: Mode) -> Generic<F> {
         Generic {
@@ -90,13 +90,13 @@ mod test {
     use std::io::{self, Read, Write};
 
     use super::Generic;
-    use crate::{Interest, Mode};
+    use crate::{Dispatcher, Interest, Mode};
     #[cfg(unix)]
     #[test]
     fn dispatch_unix() {
         use std::os::unix::net::UnixStream;
 
-        let mut event_loop = crate::EventLoop::new().unwrap();
+        let mut event_loop = crate::EventLoop::try_new().unwrap();
 
         let handle = event_loop.handle();
 
@@ -106,7 +106,7 @@ mod test {
 
         let mut dispached = false;
 
-        let _source = handle
+        let _generic_token = handle
             .insert_source(generic, move |readiness, file, d| {
                 assert!(readiness.readable);
                 // we have not registered for writability
@@ -142,23 +142,21 @@ mod test {
     fn register_deregister_unix() {
         use std::os::unix::net::UnixStream;
 
-        let mut event_loop = crate::EventLoop::new().unwrap();
+        let mut event_loop = crate::EventLoop::try_new().unwrap();
 
         let handle = event_loop.handle();
 
         let (mut tx, rx) = UnixStream::pair().unwrap();
 
         let generic = Generic::new(rx, Interest::Readable, Mode::Level);
+        let dispatcher = Dispatcher::new(generic, move |_, _, d| {
+            *d = true;
+            Ok(())
+        });
 
         let mut dispached = false;
 
-        let source = handle
-            .insert_source(generic, move |_, _, d| {
-                *d = true;
-                Ok(())
-            })
-            .map_err(Into::<io::Error>::into)
-            .unwrap();
+        let generic_token = handle.register_dispatcher(dispatcher.clone()).unwrap();
 
         event_loop
             .dispatch(Some(::std::time::Duration::from_millis(0)), &mut dispached)
@@ -168,7 +166,7 @@ mod test {
 
         // remove the source, and then write something
 
-        let generic = event_loop.handle().remove(source);
+        event_loop.handle().remove(generic_token);
 
         tx.write(&[1, 2, 3, 4, 5, 6]).unwrap();
         tx.flush().unwrap();
@@ -181,7 +179,8 @@ mod test {
         assert!(!dispached);
 
         // insert it again
-        let _source = handle
+        let generic = dispatcher.into_source_inner();
+        let _generic_token = handle
             .insert_source(generic, move |readiness, file, d| {
                 assert!(readiness.readable);
                 // we have not registered for writability

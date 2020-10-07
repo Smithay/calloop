@@ -140,7 +140,7 @@ mod tests {
 
     #[test]
     fn ping() {
-        let mut event_loop = crate::EventLoop::<bool>::new().unwrap();
+        let mut event_loop = crate::EventLoop::<bool>::try_new().unwrap();
 
         let (ping, source) = make_ping().unwrap();
 

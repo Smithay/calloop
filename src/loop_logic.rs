@@ -7,15 +7,24 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::list::SourceList;
-use crate::sources::{EventSource, Idle, IdleDispatcher, Source};
+use crate::sources::{Dispatcher, EventSource, Idle, IdleDispatcher};
 use crate::Poll;
+use crate::Token;
 
-type IdleCallback<Data> = Rc<RefCell<dyn IdleDispatcher<Data>>>;
+type IdleCallback<'i, Data> = Rc<RefCell<dyn IdleDispatcher<Data> + 'i>>;
 
-struct LoopInner<Data> {
+/// A Token for registration in the `EventLoop`.
+///
+/// This token is given to you by the `EventLoop` when an `EventSource` is inserted or
+/// a `Dispatcher` is registered. You can use it to `disable`, `enable`, `update`,
+/// `remove` or `kill` the `EventSource` or `Dispatcher`.
+#[derive(Debug, PartialEq)]
+pub struct RegistrationToken(Token);
+
+struct LoopInner<'l, Data> {
     poll: RefCell<Poll>,
-    sources: RefCell<SourceList<Data>>,
-    idles: RefCell<Vec<IdleCallback<Data>>>,
+    sources: RefCell<SourceList<'l, Data>>,
+    idles: RefCell<Vec<IdleCallback<'l, Data>>>,
 }
 
 /// An handle to an event loop
@@ -23,13 +32,13 @@ struct LoopInner<Data> {
 /// This handle allows you to insert new sources and idles in this event loop,
 /// it can be cloned, and it is possible to insert new sources from within a source
 /// callback.
-pub struct LoopHandle<Data> {
-    inner: Rc<LoopInner<Data>>,
+pub struct LoopHandle<'l, Data> {
+    inner: Rc<LoopInner<'l, Data>>,
 }
 
 #[cfg(not(tarpaulin_include))]
-impl<Data> Clone for LoopHandle<Data> {
-    fn clone(&self) -> LoopHandle<Data> {
+impl<'l, Data> Clone for LoopHandle<'l, Data> {
+    fn clone(&self) -> Self {
         LoopHandle {
             inner: self.inner.clone(),
         }
@@ -72,51 +81,84 @@ impl<E> std::error::Error for InsertError<E> {
     }
 }
 
-impl<Data> LoopHandle<Data> {
-    /// Insert an new event source in the loop
+impl<'l, Data> LoopHandle<'l, Data> {
+    /// Inserts a new event source in the loop.
     ///
     /// The provided callback will be called during the dispatching cycles whenever the
     /// associated source generates events, see `EventLoop::dispatch(..)` for details.
-    pub fn insert_source<S, F>(&self, source: S, callback: F) -> Result<Source<S>, InsertError<S>>
+    ///
+    /// This function takes ownership of the event source. Use `register_dispatcher`
+    /// if you need access to the event source after this call.
+    pub fn insert_source<S, F>(
+        &self,
+        source: S,
+        callback: F,
+    ) -> Result<RegistrationToken, InsertError<S>>
     where
-        S: EventSource + 'static,
-        F: FnMut(S::Event, &mut S::Metadata, &mut Data) -> S::Ret + 'static,
+        S: EventSource + 'l,
+        F: FnMut(S::Event, &mut S::Metadata, &mut Data) -> S::Ret + 'l,
     {
         let mut sources = self.inner.sources.borrow_mut();
         let mut poll = self.inner.poll.borrow_mut();
 
-        let dispatcher = Rc::new(RefCell::new(crate::sources::Dispatcher::<S, F>::new(
-            source, callback,
-        )));
-        let token = sources.add_source(dispatcher);
-
+        let dispatcher = Dispatcher::new(source, callback);
+        let token = sources.add_source(dispatcher.clone_as_event_dispatcher());
         let ret = sources
             .get_dispatcher(token)
             .unwrap()
             .register(&mut *poll, token);
 
         if let Err(error) = ret {
-            let source = sources
+            sources
                 .del_source(token)
-                .expect("Source was just inserted?!")
-                .into_source_any()
-                .downcast::<S>()
-                .map(|s| *s)
-                .unwrap_or_else(|_| panic!("Downcasting failed!"));
-            return Err(InsertError { error, source });
+                .expect("Source was just inserted?!");
+
+            return Err(InsertError {
+                error,
+                source: dispatcher.into_source_inner(),
+            });
         }
 
-        Ok(Source {
-            token,
-            _type: std::marker::PhantomData,
-        })
+        Ok(RegistrationToken(token))
     }
 
-    /// Insert an idle callback
+    /// Registers a `Dispatcher` in the loop.
+    ///
+    /// Use this function if you need access to the event source after its insertion in the loop.
+    ///
+    /// See also `insert_source`.
+    pub fn register_dispatcher<S, F>(
+        &self,
+        dispatcher: Dispatcher<S, F>,
+    ) -> io::Result<RegistrationToken>
+    where
+        S: EventSource + 'l,
+        F: FnMut(S::Event, &mut S::Metadata, &mut Data) -> S::Ret + 'l,
+    {
+        let mut sources = self.inner.sources.borrow_mut();
+        let mut poll = self.inner.poll.borrow_mut();
+
+        let token = sources.add_source(dispatcher.clone_as_event_dispatcher());
+        let ret = sources
+            .get_dispatcher(token)
+            .unwrap()
+            .register(&mut *poll, token);
+
+        if let Err(error) = ret {
+            sources
+                .del_source(token)
+                .expect("Source was just inserted?!");
+            return Err(error);
+        }
+
+        Ok(RegistrationToken(token))
+    }
+
+    /// Inserts an idle callback.
     ///
     /// This callback will be called during a dispatching cycle when the event loop has
     /// finished processing all pending events from the sources and becomes idle.
-    pub fn insert_idle<F: FnOnce(&mut Data) + 'static>(&self, callback: F) -> Idle {
+    pub fn insert_idle<F: FnOnce(&mut Data) + 'l>(&self, callback: F) -> Idle {
         let mut opt_cb = Some(callback);
         let callback = Rc::new(RefCell::new(Some(move |data: &mut Data| {
             if let Some(cb) = opt_cb.take() {
@@ -127,124 +169,95 @@ impl<Data> LoopHandle<Data> {
         Idle { callback }
     }
 
-    /// Access this event source
-    ///
-    /// This allows you to modify the event source without removing it from the event
-    /// loop if it allows it.
-    ///
-    /// Note that replacing it with an other using `mem::replace` or equivalent would not
-    /// correctly update its registration and generate errors. Instead you should remove
-    /// the source using the `remove()` method and then insert a new one.
-    ///
-    /// **Note**: This cannot be done from within the callback of the same source.
-    pub fn with_source<S: EventSource + 'static, T, F: FnOnce(&mut S) -> T>(
-        &self,
-        source: &Source<S>,
-        f: F,
-    ) -> T {
-        let disp = self
-            .inner
-            .sources
-            .borrow()
-            .get_dispatcher(source.token)
-            .expect("Attempting to access a non-existent source?!");
-        let mut source_any = disp.as_source_any();
-        let source_mut = source_any.downcast_mut::<S>().expect("Downcasting failed!");
-        f(source_mut)
-    }
-
-    /// Enable this previously disabled event source
+    /// Enables this previously disabled event source.
     ///
     /// This previously disabled source will start generating events again.
     ///
     /// **Note**: This cannot be done from within the callback of the same source.
-    pub fn enable<E: EventSource>(&self, source: &Source<E>) -> io::Result<()> {
+    pub fn enable(&self, token: &RegistrationToken) -> io::Result<()> {
         self.inner
             .sources
             .borrow()
-            .get_dispatcher(source.token)
+            .get_dispatcher(token.0)
             .expect("Attempting to access a non-existent source?!")
-            .register(&mut *self.inner.poll.borrow_mut(), source.token)
+            .register(&mut *self.inner.poll.borrow_mut(), token.0)
     }
 
-    /// Make this source update its registration
+    /// Makes this source update its registration.
     ///
     /// If after accessing the source you changed its parameters in a way that requires
     /// updating its registration.
     ///
     /// **Note**: This cannot be done from within the callback of the same source.
-    pub fn update<E: EventSource>(&self, source: &Source<E>) -> io::Result<()> {
+    pub fn update(&self, token: &RegistrationToken) -> io::Result<()> {
         self.inner
             .sources
             .borrow()
-            .get_dispatcher(source.token)
+            .get_dispatcher(token.0)
             .expect("Attempting to access a non-existent source?!")
-            .reregister(&mut *self.inner.poll.borrow_mut(), source.token)
+            .reregister(&mut *self.inner.poll.borrow_mut(), token.0)
     }
 
-    /// Disable this event source
+    /// Disables this event source.
     ///
     /// The source remains in the event loop, but it'll no longer generate events
     ///
     /// **Note**: This cannot be done from within the callback of the same source.
-    pub fn disable<E: EventSource>(&self, source: &Source<E>) -> io::Result<()> {
+    pub fn disable(&self, token: &RegistrationToken) -> io::Result<()> {
         self.inner
             .sources
             .borrow()
-            .get_dispatcher(source.token)
+            .get_dispatcher(token.0)
             .expect("Attempting to access a non-existent source?!")
             .unregister(&mut *self.inner.poll.borrow_mut())
     }
 
-    /// Remove this source from the event loop
-    ///
-    /// You are givent the `EventSource` back.
+    /// Removes this source from the event loop.
     ///
     /// **Note**: This cannot be done from within the callback of the same source.
-    pub fn remove<S: EventSource + 'static>(&self, source: Source<S>) -> S {
+    pub fn remove(&self, token: RegistrationToken) {
         let source = self
             .inner
             .sources
             .borrow_mut()
-            .del_source(source.token)
+            .del_source(token.0)
             .expect("Attempting to remove a non-existent source?!");
-        if let Err(e) = source.unregister(&mut *self.inner.poll.borrow_mut()) {
+
+        if let Err(e) = source.unregister(&mut self.inner.poll.borrow_mut()) {
             log::warn!(
                 "[calloop] Failed to unregister source from the polling system: {:?}",
                 e
             );
         }
-        source
-            .into_source_any()
-            .downcast::<S>()
-            .map(|s| *s)
-            .unwrap_or_else(|_| panic!("Downcasting failed!"))
     }
 
-    /// Remove this event source from the event loop and drop it
+    /// Removes this source from the event loop.
     ///
-    /// The source is not given back to you but instead dropped
-    ///
-    /// **Note**: This *can* be done from within the callback of the same source
-    pub fn kill<S: EventSource + 'static>(&self, source: Source<S>) {
-        self.inner.sources.borrow_mut().del_source(source.token);
+    /// **Note**: This can be done from within the callback of the same source.
+    pub fn kill(&self, token: RegistrationToken) {
+        let _source = self
+            .inner
+            .sources
+            .borrow_mut()
+            .del_source(token.0)
+            .expect("Attempting to remove a non-existent source?!");
     }
 }
 
 /// An event loop
 ///
 /// This loop can host several event sources, that can be dynamically added or removed.
-pub struct EventLoop<Data> {
-    handle: LoopHandle<Data>,
+pub struct EventLoop<'l, Data> {
+    handle: LoopHandle<'l, Data>,
     stop_signal: Arc<AtomicBool>,
     ping: crate::sources::ping::Ping,
 }
 
-impl<Data> EventLoop<Data> {
+impl<'l, Data> EventLoop<'l, Data> {
     /// Create a new event loop
     ///
     /// Fails if the initialization of the polling system failed.
-    pub fn new() -> io::Result<EventLoop<Data>> {
+    pub fn try_new() -> io::Result<Self> {
         let poll = Poll::new()?;
         let handle = LoopHandle {
             inner: Rc::new(LoopInner {
@@ -263,7 +276,7 @@ impl<Data> EventLoop<Data> {
     }
 
     /// Retrieve a loop handle
-    pub fn handle(&self) -> LoopHandle<Data> {
+    pub fn handle(&self) -> LoopHandle<'l, Data> {
         self.handle.clone()
     }
 
@@ -427,14 +440,15 @@ mod tests {
     use std::time::Duration;
 
     use crate::{
-        generic::Generic, sources::ping::*, Interest, Mode, Poll, Readiness, Source, Token,
+        generic::Generic, ping::*, timer::Timer, Dispatcher, Interest, Mode, Poll, Readiness,
+        RegistrationToken, Token,
     };
 
     use super::EventLoop;
 
     #[test]
     fn dispatch_idle() {
-        let mut event_loop = EventLoop::new().unwrap();
+        let mut event_loop = EventLoop::try_new().unwrap();
 
         let mut dispatched = false;
 
@@ -451,11 +465,12 @@ mod tests {
 
     #[test]
     fn cancel_idle() {
-        let mut event_loop = EventLoop::new().unwrap();
+        let mut event_loop = EventLoop::try_new().unwrap();
 
         let mut dispatched = false;
 
-        let idle = event_loop.handle().insert_idle(move |d| {
+        let handle = event_loop.handle();
+        let idle = handle.insert_idle(move |d| {
             *d = true;
         });
 
@@ -470,7 +485,7 @@ mod tests {
 
     #[test]
     fn wakeup() {
-        let mut event_loop = EventLoop::new().unwrap();
+        let mut event_loop = EventLoop::try_new().unwrap();
 
         let signal = event_loop.get_signal();
 
@@ -485,7 +500,7 @@ mod tests {
 
     #[test]
     fn wakeup_stop() {
-        let mut event_loop = EventLoop::new().unwrap();
+        let mut event_loop = EventLoop::try_new().unwrap();
 
         let signal = event_loop.get_signal();
 
@@ -501,34 +516,34 @@ mod tests {
 
     #[test]
     fn insert_remove() {
-        let mut event_loop = EventLoop::<()>::new().unwrap();
-        let source_1 = event_loop
+        let mut event_loop = EventLoop::<()>::try_new().unwrap();
+        let dummy_token_1 = event_loop
             .handle()
             .insert_source(DummySource, |_, _, _| {})
             .unwrap();
-        assert_eq!(source_1.token.id, 1); // numer 0 is the internal ping
-        let source_2 = event_loop
+        assert_eq!(dummy_token_1.0.id, 1); // numer 0 is the internal ping
+        let dummy_token_2 = event_loop
             .handle()
             .insert_source(DummySource, |_, _, _| {})
             .unwrap();
-        assert_eq!(source_2.token.id, 2);
+        assert_eq!(dummy_token_2.0.id, 2);
         // ensure token reuse on source removal
-        event_loop.handle().remove(source_1);
+        event_loop.handle().remove(dummy_token_1);
 
         event_loop
             .dispatch(Duration::from_millis(0), &mut ())
             .unwrap();
 
-        let source_3 = event_loop
+        let dummy_token_3 = event_loop
             .handle()
             .insert_source(DummySource, |_, _, _| {})
             .unwrap();
-        assert_eq!(source_3.token.id, 1);
+        assert_eq!(dummy_token_3.0.id, 1);
     }
 
     #[test]
     fn insert_bad_source() {
-        let event_loop = EventLoop::<()>::new().unwrap();
+        let event_loop = EventLoop::<()>::try_new().unwrap();
         let ret = event_loop.handle().insert_source(
             crate::sources::generic::Generic::from_fd(42, Interest::Readable, Mode::Level),
             |_, _, _| Ok(()),
@@ -538,10 +553,10 @@ mod tests {
 
     #[test]
     fn disarm_rearm() {
-        let mut event_loop = EventLoop::<bool>::new().unwrap();
+        let mut event_loop = EventLoop::<bool>::try_new().unwrap();
         let (ping, ping_source) = make_ping().unwrap();
 
-        let ping_source = event_loop
+        let ping_token = event_loop
             .handle()
             .insert_source(ping_source, |(), &mut (), dispatched| {
                 *dispatched = true;
@@ -557,7 +572,7 @@ mod tests {
 
         // disable the source
         ping.ping();
-        event_loop.handle().disable(&ping_source).unwrap();
+        event_loop.handle().disable(&ping_token).unwrap();
         let mut dispatched = false;
         event_loop
             .dispatch(Duration::from_millis(0), &mut dispatched)
@@ -565,10 +580,10 @@ mod tests {
         assert_eq!(dispatched, false);
 
         // disabling it again is an error
-        event_loop.handle().disable(&ping_source).unwrap_err();
+        event_loop.handle().disable(&ping_token).unwrap_err();
 
         // reenable it, the previous ping now gets dispatched
-        event_loop.handle().enable(&ping_source).unwrap();
+        event_loop.handle().enable(&ping_token).unwrap();
         let mut dispatched = false;
         event_loop
             .dispatch(Duration::from_millis(0), &mut dispatched)
@@ -627,7 +642,7 @@ mod tests {
             }
         }
 
-        let mut event_loop = EventLoop::<u32>::new().unwrap();
+        let mut event_loop = EventLoop::<u32>::try_new().unwrap();
 
         let (ping1, source1) = make_ping().unwrap();
         let (ping2, source2) = make_ping().unwrap();
@@ -672,7 +687,7 @@ mod tests {
     fn change_interests() {
         use nix::sys::socket::{socketpair, AddressFamily, SockFlag, SockType};
         use nix::unistd::{read, write};
-        let mut event_loop = EventLoop::<bool>::new().unwrap();
+        let mut event_loop = EventLoop::<bool>::try_new().unwrap();
 
         let (sock1, sock2) = socketpair(
             AddressFamily::Unix,
@@ -683,31 +698,32 @@ mod tests {
         .unwrap();
 
         let source = Generic::from_fd(sock1, Interest::Readable, Mode::Level);
-
-        let sock1 = event_loop
-            .handle()
-            .insert_source(source, |_, fd, dispatched| {
-                *dispatched = true;
-                // read all contents available to drain the socket
-                let mut buf = [0u8; 32];
-                loop {
-                    match read(fd.0, &mut buf) {
-                        Ok(0) => break, // closed pipe, we are now inert
-                        Ok(_) => {}
-                        Err(e) => {
-                            let e = crate::no_nix_err(e);
-                            if e.kind() == std::io::ErrorKind::WouldBlock {
-                                break;
-                            // nothing more to read
-                            } else {
-                                // propagate error
-                                return Err(e);
-                            }
+        let mut dispatcher = Dispatcher::new(source, |_, fd, dispatched| {
+            *dispatched = true;
+            // read all contents available to drain the socket
+            let mut buf = [0u8; 32];
+            loop {
+                match read(fd.0, &mut buf) {
+                    Ok(0) => break, // closed pipe, we are now inert
+                    Ok(_) => {}
+                    Err(e) => {
+                        let e = crate::no_nix_err(e);
+                        if e.kind() == std::io::ErrorKind::WouldBlock {
+                            break;
+                        // nothing more to read
+                        } else {
+                            // propagate error
+                            return Err(e);
                         }
                     }
                 }
-                Ok(())
-            })
+            }
+            Ok(())
+        });
+
+        let sock_token_1 = event_loop
+            .handle()
+            .register_dispatcher(dispatcher.clone())
             .unwrap();
 
         // first dispatch, nothing is readable
@@ -733,10 +749,8 @@ mod tests {
         assert!(!dispatched);
 
         // change the interests for writability instead
-        event_loop
-            .handle()
-            .with_source(&sock1, |g| g.interest = Interest::Writable);
-        event_loop.handle().update(&sock1).unwrap();
+        dispatcher.as_source_mut().interest = Interest::Writable;
+        event_loop.handle().update(&sock_token_1).unwrap();
 
         // the socket is writable
         dispatched = false;
@@ -746,10 +760,8 @@ mod tests {
         assert!(dispatched);
 
         // change back to readable
-        event_loop
-            .handle()
-            .with_source(&sock1, |g| g.interest = Interest::Readable);
-        event_loop.handle().update(&sock1).unwrap();
+        dispatcher.as_source_mut().interest = Interest::Readable;
+        event_loop.handle().update(&sock_token_1).unwrap();
 
         // the socket is not readable
         dispatched = false;
@@ -761,11 +773,11 @@ mod tests {
 
     #[test]
     fn kill_source() {
-        let mut event_loop = EventLoop::<Option<Source<PingSource>>>::new().unwrap();
+        let mut event_loop = EventLoop::<Option<RegistrationToken>>::try_new().unwrap();
 
         let handle = event_loop.handle();
         let (ping, ping_source) = make_ping().unwrap();
-        let source = event_loop
+        let ping_token = event_loop
             .handle()
             .insert_source(ping_source, move |(), &mut (), opt_src| {
                 if let Some(src) = opt_src.take() {
@@ -776,13 +788,80 @@ mod tests {
 
         ping.ping();
 
-        let mut opt_src = Some(source);
+        let mut opt_src = Some(ping_token);
 
         event_loop
             .dispatch(Duration::from_millis(0), &mut opt_src)
             .unwrap();
 
         assert!(opt_src.is_none());
+    }
+
+    #[test]
+    fn non_static_source() {
+        let mut flag = false;
+
+        {
+            let timer = Timer::new().unwrap();
+            let handle = timer.handle();
+            handle.add_timeout(std::time::Duration::from_millis(5), &mut flag);
+
+            let mut fired = false;
+
+            let mut event_loop = EventLoop::<bool>::try_new().unwrap();
+            let _timer_token = event_loop
+                .handle()
+                .insert_source(timer, |flag, _, fired| {
+                    *flag = true;
+                    *fired = true;
+                })
+                .unwrap();
+
+            event_loop
+                .dispatch(Duration::from_millis(500), &mut fired)
+                .unwrap();
+
+            assert!(fired);
+        }
+
+        assert!(flag);
+    }
+
+    #[test]
+    fn non_static_dispatcher() {
+        let mut flag = false;
+
+        {
+            let timer = Timer::<&mut bool>::new().unwrap();
+            let _ = timer
+                .handle()
+                .add_timeout(std::time::Duration::from_millis(5), &mut flag);
+
+            let dispatcher = Dispatcher::new(timer, |flag, _, fired| {
+                *flag = true;
+                *fired = true;
+            });
+
+            let mut fired = false;
+
+            let mut event_loop = EventLoop::<bool>::try_new().unwrap();
+            let disp_token = event_loop
+                .handle()
+                .register_dispatcher(dispatcher.clone())
+                .unwrap();
+
+            event_loop
+                .dispatch(Duration::from_millis(500), &mut fired)
+                .unwrap();
+            assert!(fired);
+
+            event_loop.handle().remove(disp_token);
+
+            let timer = dispatcher.into_source_inner();
+            timer.handle().cancel_all_timeouts();
+        }
+
+        assert!(flag);
     }
 
     #[test]
@@ -795,9 +874,9 @@ mod tests {
             struct RefSender<'a>(&'a mpsc::Sender<()>);
             let mut ref_sender = RefSender(&sender);
 
-            let mut event_loop = EventLoop::<RefSender<'_>>::new().unwrap();
+            let mut event_loop = EventLoop::<RefSender<'_>>::try_new().unwrap();
             let (ping, ping_source) = make_ping().unwrap();
-            let _source = event_loop
+            let _ping_token = event_loop
                 .handle()
                 .insert_source(ping_source, |_, _, ref_sender| {
                     ref_sender.0.send(()).unwrap();

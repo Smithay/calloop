@@ -23,7 +23,7 @@
 //!
 //! fn main() {
 //!     // Create the event loop
-//!     let mut event_loop = calloop::EventLoop::new().expect("Failed to initialize the event loop!");
+//!     let mut event_loop = calloop::EventLoop::try_new().expect("Failed to initialize the event loop!");
 //!     // Retrieve an handle. It is used to insert new sources into the event loop
 //!     // It can be cloned, allowing you to insert sources from within sources
 //!     let handle = event_loop.handle();
@@ -83,7 +83,7 @@ mod sys;
 
 pub use sys::{Interest, Mode, Poll, Readiness, Token};
 
-pub use self::loop_logic::{EventLoop, InsertError, LoopHandle, LoopSignal};
+pub use self::loop_logic::{EventLoop, InsertError, LoopHandle, LoopSignal, RegistrationToken};
 pub use self::sources::*;
 
 mod list;
