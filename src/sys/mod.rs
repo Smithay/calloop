@@ -47,32 +47,34 @@ pub enum Mode {
 
 /// Interest to register regarding the file descriptor
 #[derive(Copy, Clone, Debug)]
-pub enum Interest {
-    /// Will generate events when readable
-    Readable,
-    /// Will generate events when writable
-    Writable,
-    /// Will generate events when readable or writable
-    Both,
+pub struct Interest {
+    /// Wait for the FD to be readable
+    pub readable: bool,
+    /// Wait for the FD to be writable
+    pub writable: bool,
 }
 
-#[allow(dead_code)]
 impl Interest {
-    fn contains_read(self) -> bool {
-        match self {
-            Interest::Readable => true,
-            Interest::Writable => false,
-            Interest::Both => true,
-        }
-    }
-
-    fn contains_write(self) -> bool {
-        match self {
-            Interest::Readable => false,
-            Interest::Writable => true,
-            Interest::Both => false,
-        }
-    }
+    /// Shorthand for empty interest
+    pub const EMPTY: Interest = Interest {
+        readable: false,
+        writable: false,
+    };
+    /// Shorthand for read interest
+    pub const READ: Interest = Interest {
+        readable: true,
+        writable: false,
+    };
+    /// Shorthand for write interest
+    pub const WRITE: Interest = Interest {
+        readable: false,
+        writable: true,
+    };
+    /// Shorthand for read and write interest
+    pub const BOTH: Interest = Interest {
+        readable: true,
+        writable: true,
+    };
 }
 
 /// Readiness for a file descriptor notification

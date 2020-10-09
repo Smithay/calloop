@@ -61,7 +61,7 @@ impl Signals {
             .map_err(no_nix_err)?;
 
         Ok(Signals {
-            sfd: Generic::new(sfd, Interest::Readable, Mode::Level),
+            sfd: Generic::new(sfd, Interest::READ, Mode::Level),
             mask,
         })
     }

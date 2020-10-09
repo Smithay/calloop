@@ -102,7 +102,7 @@ mod test {
 
         let (mut tx, rx) = UnixStream::pair().unwrap();
 
-        let generic = Generic::new(rx, Interest::Readable, Mode::Level);
+        let generic = Generic::new(rx, Interest::READ, Mode::Level);
 
         let mut dispached = false;
 
@@ -148,7 +148,7 @@ mod test {
 
         let (mut tx, rx) = UnixStream::pair().unwrap();
 
-        let generic = Generic::new(rx, Interest::Readable, Mode::Level);
+        let generic = Generic::new(rx, Interest::READ, Mode::Level);
         let dispatcher = Dispatcher::new(generic, move |_, _, d| {
             *d = true;
             Ok(())

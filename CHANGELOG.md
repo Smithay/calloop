@@ -20,6 +20,7 @@
   - `LoopHandle::register_dispatcher` can be used in place of
     `LoopHandle::insert_source` when the source needs to be accessed after
     its insertion in the loop.
+- `Interest` is changed into a struct to allow empty interest queries
 
 ## 0.6.5 -- 2020-10-07
 

@@ -64,60 +64,7 @@ impl Kqueue {
         mode: Mode,
         token: Token,
     ) -> io::Result<()> {
-        let flags = EventFlag::EV_ADD | EventFlag::EV_RECEIPT | mode_to_flag(mode);
-
-        let changes = [
-            KEvent::new(
-                fd as usize,
-                EventFilter::EVFILT_WRITE,
-                flags,
-                FilterFlag::empty(),
-                0,
-                token.to_usize() as isize,
-            ),
-            KEvent::new(
-                fd as usize,
-                EventFilter::EVFILT_READ,
-                flags,
-                FilterFlag::empty(),
-                0,
-                token.to_usize() as isize,
-            ),
-        ];
-
-        let changes = match interest {
-            Interest::Readable => &changes[1..],
-            Interest::Writable => &changes[..1],
-            Interest::Both => &changes[..],
-        };
-
-        let mut out = [
-            KEvent::new(
-                0,
-                EventFilter::EVFILT_WRITE,
-                EventFlag::empty(),
-                FilterFlag::empty(),
-                0,
-                0,
-            ),
-            KEvent::new(
-                0,
-                EventFilter::EVFILT_READ,
-                EventFlag::empty(),
-                FilterFlag::empty(),
-                0,
-                0,
-            ),
-        ];
-
-        kevent_ts(self.kq, changes, &mut out, None).map_err(no_nix_err)?;
-        for o in &out {
-            if o.flags().contains(EventFlag::EV_ERROR) && o.data() != 0 {
-                let e = io::Error::from_raw_os_error(o.data() as i32);
-                return Err(e);
-            }
-        }
-        Ok(())
+        self.reregister(fd, interest, mode, token)
     }
 
     pub fn reregister(
@@ -127,12 +74,12 @@ impl Kqueue {
         mode: Mode,
         token: Token,
     ) -> io::Result<()> {
-        let write_flags = if interest.contains_write() {
+        let write_flags = if interest.writable {
             EventFlag::EV_ADD | EventFlag::EV_RECEIPT | mode_to_flag(mode)
         } else {
             EventFlag::EV_DELETE
         };
-        let read_flags = if interest.contains_read() {
+        let read_flags = if interest.readable {
             EventFlag::EV_ADD | EventFlag::EV_RECEIPT | mode_to_flag(mode)
         } else {
             EventFlag::EV_DELETE

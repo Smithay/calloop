@@ -10,11 +10,13 @@ pub struct Epoll {
 }
 
 fn make_flags(interest: Interest, mode: Mode) -> epoll::EpollFlags {
-    let mut flags = match interest {
-        Interest::Readable => epoll::EpollFlags::EPOLLIN,
-        Interest::Writable => epoll::EpollFlags::EPOLLOUT,
-        Interest::Both => epoll::EpollFlags::EPOLLIN | epoll::EpollFlags::EPOLLOUT,
-    };
+    let mut flags = epoll::EpollFlags::empty();
+    if interest.readable {
+        flags |= epoll::EpollFlags::EPOLLIN;
+    }
+    if interest.writable {
+        flags |= epoll::EpollFlags::EPOLLOUT;
+    }
     match mode {
         Mode::Level => { /* This is the default */ }
         Mode::Edge => flags |= epoll::EpollFlags::EPOLLET,
