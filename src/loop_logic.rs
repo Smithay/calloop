@@ -14,11 +14,12 @@ use crate::Token;
 
 type IdleCallback<'i, Data> = Rc<RefCell<dyn IdleDispatcher<Data> + 'i>>;
 
-/// A Token for registration in the `EventLoop`.
+/// A token representing a registration in the [`EventLoop`].
 ///
-/// This token is given to you by the `EventLoop` when an `EventSource` is inserted or
-/// a `Dispatcher` is registered. You can use it to `disable`, `enable`, `update`,
-/// `remove` or `kill` the `EventSource` or `Dispatcher`.
+/// This token is given to you by the [`EventLoop`] when an [`EventSource`] is inserted or
+/// a [`Dispatcher`] is registered. You can use it to [disable](LoopHandle#method.disable),
+/// [enable](LoopHandle#method.enable), [update`](LoopHandle#method.update),
+/// [remove](LoopHandle#method.remove) or [kill](LoopHandle#method.kill) it.
 #[derive(Debug, PartialEq)]
 pub struct RegistrationToken(Token);
 
@@ -251,8 +252,8 @@ impl<'l, Data> LoopHandle<'l, Data> {
     ///
     /// The produced futures can be polled in any executor, and notably the one provided by
     /// calloop.
-    pub fn adapt_io<F: AsRawFd>(&self, fd: F) -> std::io::Result<crate::Async<'l, F>> {
-        crate::Async::new(self.inner.clone(), fd)
+    pub fn adapt_io<F: AsRawFd>(&self, fd: F) -> std::io::Result<crate::io::Async<'l, F>> {
+        crate::io::Async::new(self.inner.clone(), fd)
     }
 }
 
@@ -362,7 +363,7 @@ impl<'l, Data> EventLoop<'l, Data> {
 
     /// Dispatch pending events to their callbacks
     ///
-    /// Some source have events available, their callbacks will be immediatly called.
+    /// If some sources have events available, their callbacks will be immediatly called.
     /// Otherwise this will wait until an event is receive or the provided `timeout`
     /// is reached. If `timeout` is `None`, it will wait without a duration limit.
     ///

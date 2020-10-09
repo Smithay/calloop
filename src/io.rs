@@ -1,3 +1,11 @@
+//! Adapters for async IO objects
+//!
+//! This module mainly hosts the [`Async`] adapter for making IO objects async with readiness
+//! monitoring backed by an [`EventLoop`](crate::EventLoop). See [`LoopHandle::adapt_io`] for
+//! how to create them.
+//!
+//! [`LoopHandle::adapt_io`]: crate::LoopHandle#method.adapt_io
+
 use std::cell::RefCell;
 use std::io;
 use std::os::unix::io::{AsRawFd, RawFd};
@@ -21,6 +29,8 @@ use crate::{
 ///
 /// If the `futures-io` cargo feature is enabled, it also implements `AsyncRead` and/or
 /// `AsyncWrite` if the underlying type implements `Read` and/or `Write`.
+///
+/// Note that this adapter and the futures procuded from it and *not* threadsafe.
 pub struct Async<'l, F: AsRawFd> {
     fd: Option<F>,
     dispatcher: Rc<RefCell<IoDispatcher>>,
@@ -70,12 +80,12 @@ impl<'l, F: AsRawFd> Async<'l, F> {
         self.fd.as_mut().unwrap()
     }
 
-    /// A future that terminates once the object becomes ready for read
+    /// A future that resolves once the object becomes ready for reading
     pub fn readable<'s>(&'s mut self) -> Readable<'s, 'l, F> {
         Readable { io: self }
     }
 
-    /// A future that terminates once the object becomes ready for write
+    /// A future that resolves once the object becomes ready for writing
     pub fn writable<'s>(&'s mut self) -> Writable<'s, 'l, F> {
         Writable { io: self }
     }
@@ -99,6 +109,7 @@ impl<'l, F: AsRawFd> Async<'l, F> {
     }
 }
 
+/// A future that resolves once the associated object becomes ready for reading
 pub struct Readable<'s, 'l, F: AsRawFd> {
     io: &'s mut Async<'l, F>,
 }
@@ -117,6 +128,7 @@ impl<'s, 'l, F: AsRawFd> std::future::Future for Readable<'s, 'l, F> {
     }
 }
 
+/// A future that resolves once the associated object becomes ready for writing
 pub struct Writable<'s, 'l, F: AsRawFd> {
     io: &'s mut Async<'l, F>,
 }

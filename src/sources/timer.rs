@@ -1,10 +1,10 @@
 //! Timer-based event sources
 //!
-//! A `Timer<T>` is a general time-tracking object. It is used by setting timeouts,
+//! A [`Timer<T>`](Timer) is a general time-tracking object. It is used by setting timeouts,
 //! and generates events whenever a timeout expires.
 //!
-//! The `Timer<T>` event source provides an handle `TimerHandle<T>`, which is used
-//! to set or cancel timeouts. This handle is cloneable and can be send accross threads
+//! The [`Timer<T>`](Timer) event source provides an handle [`TimerHandle<T>`](TimerHandle), which
+//! is used to set or cancel timeouts. This handle is cloneable and can be sent accross threads
 //! if `T: Send`, allowing you to setup timeouts from any point of your program.
 
 use std::cell::RefCell;
@@ -30,9 +30,7 @@ pub struct Timer<T> {
 }
 
 impl<T> Timer<T> {
-    /// Create a new timer with default parameters
-    ///
-    /// Default time resolution is 100ms
+    /// Create a new timer
     pub fn new() -> std::io::Result<Timer<T>> {
         let (scheduler, source) = TimerScheduler::new()?;
         let inner = TimerInner::new(scheduler);

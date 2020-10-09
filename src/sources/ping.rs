@@ -1,15 +1,13 @@
 //! Ping to the event loop
 //!
-//! This is an event source that just produces `()` events whevener
-//! the associated `Ping::ping()` method is called. If the event source
-//! is pinged multiple times between a single dispatching, it'll only generate
-//! one event.
+//! This is an event source that just produces `()` events whevener the associated
+//! [`Ping::ping`](Ping#method.ping) method is called. If the event source is pinged multiple times
+//! between a single dispatching, it'll only generate one event.
 //!
-//! This event loop is a simple way of waking up the event loop from an
-//! other part of your program (and is what backs the `LoopSignal`). It can
-//! also be used as a building block to construct event sources whose source
-//! of event is not file descriptor, but rather an userspace source
-//! (like an other thread).
+//! This event loop is a simple way of waking up the event loop from an other part of your program
+//! (and is what backs the [`LoopSignal`](crate::LoopSignal)). It can also be used as a building
+//! block to construct event sources whose source of event is not file descriptor, but rather an
+//! userspace source (like an other thread).
 
 use std::{os::unix::io::RawFd, sync::Arc};
 

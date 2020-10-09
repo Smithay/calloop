@@ -20,7 +20,7 @@ pub mod timer;
 /// This is the trait you need to implement if you wish to create your own
 /// calloop-compatible event sources.
 ///
-/// The 3 type parameter define the type of closure the user will need to
+/// The 3 associated types define the type of closure the user will need to
 /// provide to process events for your event source.
 ///
 /// The `process_events` method will be called when one of the FD you registered
@@ -37,7 +37,7 @@ pub trait EventSource {
     /// the user may need to interact with when processing events. The user callback
     /// will receive a `&mut Metadata` reference.
     ///
-    /// Just set to `()` if not needed.
+    /// Set to `()` if not needed.
     type Metadata;
     /// The return type of the user callback
     ///
@@ -45,7 +45,7 @@ pub trait EventSource {
     /// processing is finshed (to indicate success or failure for example), you can
     /// specify it using this type.
     ///
-    /// Just set to `()` if not needed.
+    /// Set to `()` if not needed.
     type Ret;
 
     /// Process any relevant events
@@ -69,23 +69,24 @@ pub trait EventSource {
 
     /// Register yourself to this poll instance
     ///
-    /// You should register all your relevant file descriptors to the provided `Poll`
-    /// using its `Poll::register` method.
+    /// You should register all your relevant file descriptors to the provided [`Poll`](crate::Poll)
+    /// using its [`Poll::register`](crate::Poll#method.register) method.
     ///
     /// If you need to register more than one file descriptor, you can change the
-    /// `sub_id` field of the `Token` to differentiate between them.
+    /// `sub_id` field of the [`Token`](crate::Token) to differentiate between them.
     fn register(&mut self, poll: &mut Poll, token: Token) -> io::Result<()>;
 
     /// Re-register your file descriptors
     ///
     /// Your should update the registration of all your relevant file descriptor to
-    /// the provided `Poll` using its `Poll::reregister`, if necessary.
+    /// the provided [`Poll`](crate::Poll) using its [`Poll::reregister`](crate::Poll#method.reregister),
+    /// if necessary.
     fn reregister(&mut self, poll: &mut Poll, token: Token) -> io::Result<()>;
 
     /// Unregister your file descriptors
     ///
-    /// You should unregister all your file descriptors from this `Poll` using its
-    /// `Poll::unregister` method.
+    /// You should unregister all your file descriptors from this [`Poll`](crate::Poll) using its
+    /// [`Poll::unregister`](crate::Poll#method.unregister) method.
     fn unregister(&mut self, poll: &mut Poll) -> io::Result<()>;
 }
 

@@ -1,9 +1,12 @@
 //! An MPSC channel whose receiving end is an event source
 //!
-//! Create a channel using `Channel::<T>::new()`, which returns a
-//! `Sender<T>` that can be cloned and sent accross threads if `T: Send`,
-//! and a `Channel<T>` that can be inserted into an `EventLoop`. It will generate
-//! one event per message.
+//! Create a channel using [`channel()`](channel), which returns a
+//! [`Sender`] that can be cloned and sent accross threads if `T: Send`,
+//! and a [`Channel`] that can be inserted into an [`EventLoop`](crate::EventLoop).
+//! It will generate one event per message.
+//!
+//! A synchronous version of the channel is provided by [`sync_channel`], in which
+//! the [`SyncSender`] will block when the channel is full.
 
 use std::sync::mpsc;
 

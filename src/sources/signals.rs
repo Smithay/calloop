@@ -79,7 +79,7 @@ impl Signals {
         Ok(())
     }
 
-    /// Remove a list of signals to the signals source
+    /// Remove a list of signals from the signals source
     ///
     /// If this function returns an error, the signal mask of the thread may
     /// have still been changed.

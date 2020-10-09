@@ -15,7 +15,8 @@
 //! (if any) by their own means.
 //!
 //! **Note:** The futures must have their own means of being woken up, as this executor is,
-//! by itself, not I/O aware.
+//! by itself, not I/O aware. See [`LoopHandle::adapt_io`](crate::LoopHandle#method.adapt_io)
+//! for that, or you can use some other mechanism if you prefer.
 use std::{future::Future, pin::Pin, sync::Arc};
 
 use futures_util::{
