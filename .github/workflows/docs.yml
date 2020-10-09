@@ -18,12 +18,12 @@ jobs:
         uses: actions/cache@v1
         with:
           path: ~/.cargo
-          key: cargo-stable
+          key: cargo-beta
 
       - name: Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: beta
           override: true
 
       - name: Build Documentation
