@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::fmt::{self, Debug, Formatter};
 use std::io;
+use std::os::unix::io::AsRawFd;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -21,9 +22,9 @@ type IdleCallback<'i, Data> = Rc<RefCell<dyn IdleDispatcher<Data> + 'i>>;
 #[derive(Debug, PartialEq)]
 pub struct RegistrationToken(Token);
 
-struct LoopInner<'l, Data> {
-    poll: RefCell<Poll>,
-    sources: RefCell<SourceList<'l, Data>>,
+pub(crate) struct LoopInner<'l, Data> {
+    pub(crate) poll: RefCell<Poll>,
+    pub(crate) sources: RefCell<SourceList<'l, Data>>,
     idles: RefCell<Vec<IdleCallback<'l, Data>>>,
 }
 
@@ -241,6 +242,17 @@ impl<'l, Data> LoopHandle<'l, Data> {
             .borrow_mut()
             .del_source(token.0)
             .expect("Attempting to remove a non-existent source?!");
+    }
+
+    /// Wrap an IO object into an async adapter
+    ///
+    /// This adapter turns the IO object into an async-aware one that can be used in futures.
+    /// The readiness of these futures will be driven by the event loop.
+    ///
+    /// The produced futures can be polled in any executor, and notably the one provided by
+    /// calloop.
+    pub fn adapt_io<F: AsRawFd>(&self, fd: F) -> std::io::Result<crate::Async<'l, F>> {
+        crate::Async::new(self.inner.clone(), fd)
     }
 }
 

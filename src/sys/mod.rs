@@ -88,6 +88,15 @@ pub struct Readiness {
     pub error: bool,
 }
 
+impl Readiness {
+    /// Shorthand for empty readiness
+    pub const EMPTY: Readiness = Readiness {
+        readable: false,
+        writable: false,
+        error: false,
+    };
+}
+
 pub(crate) struct PollEvent {
     pub(crate) readiness: Readiness,
     pub(crate) token: Token,

@@ -86,9 +86,12 @@ pub use sys::{Interest, Mode, Poll, Readiness, Token};
 pub use self::loop_logic::{EventLoop, InsertError, LoopHandle, LoopSignal, RegistrationToken};
 pub use self::sources::*;
 
+mod io;
 mod list;
 mod loop_logic;
 mod sources;
+
+pub use io::Async;
 
 fn no_nix_err(err: nix::Error) -> std::io::Error {
     match err {
