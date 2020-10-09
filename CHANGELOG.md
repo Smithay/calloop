@@ -26,6 +26,8 @@
 
 - Introduce a futures executor as a new event source, behind the `executor` cargo
   feature.
+- Introduce the `LoopHandle::adapt_io` method for creating `Async<F>` adapters to
+  adapt IO objects for async use, powered by the event loop.
 
 ## 0.6.5 -- 2020-10-07
 
