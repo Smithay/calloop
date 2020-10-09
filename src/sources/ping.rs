@@ -29,7 +29,7 @@ use crate::{no_nix_err, EventSource, Interest, Mode, Poll, Readiness, Token};
 pub fn make_ping() -> std::io::Result<(Ping, PingSource)> {
     let (read, write) = pipe2(OFlag::O_CLOEXEC | OFlag::O_NONBLOCK).map_err(no_nix_err)?;
     let source = PingSource {
-        pipe: Generic::from_fd(read, Interest::Readable, Mode::Level),
+        pipe: Generic::from_fd(read, Interest::READ, Mode::Level),
     };
     let ping = Ping {
         pipe: Arc::new(CloseOnDrop(write)),

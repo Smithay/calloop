@@ -545,10 +545,20 @@ mod tests {
     fn insert_bad_source() {
         let event_loop = EventLoop::<()>::try_new().unwrap();
         let ret = event_loop.handle().insert_source(
-            crate::sources::generic::Generic::from_fd(42, Interest::Readable, Mode::Level),
+            crate::sources::generic::Generic::from_fd(42, Interest::READ, Mode::Level),
             |_, _, _| Ok(()),
         );
         assert!(ret.is_err());
+    }
+
+    #[test]
+    fn insert_source_no_interest() {
+        let event_loop = EventLoop::<()>::try_new().unwrap();
+        let ret = event_loop.handle().insert_source(
+            crate::sources::generic::Generic::from_fd(0, Interest::EMPTY, Mode::Level),
+            |_, _, _| Ok(()),
+        );
+        assert!(ret.is_ok());
     }
 
     #[test]
@@ -697,7 +707,7 @@ mod tests {
         )
         .unwrap();
 
-        let source = Generic::from_fd(sock1, Interest::Readable, Mode::Level);
+        let source = Generic::from_fd(sock1, Interest::READ, Mode::Level);
         let mut dispatcher = Dispatcher::new(source, |_, fd, dispatched| {
             *dispatched = true;
             // read all contents available to drain the socket
@@ -749,7 +759,7 @@ mod tests {
         assert!(!dispatched);
 
         // change the interests for writability instead
-        dispatcher.as_source_mut().interest = Interest::Writable;
+        dispatcher.as_source_mut().interest = Interest::WRITE;
         event_loop.handle().update(&sock_token_1).unwrap();
 
         // the socket is writable
@@ -760,7 +770,7 @@ mod tests {
         assert!(dispatched);
 
         // change back to readable
-        dispatcher.as_source_mut().interest = Interest::Readable;
+        dispatcher.as_source_mut().interest = Interest::READ;
         event_loop.handle().update(&sock_token_1).unwrap();
 
         // the socket is not readable
