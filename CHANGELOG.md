@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.7.0 -- 2020-10-13
+
 #### Breaking Changes
 
 - The return type for `LoopHandle::insert_source` was renamed as
