@@ -44,22 +44,18 @@
 //!     );
 //!
 //!     // Actual run of your loop
-//!     loop {
-//!         // Dispatch received events to their callbacks, waiting at most 20 ms for
-//!         // new events
-//!         //
-//!         // The `&mut shared_data` is a mutable reference that will be forwarded to all
-//!         // your callbacks, allowing them to easily share some state
-//! #       let mut shared_data = ();
-//!         event_loop.dispatch(Duration::from_millis(20), &mut shared_data);
-//!
+//!     //
+//!     // Dispatch received events to their callbacks, waiting at most 20 ms for
+//!     // new events between each invocation of the provided callback.
+//!     //
+//!     // The `&mut shared_data` is a mutable reference that will be forwarded to all
+//!     // your callbacks, allowing them to share some state
+//!     event_loop.run(Duration::from_millis(20), &mut shared_data, |shared_data| {
 //!         /*
-//!          * Insert here the processing you need to do do between each event loop run
-//!          * like your drawing logic if you're doing a GUI app for example.
-//!          */
-//!
-//! #        break;
-//!     }
+//!         * Insert here the processing you need to do do between each waiting session
+//!         * like your drawing logic if you're doing a GUI app for example.
+//!         */
+//!     });
 //! }
 //! ```
 //!
