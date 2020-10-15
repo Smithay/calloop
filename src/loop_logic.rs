@@ -400,15 +400,16 @@ impl<'l, Data> EventLoop<'l, Data> {
     ///
     /// You can use the `get_signal()` method to retrieve a way to stop or wakeup
     /// the event loop from anywhere.
-    pub fn run<F>(
+    pub fn run<F, D: Into<Option<Duration>>>(
         &mut self,
-        timeout: Option<Duration>,
+        timeout: D,
         data: &mut Data,
         mut cb: F,
     ) -> io::Result<()>
     where
         F: FnMut(&mut Data),
     {
+        let timeout = timeout.into();
         self.stop_signal.store(false, Ordering::Release);
         while !self.stop_signal.load(Ordering::Acquire) {
             self.dispatch(timeout, data)?;

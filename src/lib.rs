@@ -13,7 +13,7 @@
 //!
 //! ## How to use it
 //!
-//! ```
+//! ```no_run
 //! extern crate calloop;
 //!
 //! use calloop::{generic::Generic, EventLoop, Interest, Mode};
@@ -50,6 +50,7 @@
 //!     //
 //!     // The `&mut shared_data` is a mutable reference that will be forwarded to all
 //!     // your callbacks, allowing them to share some state
+//! #   let mut shared_data = ();
 //!     event_loop.run(Duration::from_millis(20), &mut shared_data, |shared_data| {
 //!         /*
 //!         * Insert here the processing you need to do do between each waiting session

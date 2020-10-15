@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+#### Changes
+
+- `EventLoop::run()` now accepts `Into<Option<Duration>>`, like `EventLoop::disptach()`
+
 ## 0.7.0 -- 2020-10-13
 
 #### Breaking Changes
