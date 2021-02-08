@@ -97,6 +97,7 @@ impl Readiness {
     };
 }
 
+#[derive(Debug)]
 pub(crate) struct PollEvent {
     pub(crate) readiness: Readiness,
     pub(crate) token: Token,
