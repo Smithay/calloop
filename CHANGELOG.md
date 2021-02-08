@@ -6,6 +6,13 @@
 
 - `EventLoop::run()` now accepts `Into<Option<Duration>>`, like `EventLoop::disptach()`
 
+#### Bugfixes
+
+- The `Ping` event source now automatically disables itself when its sending end is
+  dropped, preventing to always be considered readable (which caused a busy-loop).
+  This also fixes a similar behavior of `Executor` and `Channel`, which use `Ping`
+  internally.
+
 ## 0.7.0 -- 2020-10-13
 
 #### Breaking Changes
