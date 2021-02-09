@@ -2,9 +2,11 @@
 
 ## Unreleased
 
+## 0.7.2 -- 2021-02-09
+
 #### Changes
 
-- `EventLoop::run()` now accepts `Into<Option<Duration>>`, like `EventLoop::disptach()`
+- `EventLoop::run()` now accepts `Into<Option<Duration>>`, like `EventLoop::dispatch()`
 
 #### Bugfixes
 
