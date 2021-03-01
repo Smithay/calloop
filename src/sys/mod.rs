@@ -147,6 +147,11 @@ impl Token {
         }
     }
 
+    /// Provide a copy of the Token with the given `sub_id`.
+    pub fn with_sub_id(self, sub_id: u32) -> Token {
+        Self { sub_id, ..self }
+    }
+
     #[cfg(target_pointer_width = "64")]
     pub(crate) fn to_usize(self) -> usize {
         self.to_u64() as usize
@@ -247,5 +252,28 @@ mod tests {
         assert_eq!(t.to_u64(), 0x0000133700000042);
         let t2 = Token::from_u64(0x0000133700000042);
         assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn token_with_sub_id() {
+        let t1 = Token {
+            id: 0x1234,
+            sub_id: 0,
+        };
+        let t2 = t1.with_sub_id(0xABCD);
+        assert_eq!(
+            t1,
+            Token {
+                id: 0x1234,
+                sub_id: 0
+            }
+        );
+        assert_eq!(
+            t2,
+            Token {
+                id: 0x1234,
+                sub_id: 0xABCD
+            }
+        );
     }
 }
