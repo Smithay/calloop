@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+#### Additions
+
+- `Token` now has a method `with_sub_id()` that returns a copy of the token
+  but with the given `sub_id`.
+
 ## 0.7.2 -- 2021-02-09
 
 #### Changes
