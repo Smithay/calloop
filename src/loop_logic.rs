@@ -559,7 +559,7 @@ mod tests {
     fn insert_bad_source() {
         let event_loop = EventLoop::<()>::try_new().unwrap();
         let ret = event_loop.handle().insert_source(
-            crate::sources::generic::Generic::from_fd(42, Interest::READ, Mode::Level),
+            crate::sources::generic::Generic::from_fd(420, Interest::READ, Mode::Level),
             |_, _, _| Ok(()),
         );
         assert!(ret.is_err());
