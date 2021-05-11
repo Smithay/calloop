@@ -1,0 +1,6 @@
+[book]
+authors = ["Jason Heeris"]
+language = "en"
+multilingual = false
+src = "src"
+title = "A Guide to Calloop"
