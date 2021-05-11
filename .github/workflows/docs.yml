@@ -26,17 +26,27 @@ jobs:
           toolchain: beta
           override: true
 
+      # Combining these docs is order-dependent. The API docs must be copied
+      # into mdBook's source directory for it to copy it to the output directory
+      # as static content.
+
       - name: Build Documentation
         uses: actions-rs/cargo@v1
         with:
           command: doc
           args: --no-deps --all-features
 
-      - name: Setup index
-        run: cp ./doc_index.html ./target/doc/index.html
+      - run: rsync -r target/doc/ doc/src/api
+
+      - name: Build mdBook
+        uses: peaceiris/actions-mdbook@v1
+        with:
+          mdbook-version: '0.4.8'
+
+      - run: mdbook build doc
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./target/doc
+          publish_dir: ./doc/book
