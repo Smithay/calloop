@@ -4,3 +4,9 @@ language = "en"
 multilingual = false
 src = "src"
 title = "A Guide to Calloop"
+
+[rust]
+edition = "2018"
+
+[output.html]
+git-repository-url = "https://github.com/detly/calloop/"
