@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.8.0 -- 2021-05-30
+
 #### Breaking changes
 
 - The `Dispatcher` type no longer has the closure type within its type parameters,
