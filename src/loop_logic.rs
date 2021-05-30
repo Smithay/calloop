@@ -129,13 +129,12 @@ impl<'l, Data> LoopHandle<'l, Data> {
     /// Use this function if you need access to the event source after its insertion in the loop.
     ///
     /// See also `insert_source`.
-    pub fn register_dispatcher<S, F>(
+    pub fn register_dispatcher<S>(
         &self,
-        dispatcher: Dispatcher<S, F>,
+        dispatcher: Dispatcher<'l, S, Data>,
     ) -> io::Result<RegistrationToken>
     where
         S: EventSource + 'l,
-        F: FnMut(S::Event, &mut S::Metadata, &mut Data) -> S::Ret + 'l,
     {
         let mut sources = self.inner.sources.borrow_mut();
         let mut poll = self.inner.poll.borrow_mut();
@@ -722,7 +721,7 @@ mod tests {
         .unwrap();
 
         let source = Generic::from_fd(sock1, Interest::READ, Mode::Level);
-        let mut dispatcher = Dispatcher::new(source, |_, fd, dispatched| {
+        let dispatcher = Dispatcher::new(source, |_, fd, dispatched| {
             *dispatched = true;
             // read all contents available to drain the socket
             let mut buf = [0u8; 32];

@@ -136,6 +136,7 @@
 //! Currently, only Linux and the *BSD are supported.
 
 #![warn(missing_docs)]
+#![allow(clippy::needless_doctest_main)]
 
 mod sys;
 
