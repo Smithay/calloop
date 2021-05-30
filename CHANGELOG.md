@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+#### Breaking changes
+
+- The `Dispatcher` type no longer has the closure type within its type parameters,
+  but instead now has an explicit lifetime parameter, as well as the source type `S`
+  and the event loop `Data` type. This allows the type to be explicitly named and
+  stored into an other struct.
+
 #### Additions
 
 - `Token` now has a method `with_sub_id()` that returns a copy of the token

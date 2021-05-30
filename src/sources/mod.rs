@@ -110,7 +110,6 @@ where
         let DispatcherInner {
             ref mut source,
             ref mut callback,
-            ..
         } = *disp;
         source.process_events(readiness, token, |event, meta| callback(event, meta, data))
     }
@@ -143,35 +142,86 @@ pub(crate) trait EventDispatcher<Data> {
     fn unregister(&self, poll: &mut Poll) -> io::Result<()>;
 }
 
+// An internal trait to erase the `F` type parameter of `DispatcherInner`
+trait ErasedDispatcher<'a, S, Data> {
+    fn as_source_ref(&self) -> Ref<S>;
+    fn as_source_mut(&self) -> RefMut<S>;
+    fn into_source_inner(self: Rc<Self>) -> S;
+    fn into_event_dispatcher(self: Rc<Self>) -> Rc<dyn EventDispatcher<Data> + 'a>;
+}
+
+impl<'a, S, Data, F> ErasedDispatcher<'a, S, Data> for RefCell<DispatcherInner<S, F>>
+where
+    S: EventSource + 'a,
+    F: FnMut(S::Event, &mut S::Metadata, &mut Data) -> S::Ret + 'a,
+{
+    fn as_source_ref(&self) -> Ref<S> {
+        Ref::map(self.borrow(), |inner| &inner.source)
+    }
+
+    fn as_source_mut(&self) -> RefMut<S> {
+        RefMut::map(self.borrow_mut(), |inner| &mut inner.source)
+    }
+
+    fn into_source_inner(self: Rc<Self>) -> S {
+        if let Ok(ref_cell) = Rc::try_unwrap(self) {
+            ref_cell.into_inner().source
+        } else {
+            panic!("Dispatcher is still registered");
+        }
+    }
+
+    fn into_event_dispatcher(self: Rc<Self>) -> Rc<dyn EventDispatcher<Data> + 'a>
+    where
+        S: 'a,
+    {
+        self as Rc<dyn EventDispatcher<Data> + 'a>
+    }
+}
+
 /// An event source with its callback.
 ///
 /// The `Dispatcher` can be registered in an event loop.
 /// Use the `as_source_{ref,mut}` functions to interact with the event source.
 /// Use `into_source_inner` to get the event source back.
-pub struct Dispatcher<S, F>(Rc<RefCell<DispatcherInner<S, F>>>);
+pub struct Dispatcher<'a, S, Data>(Rc<dyn ErasedDispatcher<'a, S, Data> + 'a>);
 
-impl<S, F> Dispatcher<S, F>
+impl<'a, S, Data> Dispatcher<'a, S, Data>
 where
-    S: EventSource,
+    S: EventSource + 'a,
 {
     /// Builds a dispatcher.
     ///
     /// The resulting `Dispatcher`
-    pub fn new<Data>(source: S, callback: F) -> Self
+    pub fn new<F>(source: S, callback: F) -> Self
     where
-        F: FnMut(S::Event, &mut S::Metadata, &mut Data) -> S::Ret,
+        F: FnMut(S::Event, &mut S::Metadata, &mut Data) -> S::Ret + 'a,
     {
         Dispatcher(Rc::new(RefCell::new(DispatcherInner { source, callback })))
     }
 
     /// Returns an immutable reference to the event source.
+    ///
+    /// # Panics
+    ///
+    /// Has the same semantics as `RefCell::borrow()`.
+    ///
+    /// The dispatcher being mutably borrowed while its events are dispatched,
+    /// this method will panic if invoked from within the associated dispatching closure.
     pub fn as_source_ref(&self) -> Ref<S> {
-        Ref::map(self.0.borrow(), |inner| &inner.source)
+        self.0.as_source_ref()
     }
 
     /// Returns a mutable reference to the event source.
-    pub fn as_source_mut(&mut self) -> RefMut<S> {
-        RefMut::map(self.0.borrow_mut(), |inner| &mut inner.source)
+    ///
+    /// # Panics
+    ///
+    /// Has the same semantics as `RefCell::borrow_mut()`.
+    ///
+    /// The dispatcher being mutably borrowed while its events are dispatched,
+    /// this method will panic if invoked from within the associated dispatching closure.
+    pub fn as_source_mut(&self) -> RefMut<S> {
+        self.0.as_source_mut()
     }
 
     /// Consumes the Dispatcher and returns the inner event source.
@@ -180,24 +230,16 @@ where
     ///
     /// Panics if the `Dispatcher` is still registered.
     pub fn into_source_inner(self) -> S {
-        if let Ok(ref_cell) = Rc::try_unwrap(self.0) {
-            ref_cell.into_inner().source
-        } else {
-            panic!("Dispatcher is still registered");
-        }
+        self.0.into_source_inner()
     }
 
-    pub(crate) fn clone_as_event_dispatcher<'a, Data>(&self) -> Rc<dyn EventDispatcher<Data> + 'a>
-    where
-        S: 'a,
-        F: FnMut(S::Event, &mut S::Metadata, &mut Data) -> S::Ret + 'a,
-    {
-        Rc::clone(&self.0) as Rc<dyn EventDispatcher<Data> + 'a>
+    pub(crate) fn clone_as_event_dispatcher(&self) -> Rc<dyn EventDispatcher<Data> + 'a> {
+        Rc::clone(&self.0).into_event_dispatcher()
     }
 }
 
-impl<S, F> Clone for Dispatcher<S, F> {
-    fn clone(&self) -> Dispatcher<S, F> {
+impl<'a, S, Data> Clone for Dispatcher<'a, S, Data> {
+    fn clone(&self) -> Dispatcher<'a, S, Data> {
         Dispatcher(Rc::clone(&self.0))
     }
 }

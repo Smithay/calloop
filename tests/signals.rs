@@ -64,7 +64,7 @@ mod test {
         let mut event_loop = EventLoop::try_new().unwrap();
 
         let mut signal_received = None;
-        let mut dispatcher = Dispatcher::new(
+        let dispatcher = Dispatcher::new(
             Signals::new(&[Signal::SIGUSR1]).unwrap(),
             move |evt, &mut (), rcv| {
                 *rcv = Some(evt.signal());
@@ -94,7 +94,7 @@ mod test {
         let mut event_loop = EventLoop::try_new().unwrap();
 
         let mut signal_received = None;
-        let mut dispatcher = Dispatcher::new(
+        let dispatcher = Dispatcher::new(
             Signals::new(&[Signal::SIGUSR1, Signal::SIGUSR2]).unwrap(),
             move |evt, &mut (), rcv| {
                 *rcv = Some(evt.signal());
