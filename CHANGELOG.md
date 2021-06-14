@@ -7,6 +7,10 @@
 - MSRV is now 1.41
 - The `futures` module now has a proper error type for `Scheduler::schedulme()`
 
+#### Bugfixes
+
+- Cancelling a timeout no longer prevents later timeouts from firing.
+
 ## 0.8.0 -- 2021-05-30
 
 #### Breaking changes
