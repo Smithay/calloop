@@ -15,6 +15,24 @@ pub mod ping;
 pub mod signals;
 pub mod timer;
 
+/// Possible actions that can be requested to the event loop by an
+/// event source once its events have been processed
+#[derive(Debug)]
+pub enum PostAction {
+    /// Continue listening for events on this source as before
+    Continue,
+    /// Trigger a re-registration of this source
+    Reregister,
+    /// Disable this source
+    ///
+    /// Has the same effect as [`LoopHandle::disable`](crate::LoopHandle#method.disable)
+    Disable,
+    /// Remove this source from the eventloop
+    ///
+    /// Has the same effect as [`LoopHandle::kill`](crate::LoopHandle#method.kill)
+    Remove,
+}
+
 /// Trait representing an event source
 ///
 /// This is the trait you need to implement if you wish to create your own
@@ -63,7 +81,7 @@ pub trait EventSource {
         readiness: Readiness,
         token: Token,
         callback: F,
-    ) -> std::io::Result<()>
+    ) -> std::io::Result<PostAction>
     where
         F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret;
 
@@ -105,7 +123,7 @@ where
         readiness: Readiness,
         token: Token,
         data: &mut Data,
-    ) -> std::io::Result<()> {
+    ) -> std::io::Result<PostAction> {
         let mut disp = self.borrow_mut();
         let DispatcherInner {
             ref mut source,
@@ -133,7 +151,7 @@ pub(crate) trait EventDispatcher<Data> {
         readiness: Readiness,
         token: Token,
         data: &mut Data,
-    ) -> std::io::Result<()>;
+    ) -> std::io::Result<PostAction>;
 
     fn register(&self, poll: &mut Poll, token: Token) -> io::Result<()>;
 

@@ -10,7 +10,7 @@
 
 use std::sync::mpsc;
 
-use crate::{EventSource, Poll, Readiness, Token};
+use crate::{EventSource, Poll, PostAction, Readiness, Token};
 
 use super::ping::{make_ping, Ping, PingSource};
 
@@ -151,7 +151,7 @@ impl<T> EventSource for Channel<T> {
         readiness: Readiness,
         token: Token,
         mut callback: C,
-    ) -> std::io::Result<()>
+    ) -> std::io::Result<PostAction>
     where
         C: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {

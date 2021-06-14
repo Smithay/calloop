@@ -18,6 +18,7 @@ use nix::fcntl::{fcntl, FcntlArg, OFlag};
 #[cfg(feature = "futures-io")]
 use futures_io::{AsyncRead, AsyncWrite, IoSlice, IoSliceMut};
 
+use crate::PostAction;
 use crate::{
     loop_logic::LoopInner, sources::EventDispatcher, Interest, Mode, Poll, Readiness, Token,
 };
@@ -208,13 +209,13 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
         readiness: Readiness,
         _token: Token,
         _data: &mut Data,
-    ) -> std::io::Result<()> {
+    ) -> std::io::Result<PostAction> {
         let mut disp = self.borrow_mut();
         disp.last_readiness = readiness;
         if let Some(waker) = disp.waker.take() {
             waker.wake();
         }
-        Ok(())
+        Ok(PostAction::Continue)
     }
 
     fn register(&self, poll: &mut Poll, token: Token) -> std::io::Result<()> {
@@ -313,8 +314,6 @@ impl<'l, F: AsRawFd + io::Write> AsyncWrite for Async<'l, F> {
 
 #[cfg(all(test, feature = "executor"))]
 mod tests {
-    use super::*;
-
     use futures::io::{AsyncReadExt, AsyncWriteExt};
 
     use crate::sources::futures::executor;

@@ -9,7 +9,7 @@
 //!
 //! ```
 //! # extern crate calloop;
-//! use calloop::{generic::Generic, Interest, Mode};
+//! use calloop::{generic::Generic, Interest, Mode, PostAction};
 //!
 //! # fn main() {
 //! # let mut event_loop = calloop::EventLoop::<()>::try_new()
@@ -24,10 +24,10 @@
 //!         // The first argument of the callback is a Readiness
 //!         // The second is a &mut reference to your object
 //!
-//!         // your callback needs to return a Result<(), std::io::Error>
+//!         // your callback needs to return a Result<PostAction, std::io::Error>
 //!         // if it returns an error, the event loop will consider this event
-//!         // event source as erroring and report it to the user
-//!         Ok(())
+//!         // event source as erroring and report it to the user.
+//!         Ok(PostAction::Continue)
 //!     }
 //! );
 //! # }
@@ -44,7 +44,7 @@ use std::io;
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, RawFd};
 
-use crate::{EventSource, Interest, Mode, Poll, Readiness, Token};
+use crate::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token};
 
 /// A generic event source wrapping a FD-backed type
 pub struct Generic<F: AsRawFd> {
@@ -91,14 +91,14 @@ impl Generic<Fd> {
 impl<F: AsRawFd> EventSource for Generic<F> {
     type Event = Readiness;
     type Metadata = F;
-    type Ret = io::Result<()>;
+    type Ret = io::Result<PostAction>;
 
     fn process_events<C>(
         &mut self,
         readiness: Readiness,
         _: Token,
         mut callback: C,
-    ) -> std::io::Result<()>
+    ) -> std::io::Result<PostAction>
     where
         C: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
@@ -123,7 +123,7 @@ mod test {
     use std::io::{self, Read, Write};
 
     use super::Generic;
-    use crate::{Dispatcher, Interest, Mode};
+    use crate::{Dispatcher, Interest, Mode, PostAction};
     #[cfg(unix)]
     #[test]
     fn dispatch_unix() {
@@ -150,7 +150,7 @@ mod test {
                 assert_eq!(&buffer[..6], &[1, 2, 3, 4, 5, 6]);
 
                 *d = true;
-                Ok(())
+                Ok(PostAction::Continue)
             })
             .map_err(Into::<io::Error>::into)
             .unwrap();
@@ -184,7 +184,7 @@ mod test {
         let generic = Generic::new(rx, Interest::READ, Mode::Level);
         let dispatcher = Dispatcher::new(generic, move |_, _, d| {
             *d = true;
-            Ok(())
+            Ok(PostAction::Continue)
         });
 
         let mut dispached = false;
@@ -224,7 +224,7 @@ mod test {
                 assert_eq!(&buffer[..6], &[1, 2, 3, 4, 5, 6]);
 
                 *d = true;
-                Ok(())
+                Ok(PostAction::Continue)
             })
             .map_err(Into::<io::Error>::into)
             .unwrap();

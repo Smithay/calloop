@@ -17,12 +17,12 @@ use nix::{
 };
 
 use super::generic::{Fd, Generic};
-use crate::{no_nix_err, EventSource, Interest, Mode, Poll, Readiness, Token};
+use crate::{no_nix_err, EventSource, Interest, Mode, Poll, PostAction, Readiness, Token};
 
 /// Create a new ping event source
 ///
-/// you are given a `Ping` instance, which can be cloned and used to ping the
-/// event loop, and a `PingSource`, which you can insert in your event loop to
+/// you are given a [`Ping`] instance, which can be cloned and used to ping the
+/// event loop, and a [`PingSource`], which you can insert in your event loop to
 /// receive the pings.
 pub fn make_ping() -> std::io::Result<(Ping, PingSource)> {
     let (read, write) = pipe2(OFlag::O_CLOEXEC | OFlag::O_NONBLOCK).map_err(no_nix_err)?;
@@ -38,6 +38,9 @@ pub fn make_ping() -> std::io::Result<(Ping, PingSource)> {
 /// The ping event source
 ///
 /// You can insert it in your event loop to receive pings.
+///
+/// If you use it directly, it will automatically remove itself from the event loop
+/// once all [`Ping`] instances are dropped.
 pub struct PingSource {
     pipe: Generic<Fd>,
 }
@@ -52,26 +55,19 @@ impl EventSource for PingSource {
         readiness: Readiness,
         token: Token,
         mut callback: C,
-    ) -> std::io::Result<()>
+    ) -> std::io::Result<PostAction>
     where
         C: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
         self.pipe.process_events(readiness, token, |_, fd| {
             let mut buf = [0u8; 32];
             let mut read_something = false;
-            // If we have already disabled ourselves, do nothing.
-            if fd.0 == -1 {
-                return Ok(());
-            }
+            let mut action = PostAction::Continue;
             loop {
                 match read(fd.0, &mut buf) {
                     Ok(0) => {
-                        // The other end of the pipe was closed, close the file descriptor
-                        // to disable ourselves
-                        if let Err(e) = close(fd.0) {
-                            log::warn!("[calloop] Failed to close read ping: {:?}", e);
-                        }
-                        fd.0 = -1;
+                        // The other end of the pipe was closed, mark ourselved to for removal
+                        action = PostAction::Remove;
                         break;
                     }
                     Ok(_) => read_something = true,
@@ -90,45 +86,27 @@ impl EventSource for PingSource {
             if read_something {
                 callback((), &mut ());
             }
-            Ok(())
+            Ok(action)
         })
     }
 
     fn register(&mut self, poll: &mut Poll, token: Token) -> std::io::Result<()> {
-        if self.pipe.file.0 >= 0 {
-            self.pipe.register(poll, token)
-        } else {
-            // do nothing if the other end was already closed
-            Ok(())
-        }
+        self.pipe.register(poll, token)
     }
 
     fn reregister(&mut self, poll: &mut Poll, token: Token) -> std::io::Result<()> {
-        if self.pipe.file.0 >= 0 {
-            self.pipe.reregister(poll, token)
-        } else {
-            // do nothing if the other end was already closed
-            Ok(())
-        }
+        self.pipe.reregister(poll, token)
     }
 
     fn unregister(&mut self, poll: &mut Poll) -> std::io::Result<()> {
-        if self.pipe.file.0 >= 0 {
-            self.pipe.unregister(poll)
-        } else {
-            // do nothing if the other end was already closed
-            Ok(())
-        }
+        self.pipe.unregister(poll)
     }
 }
 
 impl Drop for PingSource {
     fn drop(&mut self) {
-        // close the fd if it wasn't already
-        if self.pipe.file.0 >= 0 {
-            if let Err(e) = close(self.pipe.file.0) {
-                log::warn!("[calloop] Failed to close read ping: {:?}", e);
-            }
+        if let Err(e) = close(self.pipe.file.0) {
+            log::warn!("[calloop] Failed to close read ping: {:?}", e);
         }
     }
 }
@@ -205,7 +183,7 @@ mod tests {
         let mut dispatched = false;
 
         // If the sender is closed from the start, the ping should first trigger
-        // once, disabling itself but now invoking the callback
+        // once, disabling itself but not invoking the callback
         event_loop
             .dispatch(std::time::Duration::from_millis(0), &mut dispatched)
             .unwrap();

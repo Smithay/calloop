@@ -6,6 +6,8 @@
 
 - MSRV is now 1.41
 - The `futures` module now has a proper error type for `Scheduler::schedulme()`
+- The return type of `EventSource::process_events()` is now `io::Result<PostAction>` allowing
+  the sources to directly request the event loop to reregister/disable/destroy them.
 
 #### Bugfixes
 
