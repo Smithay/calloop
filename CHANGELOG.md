@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+#### Breaking changes
+
+- MSRV is now 1.41
+
 ## 0.8.0 -- 2021-05-30
 
 #### Breaking changes
