@@ -120,23 +120,19 @@ impl<T> EventSource for Timer<T> {
         };
         let inner = &self.inner;
         self.source.process_events(readiness, token, |(), &mut ()| {
-            let mut some_expired = false;
             loop {
                 let next_expired: Option<T> = {
                     let mut guard = inner.lock().unwrap();
                     guard.next_expired()
                 };
                 if let Some(val) = next_expired {
-                    some_expired = true;
                     callback(val, &mut handle);
                 } else {
                     break;
                 }
             }
             // now compute the next timeout and signal if necessary
-            if some_expired {
-                inner.lock().unwrap().reschedule();
-            }
+            inner.lock().unwrap().reschedule();
         })
     }
 
@@ -195,10 +191,11 @@ impl<T> TimerInner<T> {
     fn cancel(&mut self, timeout: &Timeout) -> Option<T> {
         for data in self.heap.iter() {
             if data.counter == timeout.counter {
-                return data.data.borrow_mut().take();
+                let udata = data.data.borrow_mut().take();
+                self.reschedule();
+                return udata;
             }
         }
-        self.reschedule();
         None
     }
 
@@ -481,5 +478,44 @@ mod tests {
             .unwrap();
 
         assert_eq!(&fired, &[2]);
+    }
+
+    #[test]
+    fn timeout_cancel_early() {
+        // Cancelling an earlier timeout should not prevent later ones from running
+        let mut event_loop = crate::EventLoop::try_new().unwrap();
+        let handle = event_loop.handle();
+
+        let timer_source = Timer::new().unwrap();
+        let timers = timer_source.handle();
+
+        handle
+            .insert_source(timer_source, |_, _, count| {
+                *count += 1;
+            })
+            .unwrap();
+        timers.add_timeout(Duration::from_secs(1), ());
+
+        let sooner = timers.add_timeout(Duration::from_millis(500), ());
+        timers.cancel_timeout(&sooner);
+
+        let mut timeout_count = 0;
+        event_loop
+            .dispatch(
+                Some(::std::time::Duration::from_secs(2)),
+                &mut timeout_count,
+            )
+            .unwrap();
+        // first timeout was cancelled, but the event loop still wakes up for nothing
+        assert_eq!(timeout_count, 0);
+
+        event_loop
+            .dispatch(
+                Some(::std::time::Duration::from_secs(2)),
+                &mut timeout_count,
+            )
+            .unwrap();
+        // second dispatch gets the second timeout
+        assert_eq!(timeout_count, 1);
     }
 }
