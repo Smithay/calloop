@@ -5,6 +5,7 @@
 #### Breaking changes
 
 - MSRV is now 1.41
+- The `futures` module now has a proper error type for `Scheduler::schedulme()`
 
 ## 0.8.0 -- 2021-05-30
 

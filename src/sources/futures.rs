@@ -51,12 +51,25 @@ impl<T> Scheduler<T> {
     /// Sends the given future to the executor associated to this scheduler
     ///
     /// Returns an error if the the executor not longer exists.
-    pub fn schedule<Fut: 'static>(&self, future: Fut) -> Result<(), ()>
+    pub fn schedule<Fut: 'static>(&self, future: Fut) -> Result<(), ExecutorDestroyed>
     where
         Fut: Future<Output = T>,
     {
         let obj = LocalFutureObj::new(Box::new(future));
-        self.sender.send(obj).map_err(|_| ())
+        self.sender.send(obj).map_err(|_| ExecutorDestroyed)
+    }
+}
+
+/// Error generated when trying to schedule a future after the
+/// executor was destroyed.
+#[derive(Debug)]
+pub struct ExecutorDestroyed;
+
+impl std::error::Error for ExecutorDestroyed {}
+
+impl std::fmt::Display for ExecutorDestroyed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("The executor was destroyed.")
     }
 }
 
