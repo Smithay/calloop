@@ -11,7 +11,7 @@ This chapter covers what the first thing means, and how Calloop accomplishes the
 
 ## Terminology
 
-A *blocking* operation is one that waits for an event to happen, and doesn't use the CPU while it's waiting. For example, if you try to read from a network socket, and there is no data available, the read operation could wait for some indefinite amount of time. Your program will be in a state where it does not need to use any CPU cycles, but it won't proceed until there is data to read.
+A *blocking* operation is one that waits for an event to happen, and doesn't do anything else while it's waiting. For example, if you try to read from a network socket, and there is no data available, the read operation could wait for some indefinite amount of time. Your program will be in a state where it does not need to use any CPU cycles, or indeed do anything at all, and it won't proceed until there is data to read.
 
 Examples of blocking operations are:
 
@@ -56,10 +56,10 @@ The state of the program is simply given by: what line is it up to? You know if 
 
 ## Never block the loop!
 
-Both of the above principles lead us to the most important rule of event loop code: **never block the loop!** This means: never use blocking calls inside one of your event callbacks. Do not use synchronous file `write()` calls in a callback. Do not `sleep()` in a callback. Do not `join()` a thread in a callback. Don't you do it!
+All of this leads us to the most important rule of event loop code: **never block the loop!** This means: never use blocking calls inside one of your event callbacks. Do not use synchronous file `write()` calls in a callback. Do not `sleep()` in a callback. Do not `join()` a thread in a callback. Don't you do it!
 
 If you do, the event loop will have no way to proceed, and just... wait for your blocking operation to complete. Nothing is going to run in a parallel thread. Nothing is going to stop your callback and move on to the next one. If your callback needs to wait for a blocking operation, your code must allow it to keep track of where it's up to, return from the callback, and wait for the event like any other.
 
 ## Calloop and composition
 
-Calloop is designed to work by *composition*. This means that you build up more complex logic in your program by combining simpler event sources. Want a network socket with custom backoff/timeout logic? Create a type containing a network socket from the [async IO adapter](api/calloop/io/), a [timer](api/calloop/timer), and add your backoff state logic. There is a much more detailed example of composition in our [ZeroMQ example](ch03-00-a-full-example-zeromq.md).
+Calloop is designed to work by *composition*. This means that you build up more complex logic in your program by combining simpler event sources into more complex ones. Want a network socket with custom backoff/timeout logic? Create a type containing a network socket from the [async IO adapter](api/calloop/io/), a [timer](api/calloop/timer), and tie them together with your backoff logic and state. There is a much more detailed example of composition in our [ZeroMQ example](ch03-00-a-full-example-zeromq.md).

@@ -1,5 +1,7 @@
 # Composing event sources
-Calloop is designed to work by *composition*. It provides you with some single-responsibility sources (timers, message channels, file descriptors), and you can combine these together bit by bit to make more complex sources. You can greatly simplify even a highly complex program if you identify and expose the "real" events you care about and use composition to tidy the other events away in internal details of event sources.
+Calloop is designed to work by *composition*. It provides you with some single-responsibility sources (timers, message channels, file descriptors), and you can combine these together, bit by bit, to make more complex event sources. These new sources can express more and more of your program's internal logic and the relationships between them, always in terms of events and how you process them.
+
+You can greatly simplify even a highly complex program if you identify and expose the "real" events you care about and use composition to tidy the other events away in internal details of event sources.
 
 So what do we need to compose?
 

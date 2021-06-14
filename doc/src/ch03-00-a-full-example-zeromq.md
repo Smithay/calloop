@@ -1,7 +1,7 @@
 # A full example: ZeroMQ
 The previous chapter showed how to use callbacks, event data and shared data to control our program. However, more complex programs will require more complex shared data, and more complex interactions between events. Eventually this will run up against ownership issues and just the basic mental load of the poor programmer.
 
-In this chapter we're going to create a more complex program: one based on [ZeroMQ sockets](https://zeromq.org/).
+In this chapter we're going to build something more complex: an event source based on [ZeroMQ sockets](https://zeromq.org/).
 
 ZeroMQ is (very) basically a highly abstracted socket library. You can create ZeroMQ sockets over TCP, PGM, IPC, in-process and more, and generally not worry about the transport mechanics. It guarantees atomic message transfer, and handles queuing, retries, reconnection and balancing under the hood. It **also** lets you integrate it with event loops and reactors by exposing a file descriptor that you can wait on.
 
