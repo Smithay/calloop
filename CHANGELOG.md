@@ -8,6 +8,14 @@
 - The `futures` module now has a proper error type for `Scheduler::schedulme()`
 - The return type of `EventSource::process_events()` is now `io::Result<PostAction>` allowing
   the sources to directly request the event loop to reregister/disable/destroy them.
+- The `Token` creation mechanism is now driven by a `TokenFactory`, that
+  dynamically generates new unique token for sub-sources. Following for this
+  if you create a new event source that is not built by composing the ones
+  provided by calloop, you need to check if the `Token` provided to
+  `process_events` is the same as the one you created when (re)registering
+  your source. If you delegate `process_events` to a sub-source, you no longer
+  need to check the `sub_id` before, instead the source you are delegating to
+  is responsible to to this check.
 
 #### Bugfixes
 

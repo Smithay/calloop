@@ -140,7 +140,7 @@
 
 mod sys;
 
-pub use sys::{Interest, Mode, Poll, Readiness, Token};
+pub use sys::{Interest, Mode, Poll, Readiness, Token, TokenFactory};
 
 pub use self::loop_logic::{EventLoop, InsertError, LoopHandle, LoopSignal, RegistrationToken};
 pub use self::sources::*;

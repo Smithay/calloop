@@ -17,7 +17,9 @@ use nix::{
 };
 
 use super::generic::{Fd, Generic};
-use crate::{no_nix_err, EventSource, Interest, Mode, Poll, PostAction, Readiness, Token};
+use crate::{
+    no_nix_err, EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory,
+};
 
 /// Create a new ping event source
 ///
@@ -90,12 +92,20 @@ impl EventSource for PingSource {
         })
     }
 
-    fn register(&mut self, poll: &mut Poll, token: Token) -> std::io::Result<()> {
-        self.pipe.register(poll, token)
+    fn register(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> std::io::Result<()> {
+        self.pipe.register(poll, token_factory)
     }
 
-    fn reregister(&mut self, poll: &mut Poll, token: Token) -> std::io::Result<()> {
-        self.pipe.reregister(poll, token)
+    fn reregister(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> std::io::Result<()> {
+        self.pipe.reregister(poll, token_factory)
     }
 
     fn unregister(&mut self, poll: &mut Poll) -> std::io::Result<()> {

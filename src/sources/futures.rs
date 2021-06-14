@@ -30,7 +30,7 @@ use crate::{
         ping::{make_ping, Ping, PingSource},
         EventSource,
     },
-    Poll, PostAction, Readiness, Token,
+    Poll, PostAction, Readiness, Token, TokenFactory,
 };
 
 /// A future executor as an event source
@@ -101,9 +101,6 @@ pub fn executor<T>() -> std::io::Result<(Executor<T>, Scheduler<T>)> {
     ))
 }
 
-const TOK_NEW: u32 = 1;
-const TOK_READY: u32 = 1;
-
 impl<T> EventSource for Executor<T> {
     type Event = T;
     type Metadata = ();
@@ -118,22 +115,18 @@ impl<T> EventSource for Executor<T> {
     where
         F: FnMut(T, &mut ()),
     {
-        if token.sub_id == TOK_NEW {
-            // fetch all newly inserted futures and push them to the container
-            let futures = &mut self.futures;
-            self.new_futures
-                .process_events(readiness, token, |evt, _| {
-                    if let Event::Msg(fut) = evt {
-                        futures.push(fut);
-                    }
-                })?;
-        }
+        // fetch all newly inserted futures and push them to the container
+        let futures = &mut self.futures;
+        self.new_futures
+            .process_events(readiness, token, |evt, _| {
+                if let Event::Msg(fut) = evt {
+                    futures.push(fut);
+                }
+            })?;
 
-        if token.sub_id == TOK_READY {
-            // process ping events to make it non-ready again
-            self.ready_futures
-                .process_events(readiness, token, |(), _| {})?;
-        }
+        // process ping events to make it non-ready again
+        self.ready_futures
+            .process_events(readiness, token, |(), _| {})?;
 
         // advance all available futures as much as possible
         let waker = waker_ref(&self.waker);
@@ -145,39 +138,23 @@ impl<T> EventSource for Executor<T> {
         Ok(PostAction::Continue)
     }
 
-    fn register(&mut self, poll: &mut Poll, token: Token) -> std::io::Result<()> {
-        self.new_futures.register(
-            poll,
-            Token {
-                sub_id: TOK_NEW,
-                ..token
-            },
-        )?;
-        self.ready_futures.register(
-            poll,
-            Token {
-                sub_id: TOK_READY,
-                ..token
-            },
-        )?;
+    fn register(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> std::io::Result<()> {
+        self.new_futures.register(poll, token_factory)?;
+        self.ready_futures.register(poll, token_factory)?;
         Ok(())
     }
 
-    fn reregister(&mut self, poll: &mut Poll, token: Token) -> std::io::Result<()> {
-        self.new_futures.reregister(
-            poll,
-            Token {
-                sub_id: TOK_NEW,
-                ..token
-            },
-        )?;
-        self.ready_futures.reregister(
-            poll,
-            Token {
-                sub_id: TOK_READY,
-                ..token
-            },
-        )?;
+    fn reregister(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> std::io::Result<()> {
+        self.new_futures.reregister(poll, token_factory)?;
+        self.ready_futures.reregister(poll, token_factory)?;
         Ok(())
     }
 

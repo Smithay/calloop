@@ -18,9 +18,9 @@ use nix::fcntl::{fcntl, FcntlArg, OFlag};
 #[cfg(feature = "futures-io")]
 use futures_io::{AsyncRead, AsyncWrite, IoSlice, IoSliceMut};
 
-use crate::PostAction;
 use crate::{
-    loop_logic::LoopInner, sources::EventDispatcher, Interest, Mode, Poll, Readiness, Token,
+    loop_logic::LoopInner, sources::EventDispatcher, Interest, Mode, Poll, PostAction, Readiness,
+    Token, TokenFactory,
 };
 
 /// Adapter for async IO manipulations
@@ -53,14 +53,14 @@ impl<'l, F: AsRawFd> Async<'l, F> {
         // register in the loop
         let dispatcher = Rc::new(RefCell::new(IoDispatcher {
             fd: rawfd,
-            token: Token { id: 0, sub_id: 0 },
+            id: 0,
             waker: None,
             is_registered: false,
             interest: Interest::EMPTY,
             last_readiness: Readiness::EMPTY,
         }));
-        let token = inner.sources.borrow_mut().add_source(dispatcher.clone());
-        dispatcher.borrow_mut().token = token;
+        let id = inner.sources.borrow_mut().add_source(dispatcher.clone());
+        dispatcher.borrow_mut().id = id;
         inner.register(&dispatcher)?;
 
         // Straightforward casting would require us to add the bound `Data: 'l` but we don't actually need it
@@ -169,28 +169,44 @@ trait IoLoopInner {
 
 impl<'l, Data> IoLoopInner for LoopInner<'l, Data> {
     fn register(&self, dispatcher: &RefCell<IoDispatcher>) -> io::Result<()> {
-        let token = dispatcher.borrow().token;
-        EventDispatcher::<Data>::register(dispatcher, &mut *self.poll.borrow_mut(), token)
+        let disp = dispatcher.borrow();
+        self.poll.borrow_mut().register(
+            disp.fd,
+            Interest::EMPTY,
+            Mode::OneShot,
+            Token {
+                id: disp.id,
+                sub_id: 0,
+            },
+        )
     }
 
     fn reregister(&self, dispatcher: &RefCell<IoDispatcher>) -> io::Result<()> {
-        let token = dispatcher.borrow().token;
-        EventDispatcher::<Data>::reregister(dispatcher, &mut *self.poll.borrow_mut(), token)
+        let disp = dispatcher.borrow();
+        self.poll.borrow_mut().reregister(
+            disp.fd,
+            Interest::EMPTY,
+            Mode::OneShot,
+            Token {
+                id: disp.id,
+                sub_id: 0,
+            },
+        )
     }
 
     fn kill(&self, dispatcher: &RefCell<IoDispatcher>) {
-        let token = dispatcher.borrow().token;
+        let id = dispatcher.borrow().id;
         let _source = self
             .sources
             .borrow_mut()
-            .del_source(token)
+            .del_source(id)
             .expect("Attempting to remove a non-existent source?!");
     }
 }
 
 struct IoDispatcher {
     fd: RawFd,
-    token: Token,
+    id: u32,
     waker: Option<Waker>,
     is_registered: bool,
     interest: Interest,
@@ -218,14 +234,14 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
         Ok(PostAction::Continue)
     }
 
-    fn register(&self, poll: &mut Poll, token: Token) -> std::io::Result<()> {
-        let disp = self.borrow();
-        dbg!(poll.register(disp.fd, Interest::EMPTY, Mode::OneShot, token))
+    fn register(&self, _: &mut Poll, _: &mut TokenFactory) -> std::io::Result<()> {
+        // registration is handled by IoLoopInner
+        unreachable!()
     }
 
-    fn reregister(&self, poll: &mut Poll, token: Token) -> std::io::Result<()> {
-        let disp = self.borrow();
-        dbg!(poll.reregister(disp.fd, disp.interest, Mode::OneShot, token))
+    fn reregister(&self, _: &mut Poll, _: &mut TokenFactory) -> std::io::Result<()> {
+        // registration is handled by IoLoopInner
+        unreachable!()
     }
 
     fn unregister(&self, poll: &mut Poll) -> std::io::Result<()> {

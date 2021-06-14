@@ -44,7 +44,7 @@ use std::io;
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, RawFd};
 
-use crate::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token};
+use crate::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
 
 /// A generic event source wrapping a FD-backed type
 pub struct Generic<F: AsRawFd> {
@@ -54,6 +54,7 @@ pub struct Generic<F: AsRawFd> {
     pub interest: Interest,
     /// The programmed mode
     pub mode: Mode,
+    token: Token,
 }
 
 /// A wrapper to insert a raw file descriptor into a `Generic` event source
@@ -72,6 +73,7 @@ impl<F: AsRawFd> Generic<F> {
             file,
             interest,
             mode,
+            token: Token::invalid(),
         }
     }
 
@@ -96,25 +98,44 @@ impl<F: AsRawFd> EventSource for Generic<F> {
     fn process_events<C>(
         &mut self,
         readiness: Readiness,
-        _: Token,
+        token: Token,
         mut callback: C,
     ) -> std::io::Result<PostAction>
     where
         C: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
+        if token != self.token {
+            return Ok(PostAction::Continue);
+        }
         callback(readiness, &mut self.file)
     }
 
-    fn register(&mut self, poll: &mut Poll, token: Token) -> std::io::Result<()> {
-        poll.register(self.file.as_raw_fd(), self.interest, self.mode, token)
+    fn register(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> std::io::Result<()> {
+        let token = token_factory.token();
+        poll.register(self.file.as_raw_fd(), self.interest, self.mode, token)?;
+        self.token = token;
+        Ok(())
     }
 
-    fn reregister(&mut self, poll: &mut Poll, token: Token) -> std::io::Result<()> {
-        poll.reregister(self.file.as_raw_fd(), self.interest, self.mode, token)
+    fn reregister(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> std::io::Result<()> {
+        let token = token_factory.token();
+        poll.reregister(self.file.as_raw_fd(), self.interest, self.mode, token)?;
+        self.token = token;
+        Ok(())
     }
 
     fn unregister(&mut self, poll: &mut Poll) -> std::io::Result<()> {
-        poll.unregister(self.file.as_raw_fd())
+        poll.unregister(self.file.as_raw_fd())?;
+        self.token = Token::invalid();
+        Ok(())
     }
 }
 

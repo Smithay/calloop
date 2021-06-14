@@ -1,7 +1,5 @@
 use std::rc::Rc;
 
-use crate::Token;
-
 use crate::sources::EventDispatcher;
 
 pub(crate) struct SourceList<'sl, Data> {
@@ -15,47 +13,35 @@ impl<'sl, Data> SourceList<'sl, Data> {
         }
     }
 
-    pub(crate) fn contains(&self, token: Token) -> bool {
+    pub(crate) fn contains(&self, id: u32) -> bool {
         self.sources
-            .get(token.id as usize)
+            .get(id as usize)
             .map(Option::is_some)
             .unwrap_or(false)
     }
 
-    pub(crate) fn get_dispatcher(
-        &self,
-        token: Token,
-    ) -> Option<Rc<dyn EventDispatcher<Data> + 'sl>> {
-        match self.sources.get(token.id as usize) {
+    pub(crate) fn get_dispatcher(&self, id: u32) -> Option<Rc<dyn EventDispatcher<Data> + 'sl>> {
+        match self.sources.get(id as usize) {
             Some(&Some(ref dispatcher)) => Some(dispatcher.clone()),
             _ => None,
         }
     }
 
-    pub(crate) fn add_source(&mut self, dispatcher: Rc<dyn EventDispatcher<Data> + 'sl>) -> Token {
+    pub(crate) fn add_source(&mut self, dispatcher: Rc<dyn EventDispatcher<Data> + 'sl>) -> u32 {
         let free_id = self.sources.iter().position(Option::is_none);
         if let Some(id) = free_id {
             self.sources[id] = Some(dispatcher);
-            Token {
-                id: id as u32,
-                sub_id: 0,
-            }
+            id as u32
         } else {
             self.sources.push(Some(dispatcher));
-            Token {
-                id: (self.sources.len() - 1) as u32,
-                sub_id: 0,
-            }
+            (self.sources.len() - 1) as u32
         }
     }
 
     // this method returns the removed dispatcher to ensure it is not dropped
     // while the refcell containing the list is borrowed, as dropping a dispatcher
     // can trigger the removal of an other source
-    pub(crate) fn del_source(
-        &mut self,
-        token: Token,
-    ) -> Option<Rc<dyn EventDispatcher<Data> + 'sl>> {
-        ::std::mem::replace(&mut self.sources[token.id as usize], None)
+    pub(crate) fn del_source(&mut self, id: u32) -> Option<Rc<dyn EventDispatcher<Data> + 'sl>> {
+        ::std::mem::replace(&mut self.sources[id as usize], None)
     }
 }

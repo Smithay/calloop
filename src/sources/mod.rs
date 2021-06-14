@@ -4,7 +4,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::{Poll, Readiness, Token};
+use crate::{sys::TokenFactory, Poll, Readiness, Token};
 
 pub mod channel;
 #[cfg(feature = "executor")]
@@ -92,14 +92,14 @@ pub trait EventSource {
     ///
     /// If you need to register more than one file descriptor, you can change the
     /// `sub_id` field of the [`Token`](crate::Token) to differentiate between them.
-    fn register(&mut self, poll: &mut Poll, token: Token) -> io::Result<()>;
+    fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> io::Result<()>;
 
     /// Re-register your file descriptors
     ///
     /// Your should update the registration of all your relevant file descriptor to
     /// the provided [`Poll`](crate::Poll) using its [`Poll::reregister`](crate::Poll#method.reregister),
     /// if necessary.
-    fn reregister(&mut self, poll: &mut Poll, token: Token) -> io::Result<()>;
+    fn reregister(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> io::Result<()>;
 
     /// Unregister your file descriptors
     ///
@@ -132,12 +132,12 @@ where
         source.process_events(readiness, token, |event, meta| callback(event, meta, data))
     }
 
-    fn register(&self, poll: &mut Poll, token: Token) -> io::Result<()> {
-        self.borrow_mut().source.register(poll, token)
+    fn register(&self, poll: &mut Poll, token_factory: &mut TokenFactory) -> io::Result<()> {
+        self.borrow_mut().source.register(poll, token_factory)
     }
 
-    fn reregister(&self, poll: &mut Poll, token: Token) -> io::Result<()> {
-        self.borrow_mut().source.reregister(poll, token)
+    fn reregister(&self, poll: &mut Poll, token_factory: &mut TokenFactory) -> io::Result<()> {
+        self.borrow_mut().source.reregister(poll, token_factory)
     }
 
     fn unregister(&self, poll: &mut Poll) -> io::Result<()> {
@@ -153,9 +153,9 @@ pub(crate) trait EventDispatcher<Data> {
         data: &mut Data,
     ) -> std::io::Result<PostAction>;
 
-    fn register(&self, poll: &mut Poll, token: Token) -> io::Result<()>;
+    fn register(&self, poll: &mut Poll, token_factory: &mut TokenFactory) -> io::Result<()>;
 
-    fn reregister(&self, poll: &mut Poll, token: Token) -> io::Result<()>;
+    fn reregister(&self, poll: &mut Poll, token_factory: &mut TokenFactory) -> io::Result<()>;
 
     fn unregister(&self, poll: &mut Poll) -> io::Result<()>;
 }
