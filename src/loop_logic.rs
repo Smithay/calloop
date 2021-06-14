@@ -9,8 +9,7 @@ use std::time::Duration;
 
 use crate::list::SourceList;
 use crate::sources::{Dispatcher, EventSource, Idle, IdleDispatcher};
-use crate::Poll;
-use crate::Token;
+use crate::{Poll, PostAction, Token};
 
 type IdleCallback<'i, Data> = Rc<RefCell<dyn IdleDispatcher<Data> + 'i>>;
 
@@ -330,7 +329,25 @@ impl<'l, Data> EventLoop<'l, Data> {
                 .get_dispatcher(event.token);
 
             if let Some(disp) = opt_disp {
-                disp.process_events(event.readiness, event.token, data)?;
+                let ret = disp.process_events(event.readiness, event.token, data)?;
+
+                match ret {
+                    PostAction::Reregister => {
+                        disp.reregister(&mut self.handle.inner.poll.borrow_mut(), event.token)?;
+                    }
+                    PostAction::Disable => {
+                        disp.unregister(&mut self.handle.inner.poll.borrow_mut())?;
+                    }
+                    PostAction::Remove => {
+                        // delete the source from the list, it'll be cleaned up with the if just below
+                        self.handle
+                            .inner
+                            .sources
+                            .borrow_mut()
+                            .del_source(event.token);
+                    }
+                    PostAction::Continue => {}
+                }
 
                 if !self.handle.inner.sources.borrow().contains(event.token) {
                     // the source has been removed from within its callback, unregister it
@@ -453,8 +470,8 @@ mod tests {
     use std::time::Duration;
 
     use crate::{
-        generic::Generic, ping::*, timer::Timer, Dispatcher, Interest, Mode, Poll, Readiness,
-        RegistrationToken, Token,
+        generic::Generic, ping::*, timer::Timer, Dispatcher, Interest, Mode, Poll, PostAction,
+        Readiness, RegistrationToken, Token,
     };
 
     use super::EventLoop;
@@ -559,7 +576,7 @@ mod tests {
         let event_loop = EventLoop::<()>::try_new().unwrap();
         let ret = event_loop.handle().insert_source(
             crate::sources::generic::Generic::from_fd(420, Interest::READ, Mode::Level),
-            |_, _, _| Ok(()),
+            |_, _, _| Ok(PostAction::Continue),
         );
         assert!(ret.is_err());
     }
@@ -569,7 +586,7 @@ mod tests {
         let event_loop = EventLoop::<()>::try_new().unwrap();
         let ret = event_loop.handle().insert_source(
             crate::sources::generic::Generic::from_fd(0, Interest::EMPTY, Mode::Level),
-            |_, _, _| Ok(()),
+            |_, _, _| Ok(PostAction::Continue),
         );
         assert!(ret.is_ok());
     }
@@ -631,7 +648,7 @@ mod tests {
                 readiness: Readiness,
                 token: Token,
                 mut callback: F,
-            ) -> std::io::Result<()>
+            ) -> std::io::Result<PostAction>
             where
                 F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
             {
@@ -642,7 +659,7 @@ mod tests {
                     self.ping2
                         .process_events(readiness, token, |(), &mut ()| callback(2, &mut ()))
                 } else {
-                    Ok(())
+                    Ok(PostAction::Continue)
                 }
             }
 
@@ -741,7 +758,7 @@ mod tests {
                     }
                 }
             }
-            Ok(())
+            Ok(PostAction::Continue)
         });
 
         let sock_token_1 = event_loop
@@ -931,12 +948,12 @@ mod tests {
             _: Readiness,
             _: Token,
             mut callback: F,
-        ) -> std::io::Result<()>
+        ) -> std::io::Result<PostAction>
         where
             F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
         {
             callback((), &mut ());
-            Ok(())
+            Ok(PostAction::Continue)
         }
 
         fn register(&mut self, _: &mut Poll, _: Token) -> std::io::Result<()> {

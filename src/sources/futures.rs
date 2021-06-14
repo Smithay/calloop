@@ -30,7 +30,7 @@ use crate::{
         ping::{make_ping, Ping, PingSource},
         EventSource,
     },
-    Poll, Readiness, Token,
+    Poll, PostAction, Readiness, Token,
 };
 
 /// A future executor as an event source
@@ -114,7 +114,7 @@ impl<T> EventSource for Executor<T> {
         readiness: Readiness,
         token: Token,
         mut callback: F,
-    ) -> std::io::Result<()>
+    ) -> std::io::Result<PostAction>
     where
         F: FnMut(T, &mut ()),
     {
@@ -142,7 +142,7 @@ impl<T> EventSource for Executor<T> {
         while let FutPoll::Ready(Some(ret)) = Pin::new(&mut self.futures).poll_next(&mut cx) {
             callback(ret, &mut ());
         }
-        Ok(())
+        Ok(PostAction::Continue)
     }
 
     fn register(&mut self, poll: &mut Poll, token: Token) -> std::io::Result<()> {

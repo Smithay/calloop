@@ -17,6 +17,7 @@ use std::sync::{
 use std::time::{Duration, Instant};
 
 use super::ping::{make_ping, PingSource};
+use crate::PostAction;
 use crate::{EventSource, Poll, Readiness, Token};
 
 /// A Timer event source
@@ -111,7 +112,7 @@ impl<T> EventSource for Timer<T> {
         readiness: Readiness,
         token: Token,
         mut callback: C,
-    ) -> std::io::Result<()>
+    ) -> std::io::Result<PostAction>
     where
         C: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
