@@ -10,7 +10,7 @@
 
 use std::sync::mpsc;
 
-use crate::{EventSource, Poll, PostAction, Readiness, Token};
+use crate::{EventSource, Poll, PostAction, Readiness, Token, TokenFactory};
 
 use super::ping::{make_ping, Ping, PingSource};
 
@@ -169,12 +169,20 @@ impl<T> EventSource for Channel<T> {
             })
     }
 
-    fn register(&mut self, poll: &mut Poll, token: Token) -> std::io::Result<()> {
-        self.source.register(poll, token)
+    fn register(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> std::io::Result<()> {
+        self.source.register(poll, token_factory)
     }
 
-    fn reregister(&mut self, poll: &mut Poll, token: Token) -> std::io::Result<()> {
-        self.source.reregister(poll, token)
+    fn reregister(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> std::io::Result<()> {
+        self.source.reregister(poll, token_factory)
     }
 
     fn unregister(&mut self, poll: &mut Poll) -> std::io::Result<()> {

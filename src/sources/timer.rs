@@ -17,8 +17,7 @@ use std::sync::{
 use std::time::{Duration, Instant};
 
 use super::ping::{make_ping, PingSource};
-use crate::PostAction;
-use crate::{EventSource, Poll, Readiness, Token};
+use crate::{EventSource, Poll, PostAction, Readiness, Token, TokenFactory};
 
 /// A Timer event source
 ///
@@ -137,12 +136,20 @@ impl<T> EventSource for Timer<T> {
         })
     }
 
-    fn register(&mut self, poll: &mut Poll, token: Token) -> std::io::Result<()> {
-        self.source.register(poll, token)
+    fn register(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> std::io::Result<()> {
+        self.source.register(poll, token_factory)
     }
 
-    fn reregister(&mut self, poll: &mut Poll, token: Token) -> std::io::Result<()> {
-        self.source.reregister(poll, token)
+    fn reregister(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> std::io::Result<()> {
+        self.source.reregister(poll, token_factory)
     }
 
     fn unregister(&mut self, poll: &mut Poll) -> std::io::Result<()> {
