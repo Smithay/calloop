@@ -101,26 +101,12 @@ impl<'l, Data> LoopHandle<'l, Data> {
         S: EventSource + 'l,
         F: FnMut(S::Event, &mut S::Metadata, &mut Data) -> S::Ret + 'l,
     {
-        let mut sources = self.inner.sources.borrow_mut();
-        let mut poll = self.inner.poll.borrow_mut();
-
         let dispatcher = Dispatcher::new(source, callback);
-        let id = sources.add_source(dispatcher.clone_as_event_dispatcher());
-        let ret = sources
-            .get_dispatcher(id)
-            .unwrap()
-            .register(&mut *poll, &mut TokenFactory::new(id));
-
-        if let Err(error) = ret {
-            sources.del_source(id).expect("Source was just inserted?!");
-
-            return Err(InsertError {
+        self.register_dispatcher(dispatcher.clone())
+            .map_err(|error| InsertError {
                 error,
                 source: dispatcher.into_source_inner(),
-            });
-        }
-
-        Ok(RegistrationToken { id })
+            })
     }
 
     /// Registers a `Dispatcher` in the loop.

@@ -328,13 +328,12 @@ impl<'l, F: AsRawFd + io::Write> AsyncWrite for Async<'l, F> {
     }
 }
 
-#[cfg(all(test, feature = "executor"))]
+#[cfg(all(test, feature = "executor", feature = "futures-io"))]
 mod tests {
     use futures::io::{AsyncReadExt, AsyncWriteExt};
 
     use crate::sources::futures::executor;
 
-    #[cfg(feature = "executor")]
     #[test]
     fn read_write() {
         let mut event_loop = crate::EventLoop::try_new().unwrap();
@@ -372,6 +371,64 @@ mod tests {
         sched
             .schedule(async move {
                 tx.write_all(b"Hello World!").await.unwrap();
+                tx.flush().await.unwrap();
+            })
+            .unwrap();
+
+        while !received.get() {
+            event_loop.dispatch(None, &mut ()).unwrap();
+        }
+    }
+
+    #[test]
+    fn read_write_vectored() {
+        let mut event_loop = crate::EventLoop::try_new().unwrap();
+        let handle = event_loop.handle();
+        let (exec, sched) = executor().unwrap();
+        handle
+            .insert_source(exec, move |ret, &mut (), got| {
+                *got = ret;
+            })
+            .map_err(Into::<std::io::Error>::into)
+            .unwrap();
+
+        let (tx, rx) = std::os::unix::net::UnixStream::pair().unwrap();
+        let mut tx = handle.adapt_io(tx).unwrap();
+        let mut rx = handle.adapt_io(rx).unwrap();
+        let received = std::rc::Rc::new(std::cell::Cell::new(false));
+        let fut_received = received.clone();
+
+        sched
+            .schedule(async move {
+                let mut buf = [0; 12];
+                let mut ioslices = buf
+                    .chunks_mut(2)
+                    .map(|chunk| std::io::IoSliceMut::new(chunk))
+                    .collect::<Vec<_>>();
+                let count = rx.read_vectored(&mut ioslices).await.unwrap();
+                assert_eq!(count, 12);
+                assert_eq!(&buf, b"Hello World!");
+                fut_received.set(true);
+            })
+            .unwrap();
+
+        // The receiving future alone cannot advance
+        event_loop
+            .dispatch(Some(std::time::Duration::from_millis(10)), &mut ())
+            .unwrap();
+        assert!(!received.get());
+
+        // schedule the writing future as well and wait until finish
+        sched
+            .schedule(async move {
+                let buf = b"Hello World!";
+                let ioslices = buf
+                    .chunks(2)
+                    .map(|chunk| std::io::IoSlice::new(chunk))
+                    .collect::<Vec<_>>();
+                let count = tx.write_vectored(&ioslices).await.unwrap();
+                assert_eq!(count, 12);
+                tx.flush().await.unwrap();
             })
             .unwrap();
 

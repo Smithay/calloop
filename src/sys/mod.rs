@@ -291,13 +291,24 @@ impl Poll {
 mod tests {
     use super::Token;
     #[test]
-    fn token_convert() {
+    fn token_convert_u64() {
         let t = Token {
             id: 0x1337,
             sub_id: 0x42,
         };
         assert_eq!(t.to_u64(), 0x0000133700000042);
         let t2 = Token::from_u64(0x0000133700000042);
+        assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn token_convert_u32() {
+        let t = Token {
+            id: 0x1337,
+            sub_id: 0x42,
+        };
+        assert_eq!(t.to_u32(), 0x13370042);
+        let t2 = Token::from_u32(0x13370042);
         assert_eq!(t, t2);
     }
 
