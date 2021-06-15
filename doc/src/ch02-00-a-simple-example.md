@@ -56,7 +56,7 @@ We have an event source, we have our shared data, and we know how to start our l
 
 Breaking this down:
 
-- We obtain a handle from the event loop. Much like the timer handle above, this is a separate type from the event loop and allows us to insert sources from event callbacks, other threads, and futures.
+- We obtain a handle from the event loop. Much like the timer handle above, this is a separate type from the event loop and allows us to insert events sources. Event sources can be added to the loop from eg. your main function, within event callbacks, and futures. Note that it is *not* safe to pass across threads!
 
 - We insert the source using `LoopHandle::insert_source()`.
 
