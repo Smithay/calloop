@@ -185,7 +185,7 @@ impl<'l, Data> IoLoopInner for LoopInner<'l, Data> {
         let disp = dispatcher.borrow();
         self.poll.borrow_mut().reregister(
             disp.fd,
-            Interest::EMPTY,
+            disp.interest,
             Mode::OneShot,
             Token {
                 id: disp.id,
