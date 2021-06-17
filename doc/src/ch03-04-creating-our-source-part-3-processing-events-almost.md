@@ -8,7 +8,7 @@ fn process_events<F>(
     readiness: calloop::Readiness,
     token: calloop::Token,
     mut callback: F,
-) -> io::Result<()>
+) -> io::Result<calloop::PostAction>
 where
     F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
 ```
@@ -23,11 +23,13 @@ What a mouthful! But when you break it down, it's not so complicated:
 
 - We take a callback. We call this callback with any "real" events that our caller will care about; in our case, that means messages we receive on the zsocket. It is closely related to [the `EventSource` trait's associated types](ch03-02-creating-our-source-part-1-our-types.md#associated-types). Note that the callback our caller supplies when adding our source to the loop actually takes an extra argument, which is some data that we won't know about in our source. Calloop's internals take care of combining our arguments here with this extra data.
 
-Implementing this method simply involves asking a couple of questions: why was this event source woken up, and what should we do about it? (I mean, that's every function, isn't it? Why were we called and what do we do?)
+- Finally we return a `PostAction`, which tells the loop whether it needs to change the state of our event source, perhaps as a result of actions we took. For example, you might require that your source be removed from the loop (with `PostAction::Remove`) if it only has a certain thing to do. Ordinarily though, you'd return `PostAction::Continue` for your source to keep waiting for events.
 
-We can answer the first question by looking at the `token` argument. If `token.sub_id` is `ID_WAKER`, we were woken up on registration. If it's `ID_CHANNEL`, we were woken up because we received a message. If it's `ID_SOCKET`, we were woken up because our zsocket file descriptor became readable.
+Note that these `PostAction` values correspond to various methods on the `LoopHandle` type (eg. `PostAction::Disable` does the same as `LoopHandle::disable()`). Whether you control your event source by returning a `PostAction` or using the `LoopHandle` methods depends on whether it makes more sense for these actions to be taken from within your event source or by something else in your code.
 
-The first thing to do is process these events. With a type that contains various Calloop sources composed together, like we have, we do this recursively by calling our internal sources' `process_events()` method.
+Implementing `process_events()` for a type that contains various Calloop sources composed together, like we have, is done recursively by calling our internal sources' `process_events()` method. The `token` that Calloop gives us is how each event source determines whether it was responsible for the wakeup and has events to process.
+
+If we were woken up because of the ping source, then the ping source's `process_events()` will see that the token matches its own, and call the callback (possibly multiple times). If we were woken up because a message was sent through the MPSC channel, then the channel's `process_events()` will match on the token instead and call the callback for every message waiting. The zsocket is a little different, and we'll go over that in detail.
 
 So a first draft of our code might look like:
 
@@ -37,47 +39,44 @@ fn process_events<F>(
     readiness: calloop::Readiness,
     token: calloop::Token,
     mut callback: F,
-) -> io::Result<()>
+) -> io::Result<calloop::PostAction>
 where
     F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
 {
-    // We were woken up on startup/registration.
-    if token.sub_id == Self::ID_WAKER {
-        self.wake_ping_receiver
-            .process_events(readiness, token, |_, _| {})?;
-    }
-    // We received a message over the MPSC channel.
-    else if token.sub_id == Self::ID_CHANNEL {
-        self.mpsc_receiver
-            .process_events(readiness, token, |evt, _| {
-				// 'evt' could be a message or a "sending end closed"
-				// notification. We don't care about the latter.
-                if let calloop::channel::Event::Msg(msg) = evt {
-                    self.socket.send_multipart(msg, 0)?;
-                }
-            })?;
-    }
-	// The zsocket became read/write-able.
-    else if token.sub_id == Self::ID_SOCKET {
-        self.socket
-            .process_events(readiness, token, |_, _| {
-                let events = self.socket.get_events()?;
-            
-                if events.contains(zmq::POLLOUT) {
-                    // Wait, what do we do here?
-                }
+    // Runs if we were woken up on startup/registration.
+    self.wake_ping_receiver
+        .process_events(readiness, token, |_, _| {})?;
 
-                if events.contains(zmq::POLLIN) {
-                    let messages = self.socket.recv_multipart(0)?;
-                    callback(messages, &mut ())?;
-                }
-            })?;
-    }
-    Ok(())
+    // Runs if we received a message over the MPSC channel.
+    self.mpsc_receiver
+        .process_events(readiness, token, |evt, _| {
+            // 'evt' could be a message or a "sending end closed"
+            // notification. We don't care about the latter.
+            if let calloop::channel::Event::Msg(msg) = evt {
+                self.socket.send_multipart(msg, 0)?;
+            }
+        })?;
+
+	// Runs if the zsocket became read/write-able.
+    self.socket
+        .process_events(readiness, token, |_, _| {
+            let events = self.socket.get_events()?;
+        
+            if events.contains(zmq::POLLOUT) {
+                // Wait, what do we do here?
+            }
+
+            if events.contains(zmq::POLLIN) {
+                let messages = self.socket.recv_multipart(0)?;
+                callback(messages, &mut ())?;
+            }
+        })?;
+
+    Ok(calloop::PostAction::Continue)
 }
 ```
 
-We process the events from whichever source woke up our composed source, and if we woke up because the zsocket became readable, we call the callback with the message we received.
+We process the events from whichever source woke up our composed source, and if we woke up because the zsocket became readable, we call the callback with the message we received. Finally we return `PostAction::Continue` to remain in the event loop.
 
 Don't worry about getting this to compile, it is a good start but it's wrong in a few ways.
 
@@ -88,14 +87,12 @@ Secondly, we don't seem to know what to do when our zsocket becomes writeable (t
 Thirdly, we commit one of the worst sins you can commit in an event-loop-based system. Can you see it? It's this part:
 
 ```rust,noplayground
-else if token.sub_id == Self::ID_CHANNEL {
-    self.mpsc_receiver
-        .process_events(readiness, token, |evt, _| {
-            if let calloop::channel::Event::Msg(msg) = evt {
-                self.socket.send_multipart(msg, 0)?;
-            }
-        })?;
-}
+self.mpsc_receiver
+    .process_events(readiness, token, |evt, _| {
+        if let calloop::channel::Event::Msg(msg) = evt {
+            self.socket.send_multipart(msg, 0)?;
+        }
+    })?;
 ```
 
 We block the event loop! In the middle of processing events from the MPSC channel, we call `zmq::Socket::send_multipart()` which *could*, under certain circumstances, block! [**We shouldn't do that.**](ch01-00-how-an-event-loop-works.md#never-block-the-loop)
@@ -129,39 +126,36 @@ where
 Our MPSC receiving code becomes:
 
 ```rust,noplayground
-else if token.sub_id == Self::ID_CHANNEL {
-    let outbox = &mut self.outbox;
+let outbox = &mut self.outbox;
 
-    self.mpsc_receiver
-        .process_events(readiness, token, |evt, _| {
-            if let calloop::channel::Event::Msg(msg) = evt {
-                outbox.push_back(msg);
-            }
-        })?;
-}
+self.mpsc_receiver
+    .process_events(readiness, token, |evt, _| {
+        if let calloop::channel::Event::Msg(msg) = evt {
+            outbox.push_back(msg);
+        }
+    })?;
 ```
 
 And our "zsocket is writeable" code becomes:
 
 ```rust,noplayground
-else if token.sub_id == Self::ID_SOCKET {
-    self.socket
-        .process_events(readiness, token, |_, _| {
-            let events = self.socket.get_events()?;
-        
-            if events.contains(zmq::POLLOUT) {
-                if let Some(parts) = self.outbox.pop_front() {
-                    self.socket
-                        .send_multipart(parts, 0)?;
-                }
-           }
-
-            if events.contains(zmq::POLLIN) {
-                let messages = self.socket.recv_multipart(0)?;
-                callback(messages, &mut ())?;
+self.socket
+    .process_events(readiness, token, |_, _| {
+        let events = self.socket.get_events()?;
+    
+        if events.contains(zmq::POLLOUT) {
+            if let Some(parts) = self.outbox.pop_front() {
+                self.socket
+                    .send_multipart(parts, 0)?;
             }
-        })?;
-}
+       }
+
+        if events.contains(zmq::POLLIN) {
+            let messages = self.socket.recv_multipart(0)?;
+            callback(messages, &mut ())?;
+        }
+    })?;
+
 ```
 
 So we've not only solved problem #3, we've also figured out #2, which suggests we're on the right track. But we still have (at least) that first issue to sort out.

@@ -1,30 +1,8 @@
 # Creating our source, part IV: processing events (really)
 
-We have three events that could wake up our event source: the ping, the channel and the zsocket itself becoming ready to use. *All three of these reasons* potentially mean doing something on the zsocket: if the ping fired, we need to check for any pending events. If the channel received a message, we want to check if the zsocket is already readable and send it. If the zsocket becomes readable or writeable, we want to read from or write to it.
+We have three events that could wake up our event source: the ping, the channel, and the zsocket itself becoming ready to use. *All three of these reasons* potentially mean doing something on the zsocket: if the ping fired, we need to check for any pending events. If the channel received a message, we want to check if the zsocket is already readable and send it. If the zsocket becomes readable or writeable, we want to read from or write to it. In other words... We want to run it every time!
 
-When you think about it this way... why do we even need to check for the zsocket token sub ID? We want to run it every time! So our first job is to get rid of the `else if token.sub_id == Self::ID_SOCKET` block:
-
-```rust,noplayground
-self.socket
-    .process_events(readiness, token, |_, _| {
-        let events = self.socket.events()?;
-    
-        if events.contains(zmq::POLLOUT) {
-            if let Some(parts) = self.outbox.pop_front() {
-                self.socket
-                    .send_multipart(parts, 0)?;
-            }
-        }
-
-        if events.contains(zmq::POLLIN) {
-            let messages = self.socket.recv_multipart(0)?;
-            callback(messages, &mut ())?;
-        }
-    })?;
-
-```
-
-We're not done yet. There's some more cruft to remove. Notice that in the zsocket `process_events()` call, we don't use any of the arguments. This is also true for our ping source, but there's an important difference: the ping source is "level triggered", which means that if we don't process its internal events, it will just keep waking up our source forever. Our zsocket source is edge triggered, so we can dispense with `process_events()` call altogether:
+Also notice that in the zsocket `process_events()` call, we don't use any of the arguments, including the event itself. That file descriptor is merely a signalling mechanism! Sending and receiving messages is what will actually clear any pending events on it, and reset it to a state where it will wake the event loop later.
 
 ```rust,noplayground
 let events = self.socket.events()?;
@@ -50,26 +28,23 @@ fn process_events<F>(
     readiness: calloop::Readiness,
     token: calloop::Token,
     mut callback: F,
-) -> io::Result<()>
+) -> io::Result<calloop::PostAction>
 where
     F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
 {
-    // We were woken up on startup/registration.
-    if token.sub_id == Self::ID_WAKER {
-        self.wake_ping_receiver
-            .process_events(readiness, token, |_, _| {})?;
-    }
-    // We received a message over the MPSC channel.
-    else if token.sub_id == Self::ID_CHANNEL {
-        let outbox = &mut self.outbox;
+    // Runs if we were woken up on startup/registration.
+    self.wake_ping_receiver
+        .process_events(readiness, token, |_, _| {})?;
 
-        self.mpsc_receiver
-            .process_events(readiness, token, |evt, _| {
-                if let calloop::channel::Event::Msg(msg) = evt {
-                    outbox.push_back(msg);
-                }
-            })?;
-    }
+    // Runs if we were woken up because a message was sent on the channel.
+    let outbox = &mut self.outbox;
+
+    self.mpsc_receiver
+        .process_events(readiness, token, |evt, _| {
+            if let calloop::channel::Event::Msg(msg) = evt {
+                outbox.push_back(msg);
+            }
+        })?;
 
 	// Always process any pending zsocket events.
 
@@ -87,7 +62,7 @@ where
         callback(messages, &mut ())?;
     }
 
-    Ok(())
+    Ok(calloop::PostAction::Continue)
 }
 ```
 

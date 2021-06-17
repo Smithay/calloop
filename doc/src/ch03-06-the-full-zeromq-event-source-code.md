@@ -77,10 +77,6 @@ where
     T: IntoIterator,
     T::Item: Into<zmq::Message>,
 {
-    const ID_CHANNEL: u32 = 1;
-    const ID_SOCKET: u32 = 2;
-    const ID_WAKER: u32 = 3;
-
     // Converts a `zmq::Socket` into a `ZeroMQSource` plus the sending end of an
     // MPSC channel to enqueue outgoing messages.
     pub fn from_socket(socket: zmq::Socket) -> io::Result<(Self, calloop::channel::Sender<T>)> {
@@ -133,30 +129,30 @@ where
         readiness: calloop::Readiness,
         token: calloop::Token,
         mut callback: F,
-    ) -> io::Result<()>
+    ) -> io::Result<calloop::PostAction>
     where
         F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
-        // We were woken up on startup/registration.
-        if token.sub_id == Self::ID_WAKER {
-            self.wake_ping_receiver
-                .process_events(readiness, token, |_, _| {})?;
-        } else if token.sub_id == Self::ID_CHANNEL {
-            let outbox = &mut self.outbox;
+        // Runs if we were woken up on startup/registration.
+        self.wake_ping_receiver
+            .process_events(readiness, token, |_, _| {})?;
 
-            self.mpsc_receiver
-                .process_events(readiness, token, |evt, _| {
-                    if let calloop::channel::Event::Msg(msg) = evt {
-                        outbox.push_back(msg);
-                    }
-                })?;
-        }
+        // Runs if we were woken up because a message was sent on the channel.
+        let outbox = &mut self.outbox;
+
+        self.mpsc_receiver
+            .process_events(readiness, token, |evt, _| {
+                if let calloop::channel::Event::Msg(msg) = evt {
+                    outbox.push_back(msg);
+                }
+            })?;
 
         // The ZeroMQ file descriptor is edge triggered. This means that if (a)
         // messages are added to the queue before registration, or (b) the
         // socket became writeable before messages were enqueued, we will need
         // to run the loop below. Hence, it always runs if this event source
-        // fires.
+        // fires. The process_events() method doesn't do anything though, so we
+        // ignore it.
 
         loop {
             // According to the docs, the edge-triggered FD will not change
@@ -192,31 +188,31 @@ where
             }
         }
 
-        Ok(())
+        Ok(calloop::PostAction::Continue)
     }
 
-    fn register(&mut self, poll: &mut calloop::Poll, token: calloop::Token) -> io::Result<()> {
-        let tk_socket = token.with_sub_id(Self::ID_SOCKET);
-        let tk_channel = token.with_sub_id(Self::ID_CHANNEL);
-        let tk_waker = token.with_sub_id(Self::ID_WAKER);
-
-        self.socket_source.register(poll, tk_socket)?;
-        self.mpsc_receiver.register(poll, tk_channel)?;
-        self.wake_ping_receiver.register(poll, tk_waker)?;
+    fn register(
+        &mut self,
+        poll: &mut calloop::Poll,
+        token_factory: &mut calloop::TokenFactory,
+    ) -> io::Result<()> {
+        self.socket_source.register(poll, token_factory)?;
+        self.mpsc_receiver.register(poll, token_factory)?;
+        self.wake_ping_receiver.register(poll, token_factory)?;
 
         self.wake_ping_sender.ping();
 
         Ok(())
     }
 
-    fn reregister(&mut self, poll: &mut calloop::Poll, token: calloop::Token) -> io::Result<()> {
-        let tk_socket = token.with_sub_id(Self::ID_SOCKET);
-        let tk_channel = token.with_sub_id(Self::ID_CHANNEL);
-        let tk_waker = token.with_sub_id(Self::ID_WAKER);
-
-        self.socket_source.reregister(poll, tk_socket)?;
-        self.mpsc_receiver.reregister(poll, tk_channel)?;
-        self.wake_ping_receiver.reregister(poll, tk_waker)?;
+    fn reregister(
+        &mut self,
+        poll: &mut calloop::Poll,
+        token_factory: &mut calloop::TokenFactory,
+    ) -> io::Result<()> {
+        self.socket_source.reregister(poll, token_factory)?;
+        self.mpsc_receiver.reregister(poll, token_factory)?;
+        self.wake_ping_receiver.reregister(poll, token_factory)?;
 
         self.wake_ping_sender.ping();
 
