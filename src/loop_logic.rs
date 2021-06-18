@@ -364,7 +364,7 @@ impl<'l, Data> EventLoop<'l, Data> {
     }
 
     fn dispatch_idles(&mut self, data: &mut Data) {
-        let idles = ::std::mem::replace(&mut *self.handle.inner.idles.borrow_mut(), Vec::new());
+        let idles = ::std::mem::take(&mut *self.handle.inner.idles.borrow_mut());
         for idle in idles {
             idle.borrow_mut().dispatch(data);
         }
