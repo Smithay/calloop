@@ -17,4 +17,4 @@ If you want to see what Calloop code might look like, there's:
 
 ## How to do X in Calloop
 
-If you're looking for how to do a specific thing in Calloop, [look at chapter 4](ch04-00-how-to-do-x-in-calloop.md).
+If you're looking for how to integrate a specific thing in Calloop (eg. futures, network sockets), [look at chapter 4](ch04-00-how-to-do-x-in-calloop.md).
