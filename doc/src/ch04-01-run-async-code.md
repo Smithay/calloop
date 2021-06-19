@@ -50,5 +50,6 @@ Now the async code will be run as expected in our loop, printing:
 
 Other tips:
 
+- Remember that the value of your async block is the last expression ie. it is effectively "returned" from the block, which means it will be provided to your executor's callback as the first argument.
 - If you need to send data repeatedly, use a channel. The sending end of an MPSC channel can be cloned or moved into an async block, and the receiving end can be added to the event loop as a source.
 - If Calloop is missing an event source or abstraction you need, see if there's an async crate for it!
