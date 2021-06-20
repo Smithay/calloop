@@ -19,7 +19,7 @@ What a mouthful! But when you break it down, it's not so complicated:
 
 - We take a `Readiness` value - this is mainly useful for "real" file descriptors, and tells you whether the event source was woken up for a read or write event. We ignore it though, because our internal sources are always only readable (remember that even if the zsocket is writeable, the FD it exposes is only ever readable).
 
-- We take a token, just like our register/re-register methods. The ID will always correspond to our own source, but we can check the sub-ID to see which of our internal sources caused us to run.
+- We take a token. This gives us a way to process events that arise from our internal sources. In general, composed sources should not actually need to use this directly; sub-sources will check their own tokens against this and run if necessary.
 
 - We take a callback. We call this callback with any "real" events that our caller will care about; in our case, that means messages we receive on the zsocket. It is closely related to [the `EventSource` trait's associated types](ch03-02-creating-our-source-part-1-our-types.md#associated-types). Note that the callback our caller supplies when adding our source to the loop actually takes an extra argument, which is some data that we won't know about in our source. Calloop's internals take care of combining our arguments here with this extra data.
 
