@@ -1,5 +1,5 @@
 // ANCHOR: all
-use calloop::{EventLoop, LoopSignal};
+use calloop::EventLoop;
 
 // futures = "0.3"
 use futures::sink::SinkExt;
@@ -11,16 +11,12 @@ fn main() -> std::io::Result<()> {
     // ANCHOR_END: decl_executor
 
     // ANCHOR: decl_loop
-    // Just like in the timer example, we want to use a LoopSignal as the loop
-    // data so we can exit the program later.
-    let mut event_loop: EventLoop<LoopSignal> = EventLoop::try_new()?;
+    let mut event_loop = EventLoop::try_new()?;
     let handle = event_loop.handle();
 
-    handle.insert_source(exec, |evt, _metadata, loop_signaller| {
+    handle.insert_source(exec, |evt, _metadata, _shared| {
         // Print the value of the async block ie. the return value.
         println!("Async block ended with: {}", evt);
-        // Stop the loop when all blocks have run.
-        loop_signaller.stop();
     })?;
     // ANCHOR_END: decl_loop
 
@@ -62,12 +58,12 @@ fn main() -> std::io::Result<()> {
 
     // ANCHOR: run_loop
     // Schedule the async block to be run in the event loop.
-    sched.schedule(async_aloof_task).unwrap();
     sched.schedule(async_friendly_task).unwrap();
+    sched.schedule(async_aloof_task).unwrap();
 
     // Run the event loop.
-    println!("Starting event loop.");
-    event_loop.run(None, &mut event_loop.get_signal(), |_| {})?;
+    println!("Starting event loop. Use Ctrl-C to exit.");
+    event_loop.run(None, &mut (), |_| {})?;
     println!("Event loop ended.");
     // ANCHOR_END: run_loop
 
