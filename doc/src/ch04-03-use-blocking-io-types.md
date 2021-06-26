@@ -55,3 +55,12 @@ All that's left is to run the loop:
 ```rust
 {{#rustdoc_include adapt_io_example.rs:run_loop}}
 ```
+
+And the output we get is:
+
+```text
+Starting event loop. Use Ctrl-C to exit.
+Async block ended with: Sent data...
+Async block ended with: Hello, world
+^C
+```
