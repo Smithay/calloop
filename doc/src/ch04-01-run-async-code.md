@@ -1,13 +1,14 @@
 # Run async code
 
-> ## Enable the executor feature!
-> 
+> ## Enable the `executor` feature!
+>
 > To use `calloop::futures` you need to enable the `executor` feature in your `Cargo.toml` like so:
 > 
 > ```toml
 > [dependencies.calloop]
 > features = [ "executor" ]
 > version = ...
+> ```
 
 Let's say you have some async code that looks like this:
 
