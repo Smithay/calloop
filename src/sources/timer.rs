@@ -24,6 +24,7 @@ use crate::{EventSource, Poll, PostAction, Readiness, Token, TokenFactory};
 /// It generates events of type `(T, TimerHandle<T>)`, providing you
 /// an handle inside the event callback, allowing you to set new timeouts
 /// as a response to a timeout being reached (for reccuring ticks for example).
+#[derive(Debug)]
 pub struct Timer<T> {
     inner: Arc<Mutex<TimerInner<T>>>,
     source: TimerSource,
@@ -52,6 +53,7 @@ impl<T> Timer<T> {
 ///
 /// This handle can be cloned, and can be sent accross thread as long
 /// as `T: Send`.
+#[derive(Debug)]
 pub struct TimerHandle<T> {
     inner: Arc<Mutex<TimerInner<T>>>,
 }
@@ -67,6 +69,7 @@ impl<T> Clone for TimerHandle<T> {
 }
 
 /// An itentifier to cancel a timeout if necessary
+#[derive(Debug)]
 pub struct Timeout {
     counter: u32,
 }
@@ -161,12 +164,14 @@ impl<T> EventSource for Timer<T> {
  * Timer logic
  */
 
+#[derive(Debug)]
 struct TimeoutData<T> {
     deadline: Instant,
     data: RefCell<Option<T>>,
     counter: u32,
 }
 
+#[derive(Debug)]
 struct TimerInner<T> {
     heap: BinaryHeap<TimeoutData<T>>,
     scheduler: TimerScheduler,
@@ -273,6 +278,7 @@ impl<T> std::cmp::Eq for TimeoutData<T> {}
  * Scheduling
  */
 
+#[derive(Debug)]
 struct TimerScheduler {
     current_deadline: Arc<Mutex<Option<Instant>>>,
     kill_switch: Arc<AtomicBool>,
