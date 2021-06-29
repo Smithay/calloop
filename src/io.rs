@@ -39,6 +39,12 @@ pub struct Async<'l, F: AsRawFd> {
     old_flags: OFlag,
 }
 
+impl<'l, F: AsRawFd + std::fmt::Debug> std::fmt::Debug for Async<'l, F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Async").field("fd", &self.fd).finish()
+    }
+}
+
 impl<'l, F: AsRawFd> Async<'l, F> {
     pub(crate) fn new<Data>(
         inner: Rc<LoopInner<'l, Data>>,
@@ -111,6 +117,7 @@ impl<'l, F: AsRawFd> Async<'l, F> {
 }
 
 /// A future that resolves once the associated object becomes ready for reading
+#[derive(Debug)]
 pub struct Readable<'s, 'l, F: AsRawFd> {
     io: &'s mut Async<'l, F>,
 }
@@ -130,6 +137,7 @@ impl<'s, 'l, F: AsRawFd> std::future::Future for Readable<'s, 'l, F> {
 }
 
 /// A future that resolves once the associated object becomes ready for writing
+#[derive(Debug)]
 pub struct Writable<'s, 'l, F: AsRawFd> {
     io: &'s mut Async<'l, F>,
 }

@@ -43,6 +43,7 @@ pub fn make_ping() -> std::io::Result<(Ping, PingSource)> {
 ///
 /// If you use it directly, it will automatically remove itself from the event loop
 /// once all [`Ping`] instances are dropped.
+#[derive(Debug)]
 pub struct PingSource {
     pipe: Generic<Fd>,
 }
@@ -125,7 +126,7 @@ impl Drop for PingSource {
 ///
 /// This handle can be cloned and sent accross threads. It can be used to
 /// send pings to the `PingSource`.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Ping {
     pipe: Arc<CloseOnDrop>,
 }
@@ -139,6 +140,7 @@ impl Ping {
     }
 }
 
+#[derive(Debug)]
 struct CloseOnDrop(RawFd);
 
 impl Drop for CloseOnDrop {

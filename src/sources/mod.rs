@@ -204,6 +204,12 @@ where
 /// Use `into_source_inner` to get the event source back.
 pub struct Dispatcher<'a, S, Data>(Rc<dyn ErasedDispatcher<'a, S, Data> + 'a>);
 
+impl<'a, S, Data> std::fmt::Debug for Dispatcher<'a, S, Data> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Dispatcher { ... }")
+    }
+}
+
 impl<'a, S, Data> Dispatcher<'a, S, Data>
 where
     S: EventSource + 'a,
@@ -268,6 +274,12 @@ impl<'a, S, Data> Clone for Dispatcher<'a, S, Data> {
 /// it will *not* cancel it.
 pub struct Idle<'i> {
     pub(crate) callback: Rc<RefCell<dyn CancellableIdle + 'i>>,
+}
+
+impl<'i> std::fmt::Debug for Idle<'i> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Idle { ... }")
+    }
 }
 
 impl<'i> Idle<'i> {

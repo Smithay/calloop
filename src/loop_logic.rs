@@ -39,6 +39,12 @@ pub struct LoopHandle<'l, Data> {
     inner: Rc<LoopInner<'l, Data>>,
 }
 
+impl<'l, Data> std::fmt::Debug for LoopHandle<'l, Data> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("LoopHandle { ... }")
+    }
+}
+
 #[cfg(not(tarpaulin_include))]
 impl<'l, Data> Clone for LoopHandle<'l, Data> {
     fn clone(&self) -> Self {
@@ -254,6 +260,12 @@ pub struct EventLoop<'l, Data> {
     ping: crate::sources::ping::Ping,
 }
 
+impl<'l, Data> std::fmt::Debug for EventLoop<'l, Data> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("EventLoop { ... }")
+    }
+}
+
 impl<'l, Data> EventLoop<'l, Data> {
     /// Create a new event loop
     ///
@@ -434,6 +446,12 @@ impl<'l, Data> EventLoop<'l, Data> {
 pub struct LoopSignal {
     signal: Arc<AtomicBool>,
     ping: crate::sources::ping::Ping,
+}
+
+impl std::fmt::Debug for LoopSignal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("LoopSignal { ... }")
+    }
 }
 
 impl LoopSignal {

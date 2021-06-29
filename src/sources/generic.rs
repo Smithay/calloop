@@ -47,6 +47,7 @@ use std::os::unix::io::{AsRawFd, RawFd};
 use crate::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
 
 /// A generic event source wrapping a FD-backed type
+#[derive(Debug)]
 pub struct Generic<F: AsRawFd> {
     /// The wrapped FD-backed type
     pub file: F,
@@ -58,6 +59,7 @@ pub struct Generic<F: AsRawFd> {
 }
 
 /// A wrapper to insert a raw file descriptor into a `Generic` event source
+#[derive(Debug)]
 pub struct Fd(pub RawFd);
 
 impl AsRawFd for Fd {

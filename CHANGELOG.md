@@ -5,7 +5,7 @@
 #### Breaking changes
 
 - MSRV is now 1.41
-- The `futures` module now has a proper error type for `Scheduler::schedulme()`
+- The `futures` module now has a proper error type for `Scheduler::schedule()`
 - The return type of `EventSource::process_events()` is now `io::Result<PostAction>` allowing
   the sources to directly request the event loop to reregister/disable/destroy them.
 - The `Token` creation mechanism is now driven by a `TokenFactory`, that

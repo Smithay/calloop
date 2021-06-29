@@ -108,6 +108,8 @@ pub(crate) struct PollEvent {
 /// When composing event sources, each sub-source needs to
 /// have its own token to identify itself. This factory is
 /// provided to produce such unique tokens.
+
+#[derive(Debug)]
 pub struct TokenFactory {
     id: u32,
     sub_id: u32,
@@ -220,6 +222,12 @@ impl Token {
 /// source and delegate the implementations to it.
 pub struct Poll {
     poller: Poller,
+}
+
+impl std::fmt::Debug for Poll {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Poll { ... }")
+    }
 }
 
 impl Poll {
