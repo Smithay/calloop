@@ -1,20 +1,14 @@
-# Where to start
+# Calloop's Documentation
 
 ## API
 
-If you're familiar with event loops and the concepts involved, you can read [the API docs](api) (they're also [hosted on `docs.rs`](https://docs.rs/calloop/)).
+If you're looking for calloop's API documentation, they are available [on `docs.rs`](https://docs.rs/calloop/) for the released versions. There are also [the docs of the current developpment version](api).
 
 ## Tutorial
 
-If you don't know where to start, start here with these tutorials!
+This book presents a step-by-step tutorial to get yourself familiar with calloop and how it is used:
 
-## Example code
-
-If you want to see what Calloop code might look like, there's:
-
-- a [simple example](ch02-00-a-simple-example.md#the-whole-program) using only a timer and a callback
-- a [ZeroMQ event source](ch03-06-the-full-zeromq-event-source-code.md) which shows how to combine event sources into something more complex
-
-## How to do X in Calloop
-
-If you're looking for how to integrate a specific thing in Calloop (eg. futures, network sockets), [look at chapter 4](ch04-00-how-to-do-x-in-calloop.md).
+- [Chapter 1](ch01-00-how-an-event-loop-works.md) presents the general principles of an event loop that are important to have in mind when working with calloop.
+- [Chapter 2](ch02-00-event-sources.md) goes through the different kind of event sources that are provided in calloop, and provides examples of how to use them
+- [Chapter 3](chp03-00-async-await.md) presents the integration with Rust's Async/Await ecosystem provided by calloop
+- [Chapter 4](chp04-00-a-full-example-zeromq.md) gives a detailed example of building a custom event source in calloop, by combining other sources

@@ -1,4 +1,4 @@
-# Use blocking IO types
+# Async IO types
 
 > This section is about adapting blocking IO types for use with `async` Rust code, and powering that `async` code with Calloop. If you just want to add blocking IO types to your event loop and use Calloop's callback/composition-based design, you only need to wrap your blocking IO type in a [generic event source](api/calloop/generic/struct.Generic.html).
 

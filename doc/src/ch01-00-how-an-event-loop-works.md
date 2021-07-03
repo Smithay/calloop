@@ -62,4 +62,4 @@ If you do, the event loop will have no way to proceed, and just... wait for your
 
 ## Calloop and composition
 
-Calloop is designed to work by *composition*. This means that you build up more complex logic in your program by combining simpler event sources into more complex ones. Want a network socket with custom backoff/timeout logic? Create a type containing a network socket from the [async IO adapter](api/calloop/io/), a [timer](api/calloop/timer), and tie them together with your backoff logic and state. There is a much more detailed example of composition in our [ZeroMQ example](ch03-00-a-full-example-zeromq.md).
+Calloop is designed to work by *composition*. This means that you build up more complex logic in your program by combining simpler event sources into more complex ones. Want a network socket with custom backoff/timeout logic? Create a type containing a network socket using the [Generic file descriptor adapter](api/calloop/generic/), a [timer](api/calloop/timer), and tie them together with your backoff logic and state. There is a much more detailed example of composition in our [ZeroMQ example](ch03-00-a-full-example-zeromq.md).

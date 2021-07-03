@@ -1,5 +1,5 @@
 [book]
-authors = ["Jason Heeris"]
+authors = ["Jason Heeris", "Victor Berger <victor.berger@m4x.org>"]
 language = "en"
 multilingual = false
 src = "src"

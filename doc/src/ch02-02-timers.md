@@ -1,14 +1,12 @@
-# A simple example
+# Working with timers
 
-The simplest way to use Calloop is to create the event sources it provides, and add them to the event loop with a callback function. When the event source has new events to process, your callback will be called.
-
-Let's create a program that waits for five seconds, prints a message, and exits. If you've already read the `README` file or [API docs](api), this will look familiar.
+To illustrate how timers work in calloop, let's create a program that waits for five seconds, prints a message, and exits. If you've already read the `README` file or [API docs](api), this will look familiar.
 
 ## The timer event source
 
 The first thing we need is an event source — that is, a type that implements the trait `calloop::EventSource`. If we look under `calloop::timer` we'll see the appropriately named `Timer`.
 
-`Timer` follows a pattern you'll see used for almost all event sources in Calloop. There is an event source (`Timer`) that is inserted into the loop. But there is also some other type (in this case, `TimerHandle`) that allows you to control or configure that source even after the loop has taken ownership of the source itself. For example:
+`Timer` follows a pattern you'll see used for many event sources in Calloop. There is an event source (`Timer`) that is inserted into the loop. But there is also some other type (in this case, `TimerHandle`) that allows you to control or configure that source even after the loop has taken ownership of the source itself. For example:
 
 - there is an MPSC (multiple producer, single consumer) channel that acts as an event source; the "control" end is simply the sending end of the channel
 
