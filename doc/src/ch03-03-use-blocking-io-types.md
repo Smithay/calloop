@@ -1,5 +1,9 @@
 # Use blocking IO types
 
+> This section is about adapting blocking IO types for use with `async` Rust code, and powering that `async` code with Calloop. If you just want to add blocking IO types to your event loop and use Calloop's callback/composition-based design, you only need to wrap your blocking IO type in a [generic event source](api/calloop/generic/struct.Generic.html).
+
+You may find that you need to write ordinary Rust `async` code around blocking IO types. Calloop provides the ability to wrap blocking types — anything that implements the [`AsRawFd`](https://doc.rust-lang.org/stable/std/os/unix/io/trait.AsRawFd.html) trait — in its own async type. This can be polled in any executor you may have chosen for your async code, but if you're using Calloop you'll probably be using [Calloop's executor](api/calloop/futures/fn.executor.html).
+
 > ## Enable the `futures-io` feature!
 > 
 > To use `calloop::io` you need to enable the `futures-io` feature in your `Cargo.toml` like so:
@@ -11,8 +15,6 @@
 > ```
 >
 > Realistically you will probably also want to use this with async code, so you should also enable the `executor` feature too.
-
-You may find that you need to write async code around blocking IO types. Calloop provides the ability to wrap blocking types — anything that implements the [`AsRawFd`](https://doc.rust-lang.org/stable/std/os/unix/io/trait.AsRawFd.html) trait — in its own async type. This can be polled in any executor you may have chosen for your async code, but if you're using Calloop you'll probably be using [Calloop's executor](api/calloop/futures/fn.executor.html).
 
 Just like in the async example, we will use the components in [`calloop::futures`](api/calloop/futures/). First, obtain both an executor and a scheduler with [`calloop::futures::executor()`](api/calloop/futures/fn.executor.html):
 
