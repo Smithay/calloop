@@ -27,7 +27,7 @@ mod test {
     use self::nix::sys::signal::{kill, SigSet};
     use self::nix::unistd::Pid;
 
-    pub const TESTS: &'static [fn()] = &[single_usr1, usr2_added_afterwards, usr2_signal_removed];
+    pub const TESTS: &[fn()] = &[single_usr1, usr2_added_afterwards, usr2_signal_removed];
 
     pub fn reset_mask() {
         SigSet::empty().thread_set_mask().unwrap();

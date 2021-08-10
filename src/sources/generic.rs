@@ -184,7 +184,8 @@ mod test {
 
         assert!(!dispached);
 
-        tx.write(&[1, 2, 3, 4, 5, 6]).unwrap();
+        let ret = tx.write(&[1, 2, 3, 4, 5, 6]).unwrap();
+        assert_eq!(ret, 6);
         tx.flush().unwrap();
 
         event_loop
@@ -224,7 +225,8 @@ mod test {
 
         event_loop.handle().remove(generic_token);
 
-        tx.write(&[1, 2, 3, 4, 5, 6]).unwrap();
+        let ret = tx.write(&[1, 2, 3, 4, 5, 6]).unwrap();
+        assert_eq!(ret, 6);
         tx.flush().unwrap();
 
         event_loop

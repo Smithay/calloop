@@ -221,7 +221,7 @@ impl<T> TimerInner<T> {
         let now = Instant::now();
         loop {
             // check if there is an expired item
-            if let Some(ref data) = self.heap.peek() {
+            if let Some(data) = self.heap.peek() {
                 if data.deadline > now {
                     return None;
                 }

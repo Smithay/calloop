@@ -619,7 +619,7 @@ mod tests {
         event_loop
             .dispatch(Duration::from_millis(0), &mut dispatched)
             .unwrap();
-        assert_eq!(dispatched, true);
+        assert!(dispatched);
 
         // disable the source
         ping.ping();
@@ -628,7 +628,7 @@ mod tests {
         event_loop
             .dispatch(Duration::from_millis(0), &mut dispatched)
             .unwrap();
-        assert_eq!(dispatched, false);
+        assert!(!dispatched);
 
         // disabling it again is an error
         event_loop.handle().disable(&ping_token).unwrap_err();
@@ -639,7 +639,7 @@ mod tests {
         event_loop
             .dispatch(Duration::from_millis(0), &mut dispatched)
             .unwrap();
-        assert_eq!(dispatched, true);
+        assert!(dispatched);
     }
 
     #[test]
@@ -762,7 +762,7 @@ mod tests {
                     Ok(0) => break, // closed pipe, we are now inert
                     Ok(_) => {}
                     Err(e) => {
-                        let e = crate::no_nix_err(e);
+                        let e: std::io::Error = e.into();
                         if e.kind() == std::io::ErrorKind::WouldBlock {
                             break;
                         // nothing more to read

@@ -1,6 +1,5 @@
 use std::{io, os::unix::io::RawFd};
 
-use crate::no_nix_err;
 use nix::sys::event::{kevent, kevent_ts, kqueue, EventFilter, EventFlag, FilterFlag, KEvent};
 
 use super::{Interest, Mode, PollEvent, Readiness, Token};
@@ -19,7 +18,7 @@ fn mode_to_flag(mode: Mode) -> EventFlag {
 
 impl Kqueue {
     pub(crate) fn new() -> io::Result<Kqueue> {
-        let kq = kqueue().map_err(no_nix_err)?;
+        let kq = kqueue()?;
         Ok(Kqueue { kq })
     }
 
@@ -39,8 +38,7 @@ impl Kqueue {
         let nevents = match timeout {
             None => kevent_ts(self.kq, &[], &mut buffer, None),
             Some(t) => kevent(self.kq, &[], &mut buffer, t.as_millis() as usize),
-        }
-        .map_err(no_nix_err)?;
+        }?;
 
         let ret = buffer
             .iter()
@@ -123,7 +121,7 @@ impl Kqueue {
             ),
         ];
 
-        kevent_ts(self.kq, &changes, &mut out, None).map_err(no_nix_err)?;
+        kevent_ts(self.kq, &changes, &mut out, None)?;
 
         for o in &out {
             if o.flags().contains(EventFlag::EV_ERROR) && o.data() != 0 {
@@ -176,7 +174,7 @@ impl Kqueue {
             ),
         ];
 
-        kevent_ts(self.kq, &changes, &mut out, None).map_err(no_nix_err)?;
+        kevent_ts(self.kq, &changes, &mut out, None)?;
 
         // Report an error if *both* fd were missing, meaning we were not registered at all
         let mut notfound = 0;
