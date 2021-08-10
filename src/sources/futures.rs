@@ -34,6 +34,7 @@ use crate::{
 };
 
 /// A future executor as an event source
+#[derive(Debug)]
 pub struct Executor<T> {
     futures: FuturesUnordered<LocalFutureObj<'static, T>>,
     new_futures: Channel<LocalFutureObj<'static, T>>,
@@ -42,7 +43,7 @@ pub struct Executor<T> {
 }
 
 /// A scheduler to send futures to an executor
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Scheduler<T> {
     sender: Sender<LocalFutureObj<'static, T>>,
 }
@@ -73,6 +74,7 @@ impl std::fmt::Display for ExecutorDestroyed {
     }
 }
 
+#[derive(Debug)]
 struct ExecWaker {
     ping: Ping,
 }

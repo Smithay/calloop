@@ -52,10 +52,9 @@ impl<'l, F: AsRawFd> Async<'l, F> {
     ) -> std::io::Result<Async<'l, F>> {
         let rawfd = fd.as_raw_fd();
         // set non-blocking
-        let old_flags = fcntl(rawfd, FcntlArg::F_GETFL).map_err(crate::no_nix_err)?;
+        let old_flags = fcntl(rawfd, FcntlArg::F_GETFL)?;
         let old_flags = unsafe { OFlag::from_bits_unchecked(old_flags) };
-        fcntl(rawfd, FcntlArg::F_SETFL(old_flags | OFlag::O_NONBLOCK))
-            .map_err(crate::no_nix_err)?;
+        fcntl(rawfd, FcntlArg::F_SETFL(old_flags | OFlag::O_NONBLOCK))?;
         // register in the loop
         let dispatcher = Rc::new(RefCell::new(IoDispatcher {
             fd: rawfd,

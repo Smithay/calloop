@@ -17,9 +17,7 @@ use nix::{
 };
 
 use super::generic::{Fd, Generic};
-use crate::{
-    no_nix_err, EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory,
-};
+use crate::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
 
 /// Create a new ping event source
 ///
@@ -27,7 +25,7 @@ use crate::{
 /// event loop, and a [`PingSource`], which you can insert in your event loop to
 /// receive the pings.
 pub fn make_ping() -> std::io::Result<(Ping, PingSource)> {
-    let (read, write) = pipe2(OFlag::O_CLOEXEC | OFlag::O_NONBLOCK).map_err(no_nix_err)?;
+    let (read, write) = pipe2(OFlag::O_CLOEXEC | OFlag::O_NONBLOCK)?;
     let source = PingSource {
         pipe: Generic::from_fd(read, Interest::READ, Mode::Level),
     };
@@ -75,7 +73,7 @@ impl EventSource for PingSource {
                     }
                     Ok(_) => read_something = true,
                     Err(e) => {
-                        let e = no_nix_err(e);
+                        let e: std::io::Error = e.into();
                         if e.kind() == std::io::ErrorKind::WouldBlock {
                             break;
                         // nothing more to read

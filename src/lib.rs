@@ -149,10 +149,3 @@ pub mod io;
 mod list;
 mod loop_logic;
 mod sources;
-
-fn no_nix_err(err: nix::Error) -> std::io::Error {
-    match err {
-        ::nix::Error::Sys(errno) => errno.into(),
-        _ => unreachable!(),
-    }
-}
