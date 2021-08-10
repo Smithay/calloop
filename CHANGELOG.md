@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.9.1 -- 2021-08-10
+
+- Update `nix` dependency to 0.22
+
 ## 0.9.0 -- 2021-06-29
 
 #### Breaking changes
