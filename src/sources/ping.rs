@@ -16,7 +16,7 @@ use nix::{
     unistd::{close, pipe2, read, write},
 };
 
-use super::generic::{Fd, Generic};
+use super::generic::Generic;
 use crate::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
 
 /// Create a new ping event source
@@ -27,7 +27,7 @@ use crate::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, Tok
 pub fn make_ping() -> std::io::Result<(Ping, PingSource)> {
     let (read, write) = pipe2(OFlag::O_CLOEXEC | OFlag::O_NONBLOCK)?;
     let source = PingSource {
-        pipe: Generic::from_fd(read, Interest::READ, Mode::Level),
+        pipe: Generic::new(read, Interest::READ, Mode::Level),
     };
     let ping = Ping {
         pipe: Arc::new(CloseOnDrop(write)),
@@ -43,7 +43,7 @@ pub fn make_ping() -> std::io::Result<(Ping, PingSource)> {
 /// once all [`Ping`] instances are dropped.
 #[derive(Debug)]
 pub struct PingSource {
-    pipe: Generic<Fd>,
+    pipe: Generic<RawFd>,
 }
 
 impl EventSource for PingSource {
@@ -60,12 +60,12 @@ impl EventSource for PingSource {
     where
         C: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
-        self.pipe.process_events(readiness, token, |_, fd| {
+        self.pipe.process_events(readiness, token, |_, &mut fd| {
             let mut buf = [0u8; 32];
             let mut read_something = false;
             let mut action = PostAction::Continue;
             loop {
-                match read(fd.0, &mut buf) {
+                match read(fd, &mut buf) {
                     Ok(0) => {
                         // The other end of the pipe was closed, mark ourselved to for removal
                         action = PostAction::Remove;
@@ -114,7 +114,7 @@ impl EventSource for PingSource {
 
 impl Drop for PingSource {
     fn drop(&mut self) {
-        if let Err(e) = close(self.pipe.file.0) {
+        if let Err(e) = close(self.pipe.file) {
             log::warn!("[calloop] Failed to close read ping: {:?}", e);
         }
     }

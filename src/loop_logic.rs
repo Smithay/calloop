@@ -560,7 +560,7 @@ mod tests {
     fn insert_bad_source() {
         let event_loop = EventLoop::<()>::try_new().unwrap();
         let ret = event_loop.handle().insert_source(
-            crate::sources::generic::Generic::from_fd(420, Interest::READ, Mode::Level),
+            crate::sources::generic::Generic::new(420, Interest::READ, Mode::Level),
             |_, _, _| Ok(PostAction::Continue),
         );
         assert!(ret.is_err());
@@ -570,7 +570,7 @@ mod tests {
     fn insert_source_no_interest() {
         let event_loop = EventLoop::<()>::try_new().unwrap();
         let ret = event_loop.handle().insert_source(
-            crate::sources::generic::Generic::from_fd(0, Interest::EMPTY, Mode::Level),
+            crate::sources::generic::Generic::new(0, Interest::EMPTY, Mode::Level),
             |_, _, _| Ok(PostAction::Continue),
         );
         assert!(ret.is_ok());
@@ -726,13 +726,13 @@ mod tests {
         )
         .unwrap();
 
-        let source = Generic::from_fd(sock1, Interest::READ, Mode::Level);
-        let dispatcher = Dispatcher::new(source, |_, fd, dispatched| {
+        let source = Generic::new(sock1, Interest::READ, Mode::Level);
+        let dispatcher = Dispatcher::new(source, |_, &mut fd, dispatched| {
             *dispatched = true;
             // read all contents available to drain the socket
             let mut buf = [0u8; 32];
             loop {
-                match read(fd.0, &mut buf) {
+                match read(fd, &mut buf) {
                     Ok(0) => break, // closed pipe, we are now inert
                     Ok(_) => {}
                     Err(e) => {
