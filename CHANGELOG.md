@@ -4,7 +4,9 @@
 
 - **Breaking:** Calloop's internal storage is now backed by a `slotmap`. As a result the
   `RegistrationToken` is now `Copy+Clone`, and the low-level registration API of `Poll` is
-  altered in a breaking way.
+  altered in a breaking way. MSRV is bumped to 1.49.
+- **Breaking:** `generic::Fd` adapter is removed, as since that rust version `RawFd` implements
+  `AsRawFd`, allowing it to be used directly in `Generic`.
 
 ## 0.9.1 -- 2021-08-10
 

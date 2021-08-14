@@ -15,7 +15,7 @@
 //! # let mut event_loop = calloop::EventLoop::<()>::try_new()
 //! #                .expect("Failed to initialize the event loop!");
 //! # let handle = event_loop.handle();
-//! # let io_object = calloop::generic::Fd(0);
+//! # let io_object = 0;
 //! handle.insert_source(
 //!     // wrap your IO object in a Generic, here we register for read readiness
 //!     // in level-triggering mode
@@ -41,8 +41,7 @@
 //! FD-backed object, see [`Generic::from_fd`](Generic#method.from_fd).
 
 use std::io;
-#[cfg(unix)]
-use std::os::unix::io::{AsRawFd, RawFd};
+use std::os::unix::io::AsRawFd;
 
 use crate::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
 
@@ -56,16 +55,6 @@ pub struct Generic<F: AsRawFd> {
     /// The programmed mode
     pub mode: Mode,
     token: Box<Token>,
-}
-
-/// A wrapper to insert a raw file descriptor into a `Generic` event source
-#[derive(Debug)]
-pub struct Fd(pub RawFd);
-
-impl AsRawFd for Fd {
-    fn as_raw_fd(&self) -> RawFd {
-        self.0
-    }
 }
 
 impl<F: AsRawFd> Generic<F> {
@@ -82,13 +71,6 @@ impl<F: AsRawFd> Generic<F> {
     /// Unwrap the `Generic` source to retrieve the underlying type
     pub fn unwrap(self) -> F {
         self.file
-    }
-}
-
-impl Generic<Fd> {
-    /// Wrap a raw file descriptor into a `Generic` event source
-    pub fn from_fd(fd: RawFd, interest: Interest, mode: Mode) -> Generic<Fd> {
-        Self::new(Fd(fd), interest, mode)
     }
 }
 
