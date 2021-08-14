@@ -1,5 +1,7 @@
 use std::{io, os::unix::io::RawFd};
 
+use crate::loop_logic::CalloopKey;
+
 #[cfg(target_os = "linux")]
 mod epoll;
 #[cfg(target_os = "linux")]
@@ -19,6 +21,7 @@ mod kqueue;
     target_os = "openbsd"
 ))]
 use kqueue::Kqueue as Poller;
+use slotmap::Key;
 
 /// Possible modes for registering a file descriptor
 #[derive(Copy, Clone, Debug)]
@@ -111,19 +114,19 @@ pub(crate) struct PollEvent {
 
 #[derive(Debug)]
 pub struct TokenFactory {
-    id: u32,
+    key: CalloopKey,
     sub_id: u32,
 }
 
 impl TokenFactory {
-    pub(crate) fn new(id: u32) -> TokenFactory {
-        TokenFactory { id, sub_id: 0 }
+    pub(crate) fn new(key: CalloopKey) -> TokenFactory {
+        TokenFactory { key, sub_id: 0 }
     }
 
     /// Produce a new unique token
     pub fn token(&mut self) -> Token {
         let token = Token {
-            id: self.id,
+            key: self.key,
             sub_id: self.sub_id,
         };
         self.sub_id += 1;
@@ -140,73 +143,26 @@ impl TokenFactory {
 /// You should forward it to the [`Poll`] when registering your file descriptors.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Token {
-    pub(crate) id: u32,
+    pub(crate) key: CalloopKey,
     pub(crate) sub_id: u32,
 }
 
 #[allow(dead_code)]
 impl Token {
-    pub(crate) fn to_u64(self) -> u64 {
-        ((self.id as u64) << 32) + self.sub_id as u64
-    }
-
-    pub(crate) fn from_u64(i: u64) -> Token {
-        Token {
-            id: (i >> 32) as u32,
-            sub_id: (i & std::u32::MAX as u64) as u32,
-        }
-    }
-
-    pub(crate) fn to_u32(self) -> u32 {
-        (self.id << 16) + self.sub_id
-    }
-
-    pub(crate) fn from_u32(i: u32) -> Token {
-        Token {
-            id: (i >> 16),
-            sub_id: (i & std::u16::MAX as u32),
-        }
-    }
-
     /// Produces an invalid Token, that is not recognized by the
     /// event loop.
     ///
     /// Can be used as a placeholder to avoid `Option<Token>`
     pub fn invalid() -> Token {
         Token {
-            id: std::u32::MAX,
+            key: CalloopKey::null(),
             sub_id: std::u32::MAX,
         }
     }
 
     /// Check if this token is the invalid token
     pub fn is_invalid(self) -> bool {
-        self.id == std::u32::MAX && self.sub_id == std::u32::MAX
-    }
-
-    /// Provide a copy of the Token with the given `sub_id`.
-    pub fn with_sub_id(self, sub_id: u32) -> Token {
-        Self { sub_id, ..self }
-    }
-
-    #[cfg(target_pointer_width = "64")]
-    pub(crate) fn to_usize(self) -> usize {
-        self.to_u64() as usize
-    }
-
-    #[cfg(target_pointer_width = "32")]
-    pub(crate) fn to_usize(self) -> usize {
-        self.to_u32() as usize
-    }
-
-    #[cfg(target_pointer_width = "64")]
-    pub(crate) fn from_usize(i: usize) -> Token {
-        Self::from_u64(i as u64)
-    }
-
-    #[cfg(target_pointer_width = "32")]
-    pub(crate) fn from_usize(i: usize) -> Token {
-        Self::from_u64(i as u64)
+        self.key.is_null()
     }
 }
 
@@ -250,14 +206,19 @@ impl Poll {
     /// mode and token. This function will fail if given a
     /// bad file descriptor or if the provided file descriptor is already
     /// registered.
-    pub fn register(
+    ///
+    /// # Safety
+    ///
+    /// You must ensure that the `*const Token` pointer provided remains alive
+    /// until your event source is re-registered or unregistered.
+    pub unsafe fn register(
         &mut self,
         fd: RawFd,
         interest: Interest,
         mode: Mode,
-        token: Token,
+        token: *const Token,
     ) -> io::Result<()> {
-        if token.is_invalid() {
+        if (*token).is_invalid() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 "Invalid Token provided to register().",
@@ -270,14 +231,19 @@ impl Poll {
     ///
     /// This allows you to change the interest, mode or token of a file
     /// descriptor. Fails if the provided fd is not currently registered.
-    pub fn reregister(
+    ///
+    /// # Safety
+    ///
+    /// You must ensure that the `*const Token` pointer provided remains alive
+    /// until your event source is re-registered or unregistered.
+    pub unsafe fn reregister(
         &mut self,
         fd: RawFd,
         interest: Interest,
         mode: Mode,
-        token: Token,
+        token: *const Token,
     ) -> io::Result<()> {
-        if token.is_invalid() {
+        if (*token).is_invalid() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 "Invalid Token provided to reregister().",
@@ -292,54 +258,5 @@ impl Poll {
     /// provided file descriptor is not currently registered.
     pub fn unregister(&mut self, fd: RawFd) -> io::Result<()> {
         self.poller.unregister(fd)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Token;
-    #[test]
-    fn token_convert_u64() {
-        let t = Token {
-            id: 0x1337,
-            sub_id: 0x42,
-        };
-        assert_eq!(t.to_u64(), 0x0000133700000042);
-        let t2 = Token::from_u64(0x0000133700000042);
-        assert_eq!(t, t2);
-    }
-
-    #[test]
-    fn token_convert_u32() {
-        let t = Token {
-            id: 0x1337,
-            sub_id: 0x42,
-        };
-        assert_eq!(t.to_u32(), 0x13370042);
-        let t2 = Token::from_u32(0x13370042);
-        assert_eq!(t, t2);
-    }
-
-    #[test]
-    fn token_with_sub_id() {
-        let t1 = Token {
-            id: 0x1234,
-            sub_id: 0,
-        };
-        let t2 = t1.with_sub_id(0xABCD);
-        assert_eq!(
-            t1,
-            Token {
-                id: 0x1234,
-                sub_id: 0
-            }
-        );
-        assert_eq!(
-            t2,
-            Token {
-                id: 0x1234,
-                sub_id: 0xABCD
-            }
-        );
     }
 }

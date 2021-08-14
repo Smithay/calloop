@@ -55,7 +55,7 @@ pub struct Generic<F: AsRawFd> {
     pub interest: Interest,
     /// The programmed mode
     pub mode: Mode,
-    token: Token,
+    token: Box<Token>,
 }
 
 /// A wrapper to insert a raw file descriptor into a `Generic` event source
@@ -75,7 +75,7 @@ impl<F: AsRawFd> Generic<F> {
             file,
             interest,
             mode,
-            token: Token::invalid(),
+            token: Box::new(Token::invalid()),
         }
     }
 
@@ -106,7 +106,7 @@ impl<F: AsRawFd> EventSource for Generic<F> {
     where
         C: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
-        if token != self.token {
+        if token != *self.token {
             return Ok(PostAction::Continue);
         }
         callback(readiness, &mut self.file)
@@ -117,8 +117,15 @@ impl<F: AsRawFd> EventSource for Generic<F> {
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
     ) -> std::io::Result<()> {
-        let token = token_factory.token();
-        poll.register(self.file.as_raw_fd(), self.interest, self.mode, token)?;
+        let token = Box::new(token_factory.token());
+        unsafe {
+            poll.register(
+                self.file.as_raw_fd(),
+                self.interest,
+                self.mode,
+                &*token as *const _,
+            )?;
+        }
         self.token = token;
         Ok(())
     }
@@ -128,15 +135,22 @@ impl<F: AsRawFd> EventSource for Generic<F> {
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
     ) -> std::io::Result<()> {
-        let token = token_factory.token();
-        poll.reregister(self.file.as_raw_fd(), self.interest, self.mode, token)?;
+        let token = Box::new(token_factory.token());
+        unsafe {
+            poll.reregister(
+                self.file.as_raw_fd(),
+                self.interest,
+                self.mode,
+                &*token as *const _,
+            )?;
+        }
         self.token = token;
         Ok(())
     }
 
     fn unregister(&mut self, poll: &mut Poll) -> std::io::Result<()> {
         poll.unregister(self.file.as_raw_fd())?;
-        self.token = Token::invalid();
+        self.token = Box::new(Token::invalid());
         Ok(())
     }
 }

@@ -49,28 +49,28 @@ impl Kqueue {
                     writable: event.filter() == EventFilter::EVFILT_WRITE,
                     error: event.flags().contains(EventFlag::EV_ERROR) && event.data() != 0,
                 },
-                token: Token::from_usize(event.udata() as usize),
+                token: unsafe { *(event.udata() as usize as *const Token) },
             })
             .collect();
         Ok(ret)
     }
 
-    pub fn register(
+    pub unsafe fn register(
         &mut self,
         fd: RawFd,
         interest: Interest,
         mode: Mode,
-        token: Token,
+        token: *const Token,
     ) -> io::Result<()> {
         self.reregister(fd, interest, mode, token)
     }
 
-    pub fn reregister(
+    pub unsafe fn reregister(
         &mut self,
         fd: RawFd,
         interest: Interest,
         mode: Mode,
-        token: Token,
+        token: *const Token,
     ) -> io::Result<()> {
         let write_flags = if interest.writable {
             EventFlag::EV_ADD | EventFlag::EV_RECEIPT | mode_to_flag(mode)
@@ -90,7 +90,7 @@ impl Kqueue {
                 write_flags,
                 FilterFlag::empty(),
                 0,
-                token.to_usize() as isize,
+                token as usize as isize,
             ),
             KEvent::new(
                 fd as usize,
@@ -98,7 +98,7 @@ impl Kqueue {
                 read_flags,
                 FilterFlag::empty(),
                 0,
-                token.to_usize() as isize,
+                token as usize as isize,
             ),
         ];
 
