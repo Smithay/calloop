@@ -50,32 +50,32 @@ impl Epoll {
             .take(n_ready)
             .map(|event| PollEvent {
                 readiness: flags_to_readiness(event.events()),
-                token: Token::from_u64(event.data()),
+                token: unsafe { *(event.data() as usize as *const Token) },
             })
             .collect();
         Ok(events)
     }
 
-    pub fn register(
+    pub unsafe fn register(
         &mut self,
         fd: RawFd,
         interest: Interest,
         mode: Mode,
-        token: Token,
+        token: *const Token,
     ) -> io::Result<()> {
-        let mut event = epoll::EpollEvent::new(make_flags(interest, mode), token.to_u64());
+        let mut event = epoll::EpollEvent::new(make_flags(interest, mode), token as usize as u64);
         epoll::epoll_ctl(self.epoll_fd, epoll::EpollOp::EpollCtlAdd, fd, &mut event)
             .map_err(Into::into)
     }
 
-    pub fn reregister(
+    pub unsafe fn reregister(
         &mut self,
         fd: RawFd,
         interest: Interest,
         mode: Mode,
-        token: Token,
+        token: *const Token,
     ) -> io::Result<()> {
-        let mut event = epoll::EpollEvent::new(make_flags(interest, mode), token.to_u64());
+        let mut event = epoll::EpollEvent::new(make_flags(interest, mode), token as usize as u64);
         epoll::epoll_ctl(self.epoll_fd, epoll::EpollOp::EpollCtlMod, fd, &mut event)
             .map_err(Into::into)
     }

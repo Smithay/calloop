@@ -58,14 +58,14 @@ impl<'l, F: AsRawFd> Async<'l, F> {
         // register in the loop
         let dispatcher = Rc::new(RefCell::new(IoDispatcher {
             fd: rawfd,
-            id: 0,
+            token: Box::new(Token::invalid()),
             waker: None,
             is_registered: false,
             interest: Interest::EMPTY,
             last_readiness: Readiness::EMPTY,
         }));
-        let id = inner.sources.borrow_mut().add_source(dispatcher.clone());
-        dispatcher.borrow_mut().id = id;
+        let key = inner.sources.borrow_mut().insert(dispatcher.clone());
+        *(dispatcher.borrow_mut().token) = Token { key, sub_id: 0 };
         inner.register(&dispatcher)?;
 
         // Straightforward casting would require us to add the bound `Data: 'l` but we don't actually need it
@@ -177,43 +177,41 @@ trait IoLoopInner {
 impl<'l, Data> IoLoopInner for LoopInner<'l, Data> {
     fn register(&self, dispatcher: &RefCell<IoDispatcher>) -> io::Result<()> {
         let disp = dispatcher.borrow();
-        self.poll.borrow_mut().register(
-            disp.fd,
-            Interest::EMPTY,
-            Mode::OneShot,
-            Token {
-                id: disp.id,
-                sub_id: 0,
-            },
-        )
+        unsafe {
+            self.poll.borrow_mut().register(
+                disp.fd,
+                Interest::EMPTY,
+                Mode::OneShot,
+                &*disp.token as *const _,
+            )
+        }
     }
 
     fn reregister(&self, dispatcher: &RefCell<IoDispatcher>) -> io::Result<()> {
         let disp = dispatcher.borrow();
-        self.poll.borrow_mut().reregister(
-            disp.fd,
-            disp.interest,
-            Mode::OneShot,
-            Token {
-                id: disp.id,
-                sub_id: 0,
-            },
-        )
+        unsafe {
+            self.poll.borrow_mut().reregister(
+                disp.fd,
+                disp.interest,
+                Mode::OneShot,
+                &*disp.token as *const _,
+            )
+        }
     }
 
     fn kill(&self, dispatcher: &RefCell<IoDispatcher>) {
-        let id = dispatcher.borrow().id;
+        let key = dispatcher.borrow().token.key;
         let _source = self
             .sources
             .borrow_mut()
-            .del_source(id)
+            .remove(key)
             .expect("Attempting to remove a non-existent source?!");
     }
 }
 
 struct IoDispatcher {
     fd: RawFd,
-    id: u32,
+    token: Box<Token>,
     waker: Option<Waker>,
     is_registered: bool,
     interest: Interest,
@@ -246,17 +244,17 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
         unreachable!()
     }
 
-    fn reregister(&self, _: &mut Poll, _: &mut TokenFactory) -> std::io::Result<()> {
+    fn reregister(&self, _: &mut Poll, _: &mut TokenFactory) -> std::io::Result<bool> {
         // registration is handled by IoLoopInner
         unreachable!()
     }
 
-    fn unregister(&self, poll: &mut Poll) -> std::io::Result<()> {
+    fn unregister(&self, poll: &mut Poll) -> std::io::Result<bool> {
         let disp = self.borrow();
         if disp.is_registered {
             poll.unregister(disp.fd)?;
         }
-        Ok(())
+        Ok(true)
     }
 }
 

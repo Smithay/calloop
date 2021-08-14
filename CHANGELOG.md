@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Breaking:** Calloop's internal storage is now backed by a `slotmap`. As a result the
+  `RegistrationToken` is now `Copy+Clone`, and the low-level registration API of `Poll` is
+  altered in a breaking way.
+
 ## 0.9.1 -- 2021-08-10
 
 - Update `nix` dependency to 0.22

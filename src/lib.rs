@@ -146,6 +146,5 @@ pub use self::loop_logic::{EventLoop, InsertError, LoopHandle, LoopSignal, Regis
 pub use self::sources::*;
 
 pub mod io;
-mod list;
 mod loop_logic;
 mod sources;

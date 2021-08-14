@@ -136,12 +136,22 @@ where
         self.borrow_mut().source.register(poll, token_factory)
     }
 
-    fn reregister(&self, poll: &mut Poll, token_factory: &mut TokenFactory) -> io::Result<()> {
-        self.borrow_mut().source.reregister(poll, token_factory)
+    fn reregister(&self, poll: &mut Poll, token_factory: &mut TokenFactory) -> io::Result<bool> {
+        if let Ok(mut me) = self.try_borrow_mut() {
+            me.source.reregister(poll, token_factory)?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 
-    fn unregister(&self, poll: &mut Poll) -> io::Result<()> {
-        self.borrow_mut().source.unregister(poll)
+    fn unregister(&self, poll: &mut Poll) -> io::Result<bool> {
+        if let Ok(mut me) = self.try_borrow_mut() {
+            me.source.unregister(poll)?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 }
 
@@ -155,9 +165,9 @@ pub(crate) trait EventDispatcher<Data> {
 
     fn register(&self, poll: &mut Poll, token_factory: &mut TokenFactory) -> io::Result<()>;
 
-    fn reregister(&self, poll: &mut Poll, token_factory: &mut TokenFactory) -> io::Result<()>;
+    fn reregister(&self, poll: &mut Poll, token_factory: &mut TokenFactory) -> io::Result<bool>;
 
-    fn unregister(&self, poll: &mut Poll) -> io::Result<()>;
+    fn unregister(&self, poll: &mut Poll) -> io::Result<bool>;
 }
 
 // An internal trait to erase the `F` type parameter of `DispatcherInner`

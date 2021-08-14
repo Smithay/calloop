@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::fmt::{self, Debug, Formatter};
 use std::io;
 use std::os::unix::io::AsRawFd;
@@ -7,11 +7,16 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::list::SourceList;
+use slotmap::SlotMap;
+
 use crate::sources::{Dispatcher, EventSource, Idle, IdleDispatcher};
-use crate::{Poll, PostAction, TokenFactory};
+use crate::{EventDispatcher, Poll, PostAction, TokenFactory};
 
 type IdleCallback<'i, Data> = Rc<RefCell<dyn IdleDispatcher<Data> + 'i>>;
+
+slotmap::new_key_type! {
+    pub(crate) struct CalloopKey;
+}
 
 /// A token representing a registration in the [`EventLoop`].
 ///
@@ -19,15 +24,16 @@ type IdleCallback<'i, Data> = Rc<RefCell<dyn IdleDispatcher<Data> + 'i>>;
 /// a [`Dispatcher`] is registered. You can use it to [disable](LoopHandle#method.disable),
 /// [enable](LoopHandle#method.enable), [update`](LoopHandle#method.update),
 /// [remove](LoopHandle#method.remove) or [kill](LoopHandle#method.kill) it.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct RegistrationToken {
-    id: u32,
+    key: CalloopKey,
 }
 
 pub(crate) struct LoopInner<'l, Data> {
     pub(crate) poll: RefCell<Poll>,
-    pub(crate) sources: RefCell<SourceList<'l, Data>>,
+    pub(crate) sources: RefCell<SlotMap<CalloopKey, Rc<dyn EventDispatcher<Data> + 'l>>>,
     idles: RefCell<Vec<IdleCallback<'l, Data>>>,
+    pending_action: Cell<PostAction>,
 }
 
 /// An handle to an event loop
@@ -130,18 +136,18 @@ impl<'l, Data> LoopHandle<'l, Data> {
         let mut sources = self.inner.sources.borrow_mut();
         let mut poll = self.inner.poll.borrow_mut();
 
-        let id = sources.add_source(dispatcher.clone_as_event_dispatcher());
+        let key = sources.insert(dispatcher.clone_as_event_dispatcher());
         let ret = sources
-            .get_dispatcher(id)
+            .get(key)
             .unwrap()
-            .register(&mut *poll, &mut TokenFactory::new(id));
+            .register(&mut *poll, &mut TokenFactory::new(key));
 
         if let Err(error) = ret {
-            sources.del_source(id).expect("Source was just inserted?!");
+            sources.remove(key).expect("Source was just inserted?!");
             return Err(error);
         }
 
-        Ok(RegistrationToken { id })
+        Ok(RegistrationToken { key })
     }
 
     /// Inserts an idle callback.
@@ -163,80 +169,57 @@ impl<'l, Data> LoopHandle<'l, Data> {
     ///
     /// This previously disabled source will start generating events again.
     ///
-    /// **Note**: This cannot be done from within the callback of the same source.
+    /// **Note:** this cannot be done from within the source callback.
     pub fn enable(&self, token: &RegistrationToken) -> io::Result<()> {
-        self.inner
-            .sources
-            .borrow()
-            .get_dispatcher(token.id)
-            .expect("Attempting to access a non-existent source?!")
-            .register(
+        if let Some(source) = self.inner.sources.borrow().get(token.key) {
+            source.register(
                 &mut *self.inner.poll.borrow_mut(),
-                &mut TokenFactory::new(token.id),
-            )
+                &mut TokenFactory::new(token.key),
+            )?;
+        }
+        Ok(())
     }
 
     /// Makes this source update its registration.
     ///
     /// If after accessing the source you changed its parameters in a way that requires
     /// updating its registration.
-    ///
-    /// **Note**: This cannot be done from within the callback of the same source.
     pub fn update(&self, token: &RegistrationToken) -> io::Result<()> {
-        self.inner
-            .sources
-            .borrow()
-            .get_dispatcher(token.id)
-            .expect("Attempting to access a non-existent source?!")
-            .reregister(
+        if let Some(source) = self.inner.sources.borrow().get(token.key) {
+            if !source.reregister(
                 &mut *self.inner.poll.borrow_mut(),
-                &mut TokenFactory::new(token.id),
-            )
+                &mut TokenFactory::new(token.key),
+            )? {
+                // we are in a callback, store for later processing
+                self.inner.pending_action.set(PostAction::Reregister);
+            }
+        }
+        Ok(())
     }
 
     /// Disables this event source.
     ///
     /// The source remains in the event loop, but it'll no longer generate events
-    ///
-    /// **Note**: This cannot be done from within the callback of the same source.
     pub fn disable(&self, token: &RegistrationToken) -> io::Result<()> {
-        self.inner
-            .sources
-            .borrow()
-            .get_dispatcher(token.id)
-            .expect("Attempting to access a non-existent source?!")
-            .unregister(&mut *self.inner.poll.borrow_mut())
-    }
-
-    /// Removes this source from the event loop.
-    ///
-    /// **Note**: This cannot be done from within the callback of the same source.
-    pub fn remove(&self, token: RegistrationToken) {
-        let source = self
-            .inner
-            .sources
-            .borrow_mut()
-            .del_source(token.id)
-            .expect("Attempting to remove a non-existent source?!");
-
-        if let Err(e) = source.unregister(&mut self.inner.poll.borrow_mut()) {
-            log::warn!(
-                "[calloop] Failed to unregister source from the polling system: {:?}",
-                e
-            );
+        if let Some(source) = self.inner.sources.borrow().get(token.key) {
+            if !source.unregister(&mut *self.inner.poll.borrow_mut())? {
+                // we are in a callback, store for later processing
+                self.inner.pending_action.set(PostAction::Disable);
+            }
         }
+        Ok(())
     }
 
     /// Removes this source from the event loop.
-    ///
-    /// **Note**: This can be done from within the callback of the same source.
-    pub fn kill(&self, token: RegistrationToken) {
-        let _source = self
-            .inner
-            .sources
-            .borrow_mut()
-            .del_source(token.id)
-            .expect("Attempting to remove a non-existent source?!");
+    pub fn remove(&self, token: RegistrationToken) {
+        if let Some(source) = self.inner.sources.borrow_mut().remove(token.key) {
+            if let Err(e) = source.unregister(&mut self.inner.poll.borrow_mut()) {
+                log::warn!(
+                    "[calloop] Failed to unregister source from the polling system: {:?}",
+                    e
+                );
+            }
+        }
     }
 
     /// Wrap an IO object into an async adapter
@@ -275,8 +258,9 @@ impl<'l, Data> EventLoop<'l, Data> {
         let handle = LoopHandle {
             inner: Rc::new(LoopInner {
                 poll: RefCell::new(poll),
-                sources: RefCell::new(SourceList::new()),
+                sources: RefCell::new(SlotMap::with_key()),
                 idles: RefCell::new(Vec::new()),
+                pending_action: Cell::new(PostAction::Continue),
             }),
         };
         let (ping, ping_source) = crate::sources::ping::make_ping()?;
@@ -328,16 +312,27 @@ impl<'l, Data> EventLoop<'l, Data> {
                 .inner
                 .sources
                 .borrow()
-                .get_dispatcher(event.token.id);
+                .get(event.token.key)
+                .cloned();
 
             if let Some(disp) = opt_disp {
-                let ret = disp.process_events(event.readiness, event.token, data)?;
+                let mut ret = disp.process_events(event.readiness, event.token, data)?;
+
+                // if the returned PostAction is Continue, it may be overwritten by an user-specified pending action
+                let pending_action = self
+                    .handle
+                    .inner
+                    .pending_action
+                    .replace(PostAction::Continue);
+                if let PostAction::Continue = ret {
+                    ret = pending_action;
+                }
 
                 match ret {
                     PostAction::Reregister => {
                         disp.reregister(
                             &mut self.handle.inner.poll.borrow_mut(),
-                            &mut TokenFactory::new(event.token.id),
+                            &mut TokenFactory::new(event.token.key),
                         )?;
                     }
                     PostAction::Disable => {
@@ -349,12 +344,18 @@ impl<'l, Data> EventLoop<'l, Data> {
                             .inner
                             .sources
                             .borrow_mut()
-                            .del_source(event.token.id);
+                            .remove(event.token.key);
                     }
                     PostAction::Continue => {}
                 }
 
-                if !self.handle.inner.sources.borrow().contains(event.token.id) {
+                if !self
+                    .handle
+                    .inner
+                    .sources
+                    .borrow()
+                    .contains_key(event.token.key)
+                {
                     // the source has been removed from within its callback, unregister it
                     let mut poll = self.handle.inner.poll.borrow_mut();
                     if let Err(e) = disp.unregister(&mut *poll) {
@@ -366,8 +367,8 @@ impl<'l, Data> EventLoop<'l, Data> {
                 }
             } else {
                 log::warn!(
-                    "[calloop] Received an event for non-existence source: {}",
-                    event.token.id
+                    "[calloop] Received an event for non-existence source: {:?}",
+                    event.token.key
                 );
             }
         }
@@ -553,33 +554,6 @@ mod tests {
 
         // the test should return
         event_loop.run(None, &mut (), |_| {}).unwrap();
-    }
-
-    #[test]
-    fn insert_remove() {
-        let mut event_loop = EventLoop::<()>::try_new().unwrap();
-        let dummy_token_1 = event_loop
-            .handle()
-            .insert_source(DummySource, |_, _, _| {})
-            .unwrap();
-        assert_eq!(dummy_token_1.id, 1); // numer 0 is the internal ping
-        let dummy_token_2 = event_loop
-            .handle()
-            .insert_source(DummySource, |_, _, _| {})
-            .unwrap();
-        assert_eq!(dummy_token_2.id, 2);
-        // ensure token reuse on source removal
-        event_loop.handle().remove(dummy_token_1);
-
-        event_loop
-            .dispatch(Duration::from_millis(0), &mut ())
-            .unwrap();
-
-        let dummy_token_3 = event_loop
-            .handle()
-            .insert_source(DummySource, |_, _, _| {})
-            .unwrap();
-        assert_eq!(dummy_token_3.id, 1);
     }
 
     #[test]
@@ -836,7 +810,7 @@ mod tests {
             .handle()
             .insert_source(ping_source, move |(), &mut (), opt_src| {
                 if let Some(src) = opt_src.take() {
-                    handle.kill(src);
+                    handle.remove(src);
                 }
             })
             .unwrap();
