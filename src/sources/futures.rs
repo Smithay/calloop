@@ -89,7 +89,7 @@ impl ArcWake for ExecWaker {
 ///
 /// May fail due to OS errors preventing calloop to setup its internal pipes (if your
 /// process has reatched its file descriptor limit for example).
-pub fn executor<T>() -> std::io::Result<(Executor<T>, Scheduler<T>)> {
+pub fn executor<T>() -> crate::Result<(Executor<T>, Scheduler<T>)> {
     let (ping, ready_futures) = make_ping()?;
     let (sender, new_futures) = channel();
     Ok((
@@ -113,7 +113,7 @@ impl<T> EventSource for Executor<T> {
         readiness: Readiness,
         token: Token,
         mut callback: F,
-    ) -> std::io::Result<PostAction>
+    ) -> crate::Result<PostAction>
     where
         F: FnMut(T, &mut ()),
     {
@@ -144,7 +144,7 @@ impl<T> EventSource for Executor<T> {
         &mut self,
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
-    ) -> std::io::Result<()> {
+    ) -> crate::Result<()> {
         self.new_futures.register(poll, token_factory)?;
         self.ready_futures.register(poll, token_factory)?;
         Ok(())
@@ -154,13 +154,13 @@ impl<T> EventSource for Executor<T> {
         &mut self,
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
-    ) -> std::io::Result<()> {
+    ) -> crate::Result<()> {
         self.new_futures.reregister(poll, token_factory)?;
         self.ready_futures.reregister(poll, token_factory)?;
         Ok(())
     }
 
-    fn unregister(&mut self, poll: &mut Poll) -> std::io::Result<()> {
+    fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
         self.new_futures.unregister(poll)?;
         self.ready_futures.unregister(poll)?;
         Ok(())
@@ -183,7 +183,6 @@ mod tests {
             .insert_source(exec, move |ret, &mut (), got| {
                 *got = ret;
             })
-            .map_err(Into::<std::io::Error>::into)
             .unwrap();
 
         let mut got = 0;

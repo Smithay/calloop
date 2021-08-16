@@ -40,7 +40,6 @@
 //! If you need to directly work with a [`RawFd`](std::os::unix::io::RawFd), rather than an
 //! FD-backed object, see [`Generic::from_fd`](Generic#method.from_fd).
 
-use std::io;
 use std::os::unix::io::AsRawFd;
 
 use crate::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
@@ -77,14 +76,14 @@ impl<F: AsRawFd> Generic<F> {
 impl<F: AsRawFd> EventSource for Generic<F> {
     type Event = Readiness;
     type Metadata = F;
-    type Ret = io::Result<PostAction>;
+    type Ret = crate::Result<PostAction>;
 
     fn process_events<C>(
         &mut self,
         readiness: Readiness,
         token: Token,
         mut callback: C,
-    ) -> std::io::Result<PostAction>
+    ) -> crate::Result<PostAction>
     where
         C: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
@@ -98,7 +97,7 @@ impl<F: AsRawFd> EventSource for Generic<F> {
         &mut self,
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
-    ) -> std::io::Result<()> {
+    ) -> crate::Result<()> {
         let token = Box::new(token_factory.token());
         unsafe {
             poll.register(
@@ -116,7 +115,7 @@ impl<F: AsRawFd> EventSource for Generic<F> {
         &mut self,
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
-    ) -> std::io::Result<()> {
+    ) -> crate::Result<()> {
         let token = Box::new(token_factory.token());
         unsafe {
             poll.reregister(
@@ -130,7 +129,7 @@ impl<F: AsRawFd> EventSource for Generic<F> {
         Ok(())
     }
 
-    fn unregister(&mut self, poll: &mut Poll) -> std::io::Result<()> {
+    fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
         poll.unregister(self.file.as_raw_fd())?;
         self.token = Box::new(Token::invalid());
         Ok(())
@@ -171,7 +170,6 @@ mod test {
                 *d = true;
                 Ok(PostAction::Continue)
             })
-            .map_err(Into::<io::Error>::into)
             .unwrap();
 
         event_loop
@@ -247,7 +245,6 @@ mod test {
                 *d = true;
                 Ok(PostAction::Continue)
             })
-            .map_err(Into::<io::Error>::into)
             .unwrap();
 
         event_loop

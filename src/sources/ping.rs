@@ -24,7 +24,7 @@ use crate::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, Tok
 /// you are given a [`Ping`] instance, which can be cloned and used to ping the
 /// event loop, and a [`PingSource`], which you can insert in your event loop to
 /// receive the pings.
-pub fn make_ping() -> std::io::Result<(Ping, PingSource)> {
+pub fn make_ping() -> crate::Result<(Ping, PingSource)> {
     let (read, write) = pipe2(OFlag::O_CLOEXEC | OFlag::O_NONBLOCK)?;
     let source = PingSource {
         pipe: Generic::new(read, Interest::READ, Mode::Level),
@@ -56,7 +56,7 @@ impl EventSource for PingSource {
         readiness: Readiness,
         token: Token,
         mut callback: C,
-    ) -> std::io::Result<PostAction>
+    ) -> crate::Result<PostAction>
     where
         C: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
@@ -72,16 +72,19 @@ impl EventSource for PingSource {
                         break;
                     }
                     Ok(_) => read_something = true,
+
                     Err(e) => {
                         let e: std::io::Error = e.into();
+
                         if e.kind() == std::io::ErrorKind::WouldBlock {
                             break;
                         // nothing more to read
                         } else {
                             // propagate error
-                            return Err(e);
+                            return Err(e.into());
                         }
                     }
+                    _ => unreachable!()
                 }
             }
             if read_something {
@@ -95,7 +98,7 @@ impl EventSource for PingSource {
         &mut self,
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
-    ) -> std::io::Result<()> {
+    ) -> crate::Result<()> {
         self.pipe.register(poll, token_factory)
     }
 
@@ -103,11 +106,11 @@ impl EventSource for PingSource {
         &mut self,
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
-    ) -> std::io::Result<()> {
+    ) -> crate::Result<()> {
         self.pipe.reregister(poll, token_factory)
     }
 
-    fn unregister(&mut self, poll: &mut Poll) -> std::io::Result<()> {
+    fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
         self.pipe.unregister(poll)
     }
 }

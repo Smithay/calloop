@@ -18,7 +18,6 @@ mod test {
     extern crate calloop;
     extern crate nix;
 
-    use std::io;
     use std::time::Duration;
 
     use self::calloop::signals::{Signal, Signals};
@@ -47,7 +46,6 @@ mod test {
                     *rcv = true;
                 },
             )
-            .map_err(Into::<io::Error>::into)
             .unwrap();
 
         // send ourselves a SIGUSR1

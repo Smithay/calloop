@@ -155,7 +155,7 @@ impl<T> EventSource for Channel<T> {
         readiness: Readiness,
         token: Token,
         mut callback: C,
-    ) -> std::io::Result<PostAction>
+    ) -> crate::Result<PostAction>
     where
         C: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
@@ -177,7 +177,7 @@ impl<T> EventSource for Channel<T> {
         &mut self,
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
-    ) -> std::io::Result<()> {
+    ) -> crate::Result<()> {
         self.source.register(poll, token_factory)
     }
 
@@ -185,11 +185,11 @@ impl<T> EventSource for Channel<T> {
         &mut self,
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
-    ) -> std::io::Result<()> {
+    ) -> crate::Result<()> {
         self.source.reregister(poll, token_factory)
     }
 
-    fn unregister(&mut self, poll: &mut Poll) -> std::io::Result<()> {
+    fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
         self.source.unregister(poll)
     }
 }
@@ -218,7 +218,6 @@ mod tests {
                     got.1 = true;
                 }
             })
-            .map_err(Into::<std::io::Error>::into)
             .unwrap();
 
         // nothing is sent, nothing is received
@@ -267,7 +266,6 @@ mod tests {
                     }
                 },
             )
-            .map_err(Into::<std::io::Error>::into)
             .unwrap();
 
         // nothing is sent, nothing is received

@@ -11,7 +11,6 @@
 //! they'll inherit their parent signal mask.
 
 use std::convert::TryFrom;
-use std::io;
 use std::os::raw::c_int;
 
 use nix::sys::signal::SigSet;
@@ -49,7 +48,7 @@ pub struct Signals {
 
 impl Signals {
     /// Create a new signal event source listening on the specified list of signals
-    pub fn new(signals: &[Signal]) -> io::Result<Signals> {
+    pub fn new(signals: &[Signal]) -> crate::Result<Signals> {
         let mut mask = SigSet::empty();
         for &s in signals {
             mask.add(s);
@@ -70,7 +69,7 @@ impl Signals {
     ///
     /// If this function returns an error, the signal mask of the thread may
     /// have still been changed.
-    pub fn add_signals(&mut self, signals: &[Signal]) -> io::Result<()> {
+    pub fn add_signals(&mut self, signals: &[Signal]) -> crate::Result<()> {
         for &s in signals {
             self.mask.add(s);
         }
@@ -83,7 +82,7 @@ impl Signals {
     ///
     /// If this function returns an error, the signal mask of the thread may
     /// have still been changed.
-    pub fn remove_signals(&mut self, signals: &[Signal]) -> io::Result<()> {
+    pub fn remove_signals(&mut self, signals: &[Signal]) -> crate::Result<()> {
         let mut removed = SigSet::empty();
         for &s in signals {
             self.mask.remove(s);
@@ -98,7 +97,7 @@ impl Signals {
     ///
     /// If this function returns an error, the signal mask of the thread may
     /// have still been changed.
-    pub fn set_signals(&mut self, signals: &[Signal]) -> io::Result<()> {
+    pub fn set_signals(&mut self, signals: &[Signal]) -> crate::Result<()> {
         let mut new_mask = SigSet::empty();
         for &s in signals {
             new_mask.add(s);
@@ -132,7 +131,7 @@ impl EventSource for Signals {
         readiness: Readiness,
         token: Token,
         mut callback: C,
-    ) -> std::io::Result<PostAction>
+    ) -> crate::Result<PostAction>
     where
         C: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
@@ -155,7 +154,7 @@ impl EventSource for Signals {
         &mut self,
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
-    ) -> std::io::Result<()> {
+    ) -> crate::Result<()> {
         self.sfd.register(poll, token_factory)
     }
 
@@ -163,11 +162,11 @@ impl EventSource for Signals {
         &mut self,
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
-    ) -> std::io::Result<()> {
+    ) -> crate::Result<()> {
         self.sfd.reregister(poll, token_factory)
     }
 
-    fn unregister(&mut self, poll: &mut Poll) -> std::io::Result<()> {
+    fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
         self.sfd.unregister(poll)
     }
 }

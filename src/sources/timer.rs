@@ -9,7 +9,6 @@
 
 use std::cell::RefCell;
 use std::collections::BinaryHeap;
-use std::io;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
@@ -32,7 +31,7 @@ pub struct Timer<T> {
 
 impl<T> Timer<T> {
     /// Create a new timer
-    pub fn new() -> std::io::Result<Timer<T>> {
+    pub fn new() -> crate::Result<Timer<T>> {
         let (scheduler, source) = TimerScheduler::new()?;
         let inner = TimerInner::new(scheduler);
         Ok(Timer {
@@ -114,7 +113,7 @@ impl<T> EventSource for Timer<T> {
         readiness: Readiness,
         token: Token,
         mut callback: C,
-    ) -> std::io::Result<PostAction>
+    ) -> crate::Result<PostAction>
     where
         C: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
@@ -143,7 +142,7 @@ impl<T> EventSource for Timer<T> {
         &mut self,
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
-    ) -> std::io::Result<()> {
+    ) -> crate::Result<()> {
         self.source.register(poll, token_factory)
     }
 
@@ -151,11 +150,11 @@ impl<T> EventSource for Timer<T> {
         &mut self,
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
-    ) -> std::io::Result<()> {
+    ) -> crate::Result<()> {
         self.source.reregister(poll, token_factory)
     }
 
-    fn unregister(&mut self, poll: &mut Poll) -> std::io::Result<()> {
+    fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
         self.source.unregister(poll)
     }
 }
@@ -288,7 +287,7 @@ struct TimerScheduler {
 type TimerSource = PingSource;
 
 impl TimerScheduler {
-    fn new() -> io::Result<(TimerScheduler, TimerSource)> {
+    fn new() -> crate::Result<(TimerScheduler, TimerSource)> {
         let current_deadline = Arc::new(Mutex::new(None::<Instant>));
         let thread_deadline = current_deadline.clone();
 
@@ -363,7 +362,6 @@ impl Drop for TimerScheduler {
 
 #[cfg(test)]
 mod tests {
-    use std::io;
     use std::time::Duration;
 
     use super::*;
@@ -382,7 +380,6 @@ mod tests {
             .insert_source(timer, move |(), _, f| {
                 *f = true;
             })
-            .map_err(Into::<io::Error>::into)
             .unwrap();
 
         timer_handle.add_timeout(Duration::from_millis(300), ());
@@ -415,7 +412,6 @@ mod tests {
             .insert_source(timer, |val, _, fired: &mut Vec<u32>| {
                 fired.push(val);
             })
-            .map_err(Into::<io::Error>::into)
             .unwrap();
 
         timer_handle.add_timeout(Duration::from_millis(300), 1);
@@ -456,7 +452,6 @@ mod tests {
 
         evl_handle
             .insert_source(timer, |val, _, fired: &mut Vec<u32>| fired.push(val))
-            .map_err(Into::<io::Error>::into)
             .unwrap();
 
         let timeout1 = timer_handle.add_timeout(Duration::from_millis(300), 1);
