@@ -1,6 +1,5 @@
 use std::{
     cell::{Ref, RefCell, RefMut},
-    io,
     rc::Rc,
 };
 
@@ -72,6 +71,9 @@ pub trait EventSource {
     ///
     /// Set to `()` if not needed.
     type Ret;
+    /// The error type returned from [`process_events()`] (not the user
+    /// callback!).
+    type Error: Into<Box<dyn std::error::Error + Sync + Send>>;
 
     /// Process any relevant events
     ///
@@ -88,7 +90,7 @@ pub trait EventSource {
         readiness: Readiness,
         token: Token,
         callback: F,
-    ) -> std::io::Result<PostAction>
+    ) -> Result<PostAction, Self::Error>
     where
         F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret;
 
@@ -99,25 +101,29 @@ pub trait EventSource {
     ///
     /// If you need to register more than one file descriptor, you can change the
     /// `sub_id` field of the [`Token`](crate::Token) to differentiate between them.
-    fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> io::Result<()>;
+    fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()>;
 
     /// Re-register your file descriptors
     ///
     /// Your should update the registration of all your relevant file descriptor to
     /// the provided [`Poll`](crate::Poll) using its [`Poll::reregister`](crate::Poll#method.reregister),
     /// if necessary.
-    fn reregister(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> io::Result<()>;
+    fn reregister(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> crate::Result<()>;
 
     /// Unregister your file descriptors
     ///
     /// You should unregister all your file descriptors from this [`Poll`](crate::Poll) using its
     /// [`Poll::unregister`](crate::Poll#method.unregister) method.
-    fn unregister(&mut self, poll: &mut Poll) -> io::Result<()>;
+    fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()>;
 
     /// Notification that a polling session is going to start
     ///
     /// You can generate events from this method as you would from `process_events`.
-    fn pre_run<F>(&mut self, _callback: F) -> io::Result<()>
+    fn pre_run<F>(&mut self, _callback: F) -> crate::Result<()>
     where
         F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
@@ -127,7 +133,7 @@ pub trait EventSource {
     /// Notification that the current polling session ended
     ///
     /// You can generate events from this method as you would from `process_events`.
-    fn post_run<F>(&mut self, _callback: F) -> io::Result<()>
+    fn post_run<F>(&mut self, _callback: F) -> crate::Result<()>
     where
         F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
@@ -150,20 +156,22 @@ where
         readiness: Readiness,
         token: Token,
         data: &mut Data,
-    ) -> std::io::Result<PostAction> {
+    ) -> crate::Result<PostAction> {
         let mut disp = self.borrow_mut();
         let DispatcherInner {
             ref mut source,
             ref mut callback,
         } = *disp;
-        source.process_events(readiness, token, |event, meta| callback(event, meta, data))
+        source
+            .process_events(readiness, token, |event, meta| callback(event, meta, data))
+            .map_err(|e| crate::Error::OtherError(e.into()))
     }
 
-    fn register(&self, poll: &mut Poll, token_factory: &mut TokenFactory) -> io::Result<()> {
+    fn register(&self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
         self.borrow_mut().source.register(poll, token_factory)
     }
 
-    fn reregister(&self, poll: &mut Poll, token_factory: &mut TokenFactory) -> io::Result<bool> {
+    fn reregister(&self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<bool> {
         if let Ok(mut me) = self.try_borrow_mut() {
             me.source.reregister(poll, token_factory)?;
             Ok(true)
@@ -172,7 +180,7 @@ where
         }
     }
 
-    fn unregister(&self, poll: &mut Poll) -> io::Result<bool> {
+    fn unregister(&self, poll: &mut Poll) -> crate::Result<bool> {
         if let Ok(mut me) = self.try_borrow_mut() {
             me.source.unregister(poll)?;
             Ok(true)
@@ -181,7 +189,7 @@ where
         }
     }
 
-    fn pre_run(&self, data: &mut Data) -> io::Result<()> {
+    fn pre_run(&self, data: &mut Data) -> crate::Result<()> {
         let mut disp = self.borrow_mut();
         let DispatcherInner {
             ref mut source,
@@ -190,7 +198,7 @@ where
         source.pre_run(|event, meta| callback(event, meta, data))
     }
 
-    fn post_run(&self, data: &mut Data) -> io::Result<()> {
+    fn post_run(&self, data: &mut Data) -> crate::Result<()> {
         let mut disp = self.borrow_mut();
         let DispatcherInner {
             ref mut source,
@@ -206,17 +214,17 @@ pub(crate) trait EventDispatcher<Data> {
         readiness: Readiness,
         token: Token,
         data: &mut Data,
-    ) -> std::io::Result<PostAction>;
+    ) -> crate::Result<PostAction>;
 
-    fn register(&self, poll: &mut Poll, token_factory: &mut TokenFactory) -> io::Result<()>;
+    fn register(&self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()>;
 
-    fn reregister(&self, poll: &mut Poll, token_factory: &mut TokenFactory) -> io::Result<bool>;
+    fn reregister(&self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<bool>;
 
-    fn unregister(&self, poll: &mut Poll) -> io::Result<bool>;
+    fn unregister(&self, poll: &mut Poll) -> crate::Result<bool>;
 
-    fn pre_run(&self, data: &mut Data) -> io::Result<()>;
+    fn pre_run(&self, data: &mut Data) -> crate::Result<()>;
 
-    fn post_run(&self, data: &mut Data) -> io::Result<()>;
+    fn post_run(&self, data: &mut Data) -> crate::Result<()>;
 }
 
 // An internal trait to erase the `F` type parameter of `DispatcherInner`

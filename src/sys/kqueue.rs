@@ -17,7 +17,7 @@ fn mode_to_flag(mode: Mode) -> EventFlag {
 }
 
 impl Kqueue {
-    pub(crate) fn new() -> io::Result<Kqueue> {
+    pub(crate) fn new() -> crate::Result<Kqueue> {
         let kq = kqueue()?;
         Ok(Kqueue { kq })
     }
@@ -25,7 +25,7 @@ impl Kqueue {
     pub(crate) fn poll(
         &mut self,
         timeout: Option<std::time::Duration>,
-    ) -> io::Result<Vec<PollEvent>> {
+    ) -> crate::Result<Vec<PollEvent>> {
         let mut buffer = [KEvent::new(
             0,
             EventFilter::EVFILT_READ,
@@ -61,7 +61,7 @@ impl Kqueue {
         interest: Interest,
         mode: Mode,
         token: *const Token,
-    ) -> io::Result<()> {
+    ) -> crate::Result<()> {
         self.reregister(fd, interest, mode, token)
     }
 
@@ -71,7 +71,7 @@ impl Kqueue {
         interest: Interest,
         mode: Mode,
         token: *const Token,
-    ) -> io::Result<()> {
+    ) -> crate::Result<()> {
         let write_flags = if interest.writable {
             EventFlag::EV_ADD | EventFlag::EV_RECEIPT | mode_to_flag(mode)
         } else {
@@ -128,14 +128,14 @@ impl Kqueue {
                 let e = io::Error::from_raw_os_error(o.data() as i32);
                 // ignore NotFound error which is raised if we tried to remove a non-existent filter
                 if e.kind() != io::ErrorKind::NotFound {
-                    return Err(e);
+                    return Err(e.into());
                 }
             }
         }
         Ok(())
     }
 
-    pub fn unregister(&mut self, fd: RawFd) -> io::Result<()> {
+    pub fn unregister(&mut self, fd: RawFd) -> crate::Result<()> {
         let changes = [
             KEvent::new(
                 fd as usize,
@@ -184,7 +184,7 @@ impl Kqueue {
                 let e = io::Error::from_raw_os_error(o.data() as i32);
                 // ignore NotFound error which is raised if we tried to remove a non-existent filter
                 if e.kind() != io::ErrorKind::NotFound {
-                    return Err(e);
+                    return Err(e.into());
                 } else {
                     notfound += 1;
                 }
@@ -192,7 +192,7 @@ impl Kqueue {
         }
 
         if notfound == 2 {
-            return Err(io::ErrorKind::NotFound.into());
+            return Err(std::io::Error::from(io::ErrorKind::NotFound).into());
         }
 
         Ok(())
