@@ -40,14 +40,13 @@
 //! If you need to directly work with a [`RawFd`](std::os::unix::io::RawFd), rather than an
 //! FD-backed object, see [`Generic::from_fd`](Generic#method.from_fd).
 
-use std::io;
-use std::os::unix::io::AsRawFd;
+use std::{marker::PhantomData, os::unix::io::AsRawFd};
 
 use crate::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
 
 /// A generic event source wrapping a FD-backed type
 #[derive(Debug)]
-pub struct Generic<F: AsRawFd> {
+pub struct Generic<F: AsRawFd, E = std::io::Error> {
     /// The wrapped FD-backed type
     pub file: F,
     /// The programmed interest
@@ -55,36 +54,59 @@ pub struct Generic<F: AsRawFd> {
     /// The programmed mode
     pub mode: Mode,
     token: Box<Token>,
+
+    // This allows us to make the associated error and return types generic.
+    _error_type: PhantomData<E>,
 }
 
-impl<F: AsRawFd> Generic<F> {
-    /// Wrap a FD-backed type into a `Generic` event source
-    pub fn new(file: F, interest: Interest, mode: Mode) -> Generic<F> {
+impl<F: AsRawFd> Generic<F, std::io::Error> {
+    /// Wrap a FD-backed type into a `Generic` event source that uses
+    /// [`std::io::Error`] as its error type.
+    pub fn new(file: F, interest: Interest, mode: Mode) -> Generic<F, std::io::Error> {
         Generic {
             file,
             interest,
             mode,
             token: Box::new(Token::invalid()),
+            _error_type: PhantomData::default(),
         }
     }
 
+    /// Wrap a FD-backed type into a `Generic` event source using an arbitrary error type.
+    pub fn new_with_error<E>(file: F, interest: Interest, mode: Mode) -> Generic<F, E> {
+        Generic {
+            file,
+            interest,
+            mode,
+            token: Box::new(Token::invalid()),
+            _error_type: PhantomData::default(),
+        }
+    }
+}
+
+impl<F: AsRawFd, E> Generic<F, E> {
     /// Unwrap the `Generic` source to retrieve the underlying type
     pub fn unwrap(self) -> F {
         self.file
     }
 }
 
-impl<F: AsRawFd> EventSource for Generic<F> {
+impl<F, E> EventSource for Generic<F, E>
+where
+    F: AsRawFd,
+    E: Into<Box<dyn std::error::Error + Send + Sync>>,
+{
     type Event = Readiness;
     type Metadata = F;
-    type Ret = io::Result<PostAction>;
+    type Ret = Result<PostAction, E>;
+    type Error = E;
 
     fn process_events<C>(
         &mut self,
         readiness: Readiness,
         token: Token,
         mut callback: C,
-    ) -> std::io::Result<PostAction>
+    ) -> Result<PostAction, Self::Error>
     where
         C: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
@@ -94,11 +116,7 @@ impl<F: AsRawFd> EventSource for Generic<F> {
         callback(readiness, &mut self.file)
     }
 
-    fn register(
-        &mut self,
-        poll: &mut Poll,
-        token_factory: &mut TokenFactory,
-    ) -> std::io::Result<()> {
+    fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
         let token = Box::new(token_factory.token());
         unsafe {
             poll.register(
@@ -116,7 +134,7 @@ impl<F: AsRawFd> EventSource for Generic<F> {
         &mut self,
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
-    ) -> std::io::Result<()> {
+    ) -> crate::Result<()> {
         let token = Box::new(token_factory.token());
         unsafe {
             poll.reregister(
@@ -130,7 +148,7 @@ impl<F: AsRawFd> EventSource for Generic<F> {
         Ok(())
     }
 
-    fn unregister(&mut self, poll: &mut Poll) -> std::io::Result<()> {
+    fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
         poll.unregister(self.file.as_raw_fd())?;
         self.token = Box::new(Token::invalid());
         Ok(())
@@ -139,7 +157,7 @@ impl<F: AsRawFd> EventSource for Generic<F> {
 
 #[cfg(test)]
 mod test {
-    use std::io::{self, Read, Write};
+    use std::io::{Read, Write};
 
     use super::Generic;
     use crate::{Dispatcher, Interest, Mode, PostAction};
@@ -171,7 +189,6 @@ mod test {
                 *d = true;
                 Ok(PostAction::Continue)
             })
-            .map_err(Into::<io::Error>::into)
             .unwrap();
 
         event_loop
@@ -247,7 +264,6 @@ mod test {
                 *d = true;
                 Ok(PostAction::Continue)
             })
-            .map_err(Into::<io::Error>::into)
             .unwrap();
 
         event_loop

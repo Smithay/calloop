@@ -1,4 +1,4 @@
-use std::{io, os::unix::io::RawFd};
+use std::os::unix::io::RawFd;
 
 use crate::loop_logic::CalloopKey;
 
@@ -187,7 +187,7 @@ impl std::fmt::Debug for Poll {
 }
 
 impl Poll {
-    pub(crate) fn new() -> io::Result<Poll> {
+    pub(crate) fn new() -> crate::Result<Poll> {
         Ok(Poll {
             poller: Poller::new()?,
         })
@@ -196,7 +196,7 @@ impl Poll {
     pub(crate) fn poll(
         &mut self,
         timeout: Option<std::time::Duration>,
-    ) -> io::Result<Vec<PollEvent>> {
+    ) -> crate::Result<Vec<PollEvent>> {
         self.poller.poll(timeout)
     }
 
@@ -217,12 +217,9 @@ impl Poll {
         interest: Interest,
         mode: Mode,
         token: *const Token,
-    ) -> io::Result<()> {
+    ) -> crate::Result<()> {
         if (*token).is_invalid() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "Invalid Token provided to register().",
-            ));
+            return Err(crate::Error::InvalidToken);
         }
         self.poller.register(fd, interest, mode, token)
     }
@@ -242,12 +239,9 @@ impl Poll {
         interest: Interest,
         mode: Mode,
         token: *const Token,
-    ) -> io::Result<()> {
+    ) -> crate::Result<()> {
         if (*token).is_invalid() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "Invalid Token provided to reregister().",
-            ));
+            return Err(crate::Error::InvalidToken);
         }
         self.poller.reregister(fd, interest, mode, token)
     }
@@ -256,7 +250,7 @@ impl Poll {
     ///
     /// This file descriptor will no longer generate events. Fails if the
     /// provided file descriptor is not currently registered.
-    pub fn unregister(&mut self, fd: RawFd) -> io::Result<()> {
+    pub fn unregister(&mut self, fd: RawFd) -> crate::Result<()> {
         self.poller.unregister(fd)
     }
 }

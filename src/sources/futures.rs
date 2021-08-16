@@ -26,8 +26,8 @@ use futures_util::{
 
 use crate::{
     sources::{
-        channel::{channel, Channel, Event, Sender},
-        ping::{make_ping, Ping, PingSource},
+        channel::{channel, Channel, ChannelError, Event, Sender},
+        ping::{make_ping, Ping, PingError, PingSource},
         EventSource,
     },
     Poll, PostAction, Readiness, Token, TokenFactory,
@@ -63,16 +63,9 @@ impl<T> Scheduler<T> {
 
 /// Error generated when trying to schedule a future after the
 /// executor was destroyed.
-#[derive(Debug)]
+#[derive(thiserror::Error, Debug)]
+#[error("the executor was destroyed")]
 pub struct ExecutorDestroyed;
-
-impl std::error::Error for ExecutorDestroyed {}
-
-impl std::fmt::Display for ExecutorDestroyed {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("The executor was destroyed.")
-    }
-}
 
 #[derive(Debug)]
 struct ExecWaker {
@@ -89,7 +82,7 @@ impl ArcWake for ExecWaker {
 ///
 /// May fail due to OS errors preventing calloop to setup its internal pipes (if your
 /// process has reatched its file descriptor limit for example).
-pub fn executor<T>() -> std::io::Result<(Executor<T>, Scheduler<T>)> {
+pub fn executor<T>() -> crate::Result<(Executor<T>, Scheduler<T>)> {
     let (ping, ready_futures) = make_ping()?;
     let (sender, new_futures) = channel();
     Ok((
@@ -107,13 +100,14 @@ impl<T> EventSource for Executor<T> {
     type Event = T;
     type Metadata = ();
     type Ret = ();
+    type Error = ExecutorError;
 
     fn process_events<F>(
         &mut self,
         readiness: Readiness,
         token: Token,
         mut callback: F,
-    ) -> std::io::Result<PostAction>
+    ) -> Result<PostAction, Self::Error>
     where
         F: FnMut(T, &mut ()),
     {
@@ -124,11 +118,13 @@ impl<T> EventSource for Executor<T> {
                 if let Event::Msg(fut) = evt {
                     futures.push(fut);
                 }
-            })?;
+            })
+            .map_err(ExecutorError::NewFutureError)?;
 
         // process ping events to make it non-ready again
         self.ready_futures
-            .process_events(readiness, token, |(), _| {})?;
+            .process_events(readiness, token, |(), _| {})
+            .map_err(ExecutorError::WakeError)?;
 
         // advance all available futures as much as possible
         let waker = waker_ref(&self.waker);
@@ -140,11 +136,7 @@ impl<T> EventSource for Executor<T> {
         Ok(PostAction::Continue)
     }
 
-    fn register(
-        &mut self,
-        poll: &mut Poll,
-        token_factory: &mut TokenFactory,
-    ) -> std::io::Result<()> {
+    fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
         self.new_futures.register(poll, token_factory)?;
         self.ready_futures.register(poll, token_factory)?;
         Ok(())
@@ -154,17 +146,29 @@ impl<T> EventSource for Executor<T> {
         &mut self,
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
-    ) -> std::io::Result<()> {
+    ) -> crate::Result<()> {
         self.new_futures.reregister(poll, token_factory)?;
         self.ready_futures.reregister(poll, token_factory)?;
         Ok(())
     }
 
-    fn unregister(&mut self, poll: &mut Poll) -> std::io::Result<()> {
+    fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
         self.new_futures.unregister(poll)?;
         self.ready_futures.unregister(poll)?;
         Ok(())
     }
+}
+
+/// An error arising from processing events in an async executor event source.
+#[derive(thiserror::Error, Debug)]
+pub enum ExecutorError {
+    /// Error while reading new futures added via [`Executor::schedule()`].
+    #[error("error adding new futures")]
+    NewFutureError(ChannelError),
+
+    /// Error while processing wake events from existing futures.
+    #[error("error processing wake events")]
+    WakeError(PingError),
 }
 
 #[cfg(test)]
@@ -183,7 +187,6 @@ mod tests {
             .insert_source(exec, move |ret, &mut (), got| {
                 *got = ret;
             })
-            .map_err(Into::<std::io::Error>::into)
             .unwrap();
 
         let mut got = 0;

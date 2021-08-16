@@ -7,7 +7,6 @@
 //! [`LoopHandle::adapt_io`]: crate::LoopHandle#method.adapt_io
 
 use std::cell::RefCell;
-use std::io;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::pin::Pin;
 use std::rc::Rc;
@@ -46,10 +45,7 @@ impl<'l, F: AsRawFd + std::fmt::Debug> std::fmt::Debug for Async<'l, F> {
 }
 
 impl<'l, F: AsRawFd> Async<'l, F> {
-    pub(crate) fn new<Data>(
-        inner: Rc<LoopInner<'l, Data>>,
-        fd: F,
-    ) -> std::io::Result<Async<'l, F>> {
+    pub(crate) fn new<Data>(inner: Rc<LoopInner<'l, Data>>, fd: F) -> crate::Result<Async<'l, F>> {
         let rawfd = fd.as_raw_fd();
         // set non-blocking
         let old_flags = fcntl(rawfd, FcntlArg::F_GETFL)?;
@@ -105,7 +101,7 @@ impl<'l, F: AsRawFd> Async<'l, F> {
         self.dispatcher.borrow_mut().readiness()
     }
 
-    fn register_waker(&self, interest: Interest, waker: Waker) -> std::io::Result<()> {
+    fn register_waker(&self, interest: Interest, waker: Waker) -> crate::Result<()> {
         {
             let mut disp = self.dispatcher.borrow_mut();
             disp.interest = interest;
@@ -169,13 +165,13 @@ impl<'l, F: AsRawFd> Drop for Async<'l, F> {
 impl<'l, F: AsRawFd> Unpin for Async<'l, F> {}
 
 trait IoLoopInner {
-    fn register(&self, dispatcher: &RefCell<IoDispatcher>) -> io::Result<()>;
-    fn reregister(&self, dispatcher: &RefCell<IoDispatcher>) -> io::Result<()>;
+    fn register(&self, dispatcher: &RefCell<IoDispatcher>) -> crate::Result<()>;
+    fn reregister(&self, dispatcher: &RefCell<IoDispatcher>) -> crate::Result<()>;
     fn kill(&self, dispatcher: &RefCell<IoDispatcher>);
 }
 
 impl<'l, Data> IoLoopInner for LoopInner<'l, Data> {
-    fn register(&self, dispatcher: &RefCell<IoDispatcher>) -> io::Result<()> {
+    fn register(&self, dispatcher: &RefCell<IoDispatcher>) -> crate::Result<()> {
         let disp = dispatcher.borrow();
         unsafe {
             self.poll.borrow_mut().register(
@@ -187,7 +183,7 @@ impl<'l, Data> IoLoopInner for LoopInner<'l, Data> {
         }
     }
 
-    fn reregister(&self, dispatcher: &RefCell<IoDispatcher>) -> io::Result<()> {
+    fn reregister(&self, dispatcher: &RefCell<IoDispatcher>) -> crate::Result<()> {
         let disp = dispatcher.borrow();
         unsafe {
             self.poll.borrow_mut().reregister(
@@ -230,7 +226,7 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
         readiness: Readiness,
         _token: Token,
         _data: &mut Data,
-    ) -> std::io::Result<PostAction> {
+    ) -> crate::Result<PostAction> {
         let mut disp = self.borrow_mut();
         disp.last_readiness = readiness;
         if let Some(waker) = disp.waker.take() {
@@ -239,17 +235,17 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
         Ok(PostAction::Continue)
     }
 
-    fn register(&self, _: &mut Poll, _: &mut TokenFactory) -> std::io::Result<()> {
+    fn register(&self, _: &mut Poll, _: &mut TokenFactory) -> crate::Result<()> {
         // registration is handled by IoLoopInner
         unreachable!()
     }
 
-    fn reregister(&self, _: &mut Poll, _: &mut TokenFactory) -> std::io::Result<bool> {
+    fn reregister(&self, _: &mut Poll, _: &mut TokenFactory) -> crate::Result<bool> {
         // registration is handled by IoLoopInner
         unreachable!()
     }
 
-    fn unregister(&self, poll: &mut Poll) -> std::io::Result<bool> {
+    fn unregister(&self, poll: &mut Poll) -> crate::Result<bool> {
         let disp = self.borrow();
         if disp.is_registered {
             poll.unregister(disp.fd)?;
@@ -257,10 +253,10 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
         Ok(true)
     }
 
-    fn pre_run(&self, _data: &mut Data) -> std::io::Result<()> {
+    fn pre_run(&self, _data: &mut Data) -> crate::Result<()> {
         Ok(())
     }
-    fn post_run(&self, _data: &mut Data) -> std::io::Result<()> {
+    fn post_run(&self, _data: &mut Data) -> crate::Result<()> {
         Ok(())
     }
 }
@@ -270,14 +266,14 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
  */
 
 #[cfg(feature = "futures-io")]
-impl<'l, F: AsRawFd + io::Read> AsyncRead for Async<'l, F> {
+impl<'l, F: AsRawFd + std::io::Read> AsyncRead for Async<'l, F> {
     fn poll_read(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut [u8],
-    ) -> TaskPoll<io::Result<usize>> {
+    ) -> TaskPoll<std::io::Result<usize>> {
         match (*self).get_mut().read(buf) {
-            Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
+            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {}
             res => return TaskPoll::Ready(res),
         }
         self.register_waker(Interest::READ, cx.waker().clone())?;
@@ -288,9 +284,9 @@ impl<'l, F: AsRawFd + io::Read> AsyncRead for Async<'l, F> {
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         bufs: &mut [IoSliceMut<'_>],
-    ) -> TaskPoll<io::Result<usize>> {
+    ) -> TaskPoll<std::io::Result<usize>> {
         match (*self).get_mut().read_vectored(bufs) {
-            Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
+            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {}
             res => return TaskPoll::Ready(res),
         }
         self.register_waker(Interest::READ, cx.waker().clone())?;
@@ -299,14 +295,14 @@ impl<'l, F: AsRawFd + io::Read> AsyncRead for Async<'l, F> {
 }
 
 #[cfg(feature = "futures-io")]
-impl<'l, F: AsRawFd + io::Write> AsyncWrite for Async<'l, F> {
+impl<'l, F: AsRawFd + std::io::Write> AsyncWrite for Async<'l, F> {
     fn poll_write(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
-    ) -> TaskPoll<io::Result<usize>> {
+    ) -> TaskPoll<std::io::Result<usize>> {
         match (*self).get_mut().write(buf) {
-            Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
+            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {}
             res => return TaskPoll::Ready(res),
         }
         self.register_waker(Interest::WRITE, cx.waker().clone())?;
@@ -317,25 +313,25 @@ impl<'l, F: AsRawFd + io::Write> AsyncWrite for Async<'l, F> {
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         bufs: &[IoSlice<'_>],
-    ) -> TaskPoll<io::Result<usize>> {
+    ) -> TaskPoll<std::io::Result<usize>> {
         match (*self).get_mut().write_vectored(bufs) {
-            Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
+            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {}
             res => return TaskPoll::Ready(res),
         }
         self.register_waker(Interest::WRITE, cx.waker().clone())?;
         TaskPoll::Pending
     }
 
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> TaskPoll<io::Result<()>> {
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> TaskPoll<std::io::Result<()>> {
         match (*self).get_mut().flush() {
-            Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
+            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {}
             res => return TaskPoll::Ready(res),
         }
         self.register_waker(Interest::WRITE, cx.waker().clone())?;
         TaskPoll::Pending
     }
 
-    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> TaskPoll<io::Result<()>> {
+    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> TaskPoll<std::io::Result<()>> {
         self.poll_flush(cx)
     }
 }
@@ -355,7 +351,6 @@ mod tests {
             .insert_source(exec, move |ret, &mut (), got| {
                 *got = ret;
             })
-            .map_err(Into::<std::io::Error>::into)
             .unwrap();
 
         let (tx, rx) = std::os::unix::net::UnixStream::pair().unwrap();
@@ -401,7 +396,6 @@ mod tests {
             .insert_source(exec, move |ret, &mut (), got| {
                 *got = ret;
             })
-            .map_err(Into::<std::io::Error>::into)
             .unwrap();
 
         let (tx, rx) = std::os::unix::net::UnixStream::pair().unwrap();

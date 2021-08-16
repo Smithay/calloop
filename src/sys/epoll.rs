@@ -1,4 +1,4 @@
-use std::{io, os::unix::io::RawFd};
+use std::os::unix::io::RawFd;
 
 use super::{Interest, Mode, PollEvent, Readiness, Token};
 
@@ -33,7 +33,7 @@ fn flags_to_readiness(flags: epoll::EpollFlags) -> Readiness {
 }
 
 impl Epoll {
-    pub(crate) fn new() -> io::Result<Epoll> {
+    pub(crate) fn new() -> crate::Result<Epoll> {
         let epoll_fd = epoll::epoll_create1(epoll::EpollCreateFlags::EPOLL_CLOEXEC)?;
         Ok(Epoll { epoll_fd })
     }
@@ -41,7 +41,7 @@ impl Epoll {
     pub(crate) fn poll(
         &mut self,
         timeout: Option<std::time::Duration>,
-    ) -> io::Result<Vec<PollEvent>> {
+    ) -> crate::Result<Vec<PollEvent>> {
         let mut buffer = [epoll::EpollEvent::empty(); 32];
         let timeout = timeout.map(|d| d.as_millis() as isize).unwrap_or(-1);
         let n_ready = epoll::epoll_wait(self.epoll_fd, &mut buffer, timeout)?;
@@ -62,7 +62,7 @@ impl Epoll {
         interest: Interest,
         mode: Mode,
         token: *const Token,
-    ) -> io::Result<()> {
+    ) -> crate::Result<()> {
         let mut event = epoll::EpollEvent::new(make_flags(interest, mode), token as usize as u64);
         epoll::epoll_ctl(self.epoll_fd, epoll::EpollOp::EpollCtlAdd, fd, &mut event)
             .map_err(Into::into)
@@ -74,13 +74,13 @@ impl Epoll {
         interest: Interest,
         mode: Mode,
         token: *const Token,
-    ) -> io::Result<()> {
+    ) -> crate::Result<()> {
         let mut event = epoll::EpollEvent::new(make_flags(interest, mode), token as usize as u64);
         epoll::epoll_ctl(self.epoll_fd, epoll::EpollOp::EpollCtlMod, fd, &mut event)
             .map_err(Into::into)
     }
 
-    pub fn unregister(&mut self, fd: RawFd) -> io::Result<()> {
+    pub fn unregister(&mut self, fd: RawFd) -> crate::Result<()> {
         epoll::epoll_ctl(self.epoll_fd, epoll::EpollOp::EpollCtlDel, fd, None).map_err(Into::into)
     }
 }

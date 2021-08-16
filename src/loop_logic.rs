@@ -1,5 +1,5 @@
 use std::cell::{Cell, RefCell};
-use std::fmt::{self, Debug, Formatter};
+use std::fmt::Debug;
 use std::io;
 use std::os::unix::io::AsRawFd;
 use std::rc::Rc;
@@ -10,7 +10,7 @@ use std::time::Duration;
 use slotmap::SlotMap;
 
 use crate::sources::{Dispatcher, EventSource, Idle, IdleDispatcher};
-use crate::{EventDispatcher, Poll, PostAction, TokenFactory};
+use crate::{EventDispatcher, InsertError, Poll, PostAction, TokenFactory};
 
 type IdleCallback<'i, Data> = Rc<RefCell<dyn IdleDispatcher<Data> + 'i>>;
 
@@ -60,42 +60,6 @@ impl<'l, Data> Clone for LoopHandle<'l, Data> {
     }
 }
 
-/// An error generated when trying to insert an event source
-pub struct InsertError<E> {
-    /// The source that could not be inserted
-    pub source: E,
-    /// The generated error
-    pub error: io::Error,
-}
-
-#[cfg(not(tarpaulin_include))]
-impl<E> Debug for InsertError<E> {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(formatter, "{:?}", self.error)
-    }
-}
-
-#[cfg(not(tarpaulin_include))]
-impl<E> std::fmt::Display for InsertError<E> {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(formatter, "{}", self.error)
-    }
-}
-
-#[cfg(not(tarpaulin_include))]
-impl<E> From<InsertError<E>> for io::Error {
-    fn from(e: InsertError<E>) -> io::Error {
-        e.error
-    }
-}
-
-#[cfg(not(tarpaulin_include))]
-impl<E> std::error::Error for InsertError<E> {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.error.source()
-    }
-}
-
 impl<'l, Data> LoopHandle<'l, Data> {
     /// Inserts a new event source in the loop.
     ///
@@ -117,7 +81,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
         self.register_dispatcher(dispatcher.clone())
             .map_err(|error| InsertError {
                 error,
-                source: dispatcher.into_source_inner(),
+                inserted: dispatcher.into_source_inner(),
             })
     }
 
@@ -129,7 +93,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
     pub fn register_dispatcher<S>(
         &self,
         dispatcher: Dispatcher<'l, S, Data>,
-    ) -> io::Result<RegistrationToken>
+    ) -> crate::Result<RegistrationToken>
     where
         S: EventSource + 'l,
     {
@@ -170,7 +134,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
     /// This previously disabled source will start generating events again.
     ///
     /// **Note:** this cannot be done from within the source callback.
-    pub fn enable(&self, token: &RegistrationToken) -> io::Result<()> {
+    pub fn enable(&self, token: &RegistrationToken) -> crate::Result<()> {
         if let Some(source) = self.inner.sources.borrow().get(token.key) {
             source.register(
                 &mut *self.inner.poll.borrow_mut(),
@@ -184,7 +148,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
     ///
     /// If after accessing the source you changed its parameters in a way that requires
     /// updating its registration.
-    pub fn update(&self, token: &RegistrationToken) -> io::Result<()> {
+    pub fn update(&self, token: &RegistrationToken) -> crate::Result<()> {
         if let Some(source) = self.inner.sources.borrow().get(token.key) {
             if !source.reregister(
                 &mut *self.inner.poll.borrow_mut(),
@@ -200,7 +164,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
     /// Disables this event source.
     ///
     /// The source remains in the event loop, but it'll no longer generate events
-    pub fn disable(&self, token: &RegistrationToken) -> io::Result<()> {
+    pub fn disable(&self, token: &RegistrationToken) -> crate::Result<()> {
         if let Some(source) = self.inner.sources.borrow().get(token.key) {
             if !source.unregister(&mut *self.inner.poll.borrow_mut())? {
                 // we are in a callback, store for later processing
@@ -229,7 +193,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
     ///
     /// The produced futures can be polled in any executor, and notably the one provided by
     /// calloop.
-    pub fn adapt_io<F: AsRawFd>(&self, fd: F) -> std::io::Result<crate::io::Async<'l, F>> {
+    pub fn adapt_io<F: AsRawFd>(&self, fd: F) -> crate::Result<crate::io::Async<'l, F>> {
         crate::io::Async::new(self.inner.clone(), fd)
     }
 }
@@ -253,7 +217,7 @@ impl<'l, Data> EventLoop<'l, Data> {
     /// Create a new event loop
     ///
     /// Fails if the initialization of the polling system failed.
-    pub fn try_new() -> io::Result<Self> {
+    pub fn try_new() -> crate::Result<Self> {
         let poll = Poll::new()?;
         let handle = LoopHandle {
             inner: Rc::new(LoopInner {
@@ -281,7 +245,7 @@ impl<'l, Data> EventLoop<'l, Data> {
         &mut self,
         mut timeout: Option<Duration>,
         data: &mut Data,
-    ) -> io::Result<()> {
+    ) -> crate::Result<()> {
         let events = {
             let mut poll = self.handle.inner.poll.borrow_mut();
             loop {
@@ -290,7 +254,7 @@ impl<'l, Data> EventLoop<'l, Data> {
 
                 match result {
                     Ok(events) => break events,
-                    Err(ref err) if err.kind() == io::ErrorKind::Interrupted => {
+                    Err(crate::Error::IoError(err)) if err.kind() == io::ErrorKind::Interrupted => {
                         // Interrupted by a signal. Update timeout and retry.
                         if let Some(to) = timeout {
                             let elapsed = now.elapsed();
@@ -383,14 +347,14 @@ impl<'l, Data> EventLoop<'l, Data> {
         }
     }
 
-    fn invoke_pre_run(&self, data: &mut Data) -> std::io::Result<()> {
+    fn invoke_pre_run(&self, data: &mut Data) -> crate::Result<()> {
         for (_, source) in self.handle.inner.sources.borrow().iter() {
             source.pre_run(data)?;
         }
         Ok(())
     }
 
-    fn invoke_post_run(&self, data: &mut Data) -> std::io::Result<()> {
+    fn invoke_post_run(&self, data: &mut Data) -> crate::Result<()> {
         for (_, source) in self.handle.inner.sources.borrow().iter() {
             source.post_run(data)?;
         }
@@ -409,7 +373,7 @@ impl<'l, Data> EventLoop<'l, Data> {
         &mut self,
         timeout: D,
         data: &mut Data,
-    ) -> io::Result<()> {
+    ) -> crate::Result<()> {
         self.invoke_pre_run(data)?;
         self.dispatch_events(timeout.into(), data)?;
         self.dispatch_idles(data);
@@ -442,7 +406,7 @@ impl<'l, Data> EventLoop<'l, Data> {
         timeout: D,
         data: &mut Data,
         mut cb: F,
-    ) -> io::Result<()>
+    ) -> crate::Result<()>
     where
         F: FnMut(&mut Data),
     {
@@ -645,13 +609,14 @@ mod tests {
             type Event = u32;
             type Metadata = ();
             type Ret = ();
+            type Error = PingError;
 
             fn process_events<F>(
                 &mut self,
                 readiness: Readiness,
                 token: Token,
                 mut callback: F,
-            ) -> std::io::Result<PostAction>
+            ) -> Result<PostAction, Self::Error>
             where
                 F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
             {
@@ -666,7 +631,7 @@ mod tests {
                 &mut self,
                 poll: &mut Poll,
                 token_factory: &mut TokenFactory,
-            ) -> std::io::Result<()> {
+            ) -> crate::Result<()> {
                 self.ping1.register(poll, token_factory)?;
                 self.ping2.register(poll, token_factory)?;
                 Ok(())
@@ -676,13 +641,13 @@ mod tests {
                 &mut self,
                 poll: &mut Poll,
                 token_factory: &mut TokenFactory,
-            ) -> std::io::Result<()> {
+            ) -> crate::Result<()> {
                 self.ping1.reregister(poll, token_factory)?;
                 self.ping2.reregister(poll, token_factory)?;
                 Ok(())
             }
 
-            fn unregister(&mut self, poll: &mut Poll) -> std::io::Result<()> {
+            fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
                 self.ping1.unregister(poll)?;
                 self.ping2.unregister(poll)?;
                 Ok(())
@@ -949,13 +914,14 @@ mod tests {
         type Event = ();
         type Metadata = ();
         type Ret = ();
+        type Error = crate::Error;
 
         fn process_events<F>(
             &mut self,
             _: Readiness,
             _: Token,
             mut callback: F,
-        ) -> std::io::Result<PostAction>
+        ) -> Result<PostAction, Self::Error>
         where
             F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
         {
@@ -963,15 +929,15 @@ mod tests {
             Ok(PostAction::Continue)
         }
 
-        fn register(&mut self, _: &mut Poll, _: &mut TokenFactory) -> std::io::Result<()> {
+        fn register(&mut self, _: &mut Poll, _: &mut TokenFactory) -> crate::Result<()> {
             Ok(())
         }
 
-        fn reregister(&mut self, _: &mut Poll, _: &mut TokenFactory) -> std::io::Result<()> {
+        fn reregister(&mut self, _: &mut Poll, _: &mut TokenFactory) -> crate::Result<()> {
             Ok(())
         }
 
-        fn unregister(&mut self, _: &mut Poll) -> std::io::Result<()> {
+        fn unregister(&mut self, _: &mut Poll) -> crate::Result<()> {
             Ok(())
         }
     }

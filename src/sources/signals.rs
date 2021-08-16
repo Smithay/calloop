@@ -11,7 +11,6 @@
 //! they'll inherit their parent signal mask.
 
 use std::convert::TryFrom;
-use std::io;
 use std::os::raw::c_int;
 
 use nix::sys::signal::SigSet;
@@ -49,7 +48,7 @@ pub struct Signals {
 
 impl Signals {
     /// Create a new signal event source listening on the specified list of signals
-    pub fn new(signals: &[Signal]) -> io::Result<Signals> {
+    pub fn new(signals: &[Signal]) -> crate::Result<Signals> {
         let mut mask = SigSet::empty();
         for &s in signals {
             mask.add(s);
@@ -70,7 +69,7 @@ impl Signals {
     ///
     /// If this function returns an error, the signal mask of the thread may
     /// have still been changed.
-    pub fn add_signals(&mut self, signals: &[Signal]) -> io::Result<()> {
+    pub fn add_signals(&mut self, signals: &[Signal]) -> crate::Result<()> {
         for &s in signals {
             self.mask.add(s);
         }
@@ -83,7 +82,7 @@ impl Signals {
     ///
     /// If this function returns an error, the signal mask of the thread may
     /// have still been changed.
-    pub fn remove_signals(&mut self, signals: &[Signal]) -> io::Result<()> {
+    pub fn remove_signals(&mut self, signals: &[Signal]) -> crate::Result<()> {
         let mut removed = SigSet::empty();
         for &s in signals {
             self.mask.remove(s);
@@ -98,7 +97,7 @@ impl Signals {
     ///
     /// If this function returns an error, the signal mask of the thread may
     /// have still been changed.
-    pub fn set_signals(&mut self, signals: &[Signal]) -> io::Result<()> {
+    pub fn set_signals(&mut self, signals: &[Signal]) -> crate::Result<()> {
         let mut new_mask = SigSet::empty();
         for &s in signals {
             new_mask.add(s);
@@ -126,36 +125,35 @@ impl EventSource for Signals {
     type Event = Event;
     type Metadata = ();
     type Ret = ();
+    type Error = SignalError;
 
     fn process_events<C>(
         &mut self,
         readiness: Readiness,
         token: Token,
         mut callback: C,
-    ) -> std::io::Result<PostAction>
+    ) -> Result<PostAction, Self::Error>
     where
         C: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
-        self.sfd.process_events(readiness, token, |_, sfd| {
-            loop {
-                match sfd.read_signal() {
-                    Ok(Some(info)) => callback(Event { info }, &mut ()),
-                    Ok(None) => break,
-                    Err(e) => {
-                        log::warn!("[callop] Error reading from signalfd: {}", e);
-                        return Err(e.into());
+        self.sfd
+            .process_events(readiness, token, |_, sfd| {
+                loop {
+                    match sfd.read_signal() {
+                        Ok(Some(info)) => callback(Event { info }, &mut ()),
+                        Ok(None) => break,
+                        Err(e) => {
+                            log::warn!("[callop] Error reading from signalfd: {}", e);
+                            return Err(e.into());
+                        }
                     }
                 }
-            }
-            Ok(PostAction::Continue)
-        })
+                Ok(PostAction::Continue)
+            })
+            .map_err(|e| SignalError(e.into()))
     }
 
-    fn register(
-        &mut self,
-        poll: &mut Poll,
-        token_factory: &mut TokenFactory,
-    ) -> std::io::Result<()> {
+    fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
         self.sfd.register(poll, token_factory)
     }
 
@@ -163,11 +161,16 @@ impl EventSource for Signals {
         &mut self,
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
-    ) -> std::io::Result<()> {
+    ) -> crate::Result<()> {
         self.sfd.reregister(poll, token_factory)
     }
 
-    fn unregister(&mut self, poll: &mut Poll) -> std::io::Result<()> {
+    fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
         self.sfd.unregister(poll)
     }
 }
+
+/// An error arising from processing events for a process signal.
+#[derive(thiserror::Error, Debug)]
+#[error(transparent)]
+pub struct SignalError(Box<dyn std::error::Error + Sync + Send>);

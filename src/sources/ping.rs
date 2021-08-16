@@ -24,7 +24,7 @@ use crate::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, Tok
 /// you are given a [`Ping`] instance, which can be cloned and used to ping the
 /// event loop, and a [`PingSource`], which you can insert in your event loop to
 /// receive the pings.
-pub fn make_ping() -> std::io::Result<(Ping, PingSource)> {
+pub fn make_ping() -> crate::Result<(Ping, PingSource)> {
     let (read, write) = pipe2(OFlag::O_CLOEXEC | OFlag::O_NONBLOCK)?;
     let source = PingSource {
         pipe: Generic::new(read, Interest::READ, Mode::Level),
@@ -50,52 +50,53 @@ impl EventSource for PingSource {
     type Event = ();
     type Metadata = ();
     type Ret = ();
+    type Error = PingError;
 
     fn process_events<C>(
         &mut self,
         readiness: Readiness,
         token: Token,
         mut callback: C,
-    ) -> std::io::Result<PostAction>
+    ) -> Result<PostAction, Self::Error>
     where
         C: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
-        self.pipe.process_events(readiness, token, |_, &mut fd| {
-            let mut buf = [0u8; 32];
-            let mut read_something = false;
-            let mut action = PostAction::Continue;
-            loop {
-                match read(fd, &mut buf) {
-                    Ok(0) => {
-                        // The other end of the pipe was closed, mark ourselved to for removal
-                        action = PostAction::Remove;
-                        break;
-                    }
-                    Ok(_) => read_something = true,
-                    Err(e) => {
-                        let e: std::io::Error = e.into();
-                        if e.kind() == std::io::ErrorKind::WouldBlock {
+        self.pipe
+            .process_events(readiness, token, |_, &mut fd| {
+                let mut buf = [0u8; 32];
+                let mut read_something = false;
+                let mut action = PostAction::Continue;
+                loop {
+                    match read(fd, &mut buf) {
+                        Ok(0) => {
+                            // The other end of the pipe was closed, mark ourselved to for removal
+                            action = PostAction::Remove;
                             break;
-                        // nothing more to read
-                        } else {
-                            // propagate error
-                            return Err(e);
+                        }
+                        Ok(_) => read_something = true,
+
+                        Err(e) => {
+                            let e: std::io::Error = e.into();
+
+                            if e.kind() == std::io::ErrorKind::WouldBlock {
+                                // nothing more to read
+                                break;
+                            } else {
+                                // propagate error
+                                return Err(e);
+                            }
                         }
                     }
                 }
-            }
-            if read_something {
-                callback((), &mut ());
-            }
-            Ok(action)
-        })
+                if read_something {
+                    callback((), &mut ());
+                }
+                Ok(action)
+            })
+            .map_err(|e| PingError(e.into()))
     }
 
-    fn register(
-        &mut self,
-        poll: &mut Poll,
-        token_factory: &mut TokenFactory,
-    ) -> std::io::Result<()> {
+    fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
         self.pipe.register(poll, token_factory)
     }
 
@@ -103,11 +104,11 @@ impl EventSource for PingSource {
         &mut self,
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
-    ) -> std::io::Result<()> {
+    ) -> crate::Result<()> {
         self.pipe.reregister(poll, token_factory)
     }
 
-    fn unregister(&mut self, poll: &mut Poll) -> std::io::Result<()> {
+    fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
         self.pipe.unregister(poll)
     }
 }
@@ -148,6 +149,11 @@ impl Drop for CloseOnDrop {
         }
     }
 }
+
+/// An error arising from processing events for a ping.
+#[derive(thiserror::Error, Debug)]
+#[error(transparent)]
+pub struct PingError(Box<dyn std::error::Error + Sync + Send>);
 
 #[cfg(test)]
 mod tests {
