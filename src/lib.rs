@@ -13,6 +13,9 @@
 //!
 //! ## How to use it
 //!
+//! Below is a quick usage example of calloop. For a more in-depth tutorial, see
+//! the [calloop book](https://smithay.github.io/calloop).
+//!
 //! For simple uses, you can just add event sources with callbacks to the event
 //! loop. For example, here's a runnable program that exits after five seconds:
 //!
