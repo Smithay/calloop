@@ -84,7 +84,6 @@ impl EventSource for PingSource {
                             return Err(e.into());
                         }
                     }
-                    _ => unreachable!()
                 }
             }
             if read_something {

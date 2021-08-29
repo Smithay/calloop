@@ -145,11 +145,11 @@ mod sys;
 
 pub use sys::{Interest, Mode, Poll, Readiness, Token, TokenFactory};
 
-pub use self::loop_logic::{EventLoop, InsertError, LoopHandle, LoopSignal, RegistrationToken};
+pub use self::loop_logic::{EventLoop, LoopHandle, LoopSignal, RegistrationToken};
 pub use self::sources::*;
 
 pub mod error;
-pub use error::{Error, Result};
+pub use error::{Error, InsertError, Result};
 
 pub mod io;
 mod loop_logic;

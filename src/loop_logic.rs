@@ -10,7 +10,7 @@ use std::time::Duration;
 use slotmap::SlotMap;
 
 use crate::sources::{Dispatcher, EventSource, Idle, IdleDispatcher};
-use crate::{EventDispatcher, Poll, PostAction, TokenFactory};
+use crate::{InsertError, EventDispatcher, Poll, PostAction, TokenFactory};
 
 type IdleCallback<'i, Data> = Rc<RefCell<dyn IdleDispatcher<Data> + 'i>>;
 
@@ -57,42 +57,6 @@ impl<'l, Data> Clone for LoopHandle<'l, Data> {
         LoopHandle {
             inner: self.inner.clone(),
         }
-    }
-}
-
-/// An error generated when trying to insert an event source
-pub struct InsertError<T> {
-    /// The source that could not be inserted
-    pub inserted: T,
-    /// The generated error
-    pub error: crate::Error,
-}
-
-#[cfg(not(tarpaulin_include))]
-impl<E> Debug for InsertError<E> {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(formatter, "{:?}", self.error)
-    }
-}
-
-#[cfg(not(tarpaulin_include))]
-impl<E> std::fmt::Display for InsertError<E> {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(formatter, "{}", self.error)
-    }
-}
-
-#[cfg(not(tarpaulin_include))]
-impl<E> From<InsertError<E>> for crate::Error {
-    fn from(e: InsertError<E>) -> crate::Error {
-        e.error
-    }
-}
-
-#[cfg(not(tarpaulin_include))]
-impl<E> std::error::Error for InsertError<E> {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.error.source()
     }
 }
 
