@@ -1,5 +1,5 @@
 use std::cell::{Cell, RefCell};
-use std::fmt::{self, Debug, Formatter};
+use std::fmt::Debug;
 use std::io;
 use std::os::unix::io::AsRawFd;
 use std::rc::Rc;
