@@ -48,15 +48,23 @@ impl Epoll {
         let events = buffer
             .iter()
             .take(n_ready)
-            .map(|event| PollEvent {
-                readiness: flags_to_readiness(event.events()),
-                token: unsafe { *(event.data() as usize as *const Token) },
+            .map(|event| {
+                // In C, the underlying data type is a union including a void
+                // pointer; in Rust's FFI bindings, it only exposes the u64. The
+                // round-trip conversion is valid however.
+                let token_ptr = event.data() as usize as *const Token;
+                PollEvent {
+                    readiness: flags_to_readiness(event.events()),
+                    // Why this is safe: it points to memory boxed and owned by
+                    // the parent Poller type.
+                    token: unsafe { *token_ptr },
+                }
             })
             .collect();
         Ok(events)
     }
 
-    pub unsafe fn register(
+    pub fn register(
         &mut self,
         fd: RawFd,
         interest: Interest,
@@ -68,7 +76,7 @@ impl Epoll {
             .map_err(Into::into)
     }
 
-    pub unsafe fn reregister(
+    pub fn reregister(
         &mut self,
         fd: RawFd,
         interest: Interest,

@@ -54,14 +54,14 @@ impl<'l, F: AsRawFd> Async<'l, F> {
         // register in the loop
         let dispatcher = Rc::new(RefCell::new(IoDispatcher {
             fd: rawfd,
-            token: Box::new(Token::invalid()),
+            token: None,
             waker: None,
             is_registered: false,
             interest: Interest::EMPTY,
             last_readiness: Readiness::EMPTY,
         }));
         let key = inner.sources.borrow_mut().insert(dispatcher.clone());
-        *(dispatcher.borrow_mut().token) = Token { key, sub_id: 0 };
+        dispatcher.borrow_mut().token = Some(Token { key, sub_id: 0 });
         inner.register(&dispatcher)?;
 
         // Straightforward casting would require us to add the bound `Data: 'l` but we don't actually need it
@@ -173,30 +173,30 @@ trait IoLoopInner {
 impl<'l, Data> IoLoopInner for LoopInner<'l, Data> {
     fn register(&self, dispatcher: &RefCell<IoDispatcher>) -> crate::Result<()> {
         let disp = dispatcher.borrow();
-        unsafe {
-            self.poll.borrow_mut().register(
-                disp.fd,
-                Interest::EMPTY,
-                Mode::OneShot,
-                &*disp.token as *const _,
-            )
-        }
+        self.poll.borrow_mut().register(
+            disp.fd,
+            Interest::EMPTY,
+            Mode::OneShot,
+            disp.token.expect("No token for IO dispatcher"),
+        )
     }
 
     fn reregister(&self, dispatcher: &RefCell<IoDispatcher>) -> crate::Result<()> {
         let disp = dispatcher.borrow();
-        unsafe {
-            self.poll.borrow_mut().reregister(
-                disp.fd,
-                disp.interest,
-                Mode::OneShot,
-                &*disp.token as *const _,
-            )
-        }
+        self.poll.borrow_mut().reregister(
+            disp.fd,
+            disp.interest,
+            Mode::OneShot,
+            disp.token.expect("No token for IO dispatcher"),
+        )
     }
 
     fn kill(&self, dispatcher: &RefCell<IoDispatcher>) {
-        let key = dispatcher.borrow().token.key;
+        let key = dispatcher
+            .borrow()
+            .token
+            .expect("No token for IO dispatcher")
+            .key;
         let _source = self
             .sources
             .borrow_mut()
@@ -207,7 +207,7 @@ impl<'l, Data> IoLoopInner for LoopInner<'l, Data> {
 
 struct IoDispatcher {
     fd: RawFd,
-    token: Box<Token>,
+    token: Option<Token>,
     waker: Option<Waker>,
     is_registered: bool,
     interest: Interest,
