@@ -382,6 +382,20 @@ impl<'l, Data> EventLoop<'l, Data> {
         }
     }
 
+    fn invoke_pre_run(&self, data: &mut Data) -> std::io::Result<()> {
+        for source in self.handle.inner.sources.borrow().iter() {
+            source.pre_run(data)?;
+        }
+        Ok(())
+    }
+
+    fn invoke_post_run(&self, data: &mut Data) -> std::io::Result<()> {
+        for source in self.handle.inner.sources.borrow().iter() {
+            source.post_run(data)?;
+        }
+        Ok(())
+    }
+
     /// Dispatch pending events to their callbacks
     ///
     /// If some sources have events available, their callbacks will be immediatly called.
@@ -395,9 +409,10 @@ impl<'l, Data> EventLoop<'l, Data> {
         timeout: D,
         data: &mut Data,
     ) -> io::Result<()> {
+        self.invoke_pre_run(data)?;
         self.dispatch_events(timeout.into(), data)?;
-
         self.dispatch_idles(data);
+        self.invoke_post_run(data)?;
 
         Ok(())
     }
@@ -432,10 +447,13 @@ impl<'l, Data> EventLoop<'l, Data> {
     {
         let timeout = timeout.into();
         self.stop_signal.store(false, Ordering::Release);
+        self.invoke_pre_run(data)?;
         while !self.stop_signal.load(Ordering::Acquire) {
-            self.dispatch(timeout, data)?;
+            self.dispatch_events(timeout, data)?;
+            self.dispatch_idles(data);
             cb(data);
         }
+        self.invoke_post_run(data)?;
         Ok(())
     }
 }

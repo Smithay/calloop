@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+#### Additions
+
+- Introduce the methods `pre_run()` and `post_run()` to `EventSource`, allowing event sources
+  to do preparations before entering a run/dispatch session, and cleanup afterwards. They have default
+  implementations doing nothing.
+
 ## 0.9.1 -- 2021-08-10
 
 - Update `nix` dependency to 0.22

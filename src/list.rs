@@ -44,4 +44,8 @@ impl<'sl, Data> SourceList<'sl, Data> {
     pub(crate) fn del_source(&mut self, id: u32) -> Option<Rc<dyn EventDispatcher<Data> + 'sl>> {
         ::std::mem::replace(&mut self.sources[id as usize], None)
     }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &Rc<dyn EventDispatcher<Data> + 'sl>> {
+        self.sources.iter().flat_map(|o| o.as_ref())
+    }
 }

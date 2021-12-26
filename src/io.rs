@@ -258,6 +258,13 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
         }
         Ok(())
     }
+
+    fn pre_run(&self, _data: &mut Data) -> std::io::Result<()> {
+        Ok(())
+    }
+    fn post_run(&self, _data: &mut Data) -> std::io::Result<()> {
+        Ok(())
+    }
 }
 
 /*
