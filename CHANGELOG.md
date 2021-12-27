@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.9.2 -- 2021-12-27
+
 #### Additions
 
 - Introduce the methods `pre_run()` and `post_run()` to `EventSource`, allowing event sources
