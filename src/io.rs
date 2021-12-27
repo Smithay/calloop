@@ -415,7 +415,7 @@ mod tests {
                 let mut buf = [0; 12];
                 let mut ioslices = buf
                     .chunks_mut(2)
-                    .map(|chunk| std::io::IoSliceMut::new(chunk))
+                    .map(std::io::IoSliceMut::new)
                     .collect::<Vec<_>>();
                 let count = rx.read_vectored(&mut ioslices).await.unwrap();
                 assert_eq!(count, 12);
@@ -436,7 +436,7 @@ mod tests {
                 let buf = b"Hello World!";
                 let ioslices = buf
                     .chunks(2)
-                    .map(|chunk| std::io::IoSlice::new(chunk))
+                    .map(std::io::IoSlice::new)
                     .collect::<Vec<_>>();
                 let count = tx.write_vectored(&ioslices).await.unwrap();
                 assert_eq!(count, 12);
