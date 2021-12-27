@@ -434,10 +434,7 @@ mod tests {
         sched
             .schedule(async move {
                 let buf = b"Hello World!";
-                let ioslices = buf
-                    .chunks(2)
-                    .map(std::io::IoSlice::new)
-                    .collect::<Vec<_>>();
+                let ioslices = buf.chunks(2).map(std::io::IoSlice::new).collect::<Vec<_>>();
                 let count = tx.write_vectored(&ioslices).await.unwrap();
                 assert_eq!(count, 12);
                 tx.flush().await.unwrap();
