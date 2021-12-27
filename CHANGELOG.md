@@ -2,7 +2,11 @@
 
 ## Unreleased
 
-## 0.9.2 -- 2021-12-27
+## 0.9.3 -- 2021-12-27
+
+- a `nix` update inadvertently bumped the MSRV, and was reverted.
+
+## 0.9.2 -- 2021-12-27 (yanked)
 
 #### Additions
 
