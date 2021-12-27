@@ -45,8 +45,8 @@ impl Kqueue {
             .take(nevents)
             .map(|event| PollEvent {
                 readiness: Readiness {
-                    readable: event.filter() == EventFilter::EVFILT_READ,
-                    writable: event.filter() == EventFilter::EVFILT_WRITE,
+                    readable: event.filter() == Ok(EventFilter::EVFILT_READ),
+                    writable: event.filter() == Ok(EventFilter::EVFILT_WRITE),
                     error: event.flags().contains(EventFlag::EV_ERROR) && event.data() != 0,
                 },
                 token: unsafe { *(event.udata() as usize as *const Token) },
