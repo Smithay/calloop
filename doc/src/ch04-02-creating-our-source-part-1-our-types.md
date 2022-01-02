@@ -12,7 +12,7 @@ So at a minimum, our type needs to contain these:
 pub struct ZeroMQSource
 {
     // Calloop components.
-    socket_source: calloop::generic::Generic<calloop::generic::Fd>,
+    socket_source: calloop::generic::Generic<std::os::unix::io::RawFd>,
     mpsc_receiver: calloop::channel::Channel<?>,
     wake_ping_receiver: calloop::ping::PingSource,
 }
@@ -26,7 +26,7 @@ What else do we need? If the `PingSource` is there to wake up the loop manually,
 pub struct ZeroMQSource
 {
     // Calloop components.
-    socket_source: calloop::generic::Generic<calloop::generic::Fd>,
+    socket_source: calloop::generic::Generic<std::os::unix::io::RawFd>,
     mpsc_receiver: calloop::channel::Channel<?>,
     wake_ping_receiver: calloop::ping::PingSource,
 
@@ -59,13 +59,15 @@ where
 > Remember that it's not just `Vec<T>` and other sequence types that implement `IntoIterator` — `Option<T>` implements it too! There is also `std::iter::Once<T>`. So if a user of our API wants to enforce that all "multi"-part messages actually contain exactly one part, they can use this API with `T` being, say, `std::iter::Once<zmq::Message>` (or even just `[zmq::Message; 1]` in Rust 2021 edition).
 
 ## Associated types
-The `EventSource` trait has three associated types:
+The `EventSource` trait has four associated types:
 
 - `Event` - when an event is generated that our caller cares about (ie. not some internal thing), this is the data we provide to their callback. This will be another sequence of messages, but because we're constructing it we can be more opinionated about the type and use the return type of `zmq::Socket::recv_multipart()` which is `Vec<Vec<u8>>`.
 
 - `Metadata` - this is a more persistent kind of data, perhaps the underlying file descriptor or socket, or maybe some stateful object that the callback can manipulate. It is passed by exclusive reference to the `Metadata` type. In our case we don't use this, so it's `()`.
 
 - `Ret` - this is the return type of the callback that's called on an event. Usually this will be a `Result` of some sort; in our case it's `std::io::Result<()>` just to signal whether some underlying operation failed or not.
+
+- `Error` - this is the error type returned by `process_events()` (not the user callback!). Having this as an associated type allows you to have more control over error propagation in nested event sources. We will use [Anyhow](https://crates.io/crates/anyhow), which is like a more fully-features `Box<dyn Error>`. It allows you to add context to any other error with a `context()` method.
 
 So together these are:
 
@@ -78,6 +80,7 @@ where
     type Event = Vec<Vec<u8>>;
     type Metadata = ();
     type Ret = io::Result<()>;
+    type Error = anyhow::Error;
     // ...
 }
 ```

@@ -1,6 +1,8 @@
 //! A Calloop event source implementation for ZeroMQ sockets.
 
-use std::{collections, io};
+use std::{collections, io, os::unix::io::RawFd};
+
+use anyhow::Context;
 
 /// A Calloop event source that contains a ZeroMQ socket (of any kind) and a
 /// Calloop MPSC channel for sending over it.
@@ -46,7 +48,7 @@ where
 {
     // Calloop components.
     /// Event source for ZeroMQ socket.
-    socket_source: calloop::generic::Generic<calloop::generic::Fd>,
+    socket_source: calloop::generic::Generic<RawFd>,
 
     /// Event source for channel.
     mpsc_receiver: calloop::channel::Channel<T>,
@@ -81,7 +83,7 @@ where
         let fd = socket.get_fd()?;
 
         let socket_source =
-            calloop::generic::Generic::from_fd(fd, calloop::Interest::READ, calloop::Mode::Edge);
+            calloop::generic::Generic::new(fd, calloop::Interest::READ, calloop::Mode::Edge);
 
         Ok((
             Self {
@@ -118,19 +120,21 @@ where
     type Event = Vec<Vec<u8>>;
     type Metadata = ();
     type Ret = io::Result<()>;
+    type Error = anyhow::Error;
 
     fn process_events<F>(
         &mut self,
         readiness: calloop::Readiness,
         token: calloop::Token,
         mut callback: F,
-    ) -> io::Result<calloop::PostAction>
+    ) -> Result<calloop::PostAction, Self::Error>
     where
         F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
         // Runs if we were woken up on startup/registration.
         self.wake_ping_receiver
-            .process_events(readiness, token, |_, _| {})?;
+            .process_events(readiness, token, |_, _| {})
+            .context("Failed after registration")?;
 
         // Runs if we were woken up because a message was sent on the channel.
         let outbox = &mut self.outbox;
@@ -140,7 +144,8 @@ where
                 if let calloop::channel::Event::Msg(msg) = evt {
                     outbox.push_back(msg);
                 }
-            })?;
+            })
+            .context("Failed to processing outgoing messages")?;
 
         // The ZeroMQ file descriptor is edge triggered. This means that if (a)
         // messages are added to the queue before registration, or (b) the
@@ -157,12 +162,18 @@ where
             // or receiving on the socket while processing such an event. The
             // "used_socket" flag below tracks whether we perform an operation
             // on the socket that warrants reading the events again.
-            let events = self.socket.get_events()?;
+            let events = self
+                .socket
+                .get_events()
+                .context("Failed to read ZeroMQ events")?;
+
             let mut used_socket = false;
 
             if events.contains(zmq::POLLOUT) {
                 if let Some(parts) = self.outbox.pop_front() {
-                    self.socket.send_multipart(parts, 0)?;
+                    self.socket
+                        .send_multipart(parts, 0)
+                        .context("Failed to send message")?;
                     used_socket = true;
                 }
             }
@@ -170,12 +181,15 @@ where
             if events.contains(zmq::POLLIN) {
                 // Batch up multipart messages. ZeroMQ guarantees atomic message
                 // sending, which includes all parts of a multipart message.
-                let messages = self.socket.recv_multipart(0)?;
+                let messages = self
+                    .socket
+                    .recv_multipart(0)
+                    .context("Failed to receive message")?;
                 used_socket = true;
 
                 // Capture and report errors from the callback, but don't propagate
                 // them up.
-                callback(messages, &mut ())?;
+                callback(messages, &mut ()).context("Error in event callback")?;
             }
 
             if !used_socket {
@@ -190,7 +204,7 @@ where
         &mut self,
         poll: &mut calloop::Poll,
         token_factory: &mut calloop::TokenFactory,
-    ) -> io::Result<()> {
+    ) -> calloop::Result<()> {
         self.socket_source.register(poll, token_factory)?;
         self.mpsc_receiver.register(poll, token_factory)?;
         self.wake_ping_receiver.register(poll, token_factory)?;
@@ -204,7 +218,7 @@ where
         &mut self,
         poll: &mut calloop::Poll,
         token_factory: &mut calloop::TokenFactory,
-    ) -> io::Result<()> {
+    ) -> calloop::Result<()> {
         self.socket_source.reregister(poll, token_factory)?;
         self.mpsc_receiver.reregister(poll, token_factory)?;
         self.wake_ping_receiver.reregister(poll, token_factory)?;
@@ -214,7 +228,7 @@ where
         Ok(())
     }
 
-    fn unregister(&mut self, poll: &mut calloop::Poll) -> io::Result<()> {
+    fn unregister(&mut self, poll: &mut calloop::Poll) -> calloop::Result<()> {
         self.socket_source.unregister(poll)?;
         self.mpsc_receiver.unregister(poll)?;
         self.wake_ping_receiver.unregister(poll)?;
@@ -244,3 +258,5 @@ where
         }
     }
 }
+
+pub fn main() {}

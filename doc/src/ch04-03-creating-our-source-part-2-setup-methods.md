@@ -38,9 +38,9 @@ pub fn from_socket(socket: zmq::Socket) -> io::Result<(Self, calloop::channel::S
 
 Calloop's event sources have a kind of life cycle, starting with *registration*. When you add an event source to the event loop, under the hood the source will *register* itself with the loop. Under certain circumstances a source will need to re-register itself. And finally there is the *unregister* action when an event source is removed from the loop. These are expressed via the `calloop::EventSource` methods:
 
-- `fn register(&mut self, poll: &mut calloop::Poll, token_factory: &mut calloop::TokenFactory) -> std::io::Result<()>`
-- `fn reregister(&mut self, poll: &mut calloop::Poll, token_factory: &mut calloop::TokenFactory) -> std::io::Result<()>`
-- `fn unregister(&mut self, poll: &mut calloop::Poll) -> std::io::Result<()>`
+- `fn register(&mut self, poll: &mut calloop::Poll, token_factory: &mut calloop::TokenFactory) -> calloop::Result<()>`
+- `fn reregister(&mut self, poll: &mut calloop::Poll, token_factory: &mut calloop::TokenFactory) -> calloop::Result<()>`
+- `fn unregister(&mut self, poll: &mut calloop::Poll) -> calloop::Result<()>`
 
 The first two methods take a *token factory*, which is a way for Calloop to keep track of why your source was woken up. When we get to actually processing events, you'll see how this works. But for now, all you need to do is recursively pass the token factory into whatever sources your own event source is composed of. This includes other composed sources, which will pass the token factory into *their* sources, and so on.
 
@@ -51,7 +51,7 @@ fn register(
     &mut self,
     poll: &mut calloop::Poll,
     token_factory: &mut calloop::TokenFactory
-) -> io::Result<()>
+) -> calloop::Result<()>
 {
     self.socket_source.register(poll, token_factory)?;
     self.mpsc_receiver.register(poll, token_factory)?;
@@ -65,7 +65,7 @@ fn reregister(
     &mut self,
     poll: &mut calloop::Poll,
     token_factory: &mut calloop::TokenFactory
-) -> io::Result<()>
+) -> calloop::Result<()>
 {
     self.socket_source.reregister(poll, token_factory)?;
     self.mpsc_receiver.reregister(poll, token_factory)?;
@@ -77,7 +77,7 @@ fn reregister(
 }
 
 
-fn unregister(&mut self, poll: &mut calloop::Poll)-> std::io::Result<()> {
+fn unregister(&mut self, poll: &mut calloop::Poll)-> calloop::Result<()> {
     self.socket_source.unregister(poll)?;
     self.mpsc_receiver.unregister(poll)?;
     self.wake_ping_receiver.unregister(poll)?;
