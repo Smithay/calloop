@@ -14,10 +14,12 @@ fn main() -> std::io::Result<()> {
     let mut event_loop = EventLoop::try_new()?;
     let handle = event_loop.handle();
 
-    handle.insert_source(exec, |evt, _metadata, _shared| {
-        // Print the value of the async block ie. the return value.
-        println!("Async block ended with: {}", evt);
-    })?;
+    handle
+        .insert_source(exec, |evt, _metadata, _shared| {
+            // Print the value of the async block ie. the return value.
+            println!("Async block ended with: {}", evt);
+        })
+        .map_err(|e| e.error)?;
     // ANCHOR_END: decl_loop
 
     // ANCHOR: decl_async

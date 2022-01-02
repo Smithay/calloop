@@ -9,6 +9,7 @@
   - [Ping](ch02-03-ping.md)
   - [Channels](ch02-04-channels.md)
   - [Unix Signals](ch02-05-signals.md)
+  - [Error handling](ch02-06-errors.md)
 - [I need async/await!](ch03-00-async-await.md)
   - [Run async code](ch03-01-run-async-code.md)
   - [Async IO types](ch03-02-async-io-types.md)

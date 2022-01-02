@@ -8,7 +8,7 @@ fn process_events<F>(
     readiness: calloop::Readiness,
     token: calloop::Token,
     mut callback: F,
-) -> io::Result<calloop::PostAction>
+) -> Result<calloop::PostAction, Self::Error>
 where
     F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
 ```
@@ -31,6 +31,8 @@ Implementing `process_events()` for a type that contains various Calloop sources
 
 If we were woken up because of the ping source, then the ping source's `process_events()` will see that the token matches its own, and call the callback (possibly multiple times). If we were woken up because a message was sent through the MPSC channel, then the channel's `process_events()` will match on the token instead and call the callback for every message waiting. The zsocket is a little different, and we'll go over that in detail.
 
+For error handling we're using [Anyhow](https://crates.io/crates/anyhow), hence the `context()` calls on each fallible operation. These just add a message to any error that might appear in a traceback.
+
 So a first draft of our code might look like:
 
 ```rust,noplayground
@@ -39,13 +41,14 @@ fn process_events<F>(
     readiness: calloop::Readiness,
     token: calloop::Token,
     mut callback: F,
-) -> io::Result<calloop::PostAction>
+) -> Result<calloop::PostAction, Self::Error>
 where
     F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
 {
     // Runs if we were woken up on startup/registration.
     self.wake_ping_receiver
-        .process_events(readiness, token, |_, _| {})?;
+        .process_events(readiness, token, |_, _| {})
+        .context("Failed after registration")?;
 
     // Runs if we received a message over the MPSC channel.
     self.mpsc_receiver
@@ -53,22 +56,32 @@ where
             // 'evt' could be a message or a "sending end closed"
             // notification. We don't care about the latter.
             if let calloop::channel::Event::Msg(msg) = evt {
-                self.socket.send_multipart(msg, 0)?;
+                self.socket
+                    .send_multipart(msg, 0)
+                    .context("Failed to send message")?;
             }
         })?;
 
 	// Runs if the zsocket became read/write-able.
     self.socket
         .process_events(readiness, token, |_, _| {
-            let events = self.socket.get_events()?;
+            let events =
+                self.socket
+                    .get_events()
+                    .context("Failed to read ZeroMQ events")?;
         
             if events.contains(zmq::POLLOUT) {
                 // Wait, what do we do here?
             }
 
             if events.contains(zmq::POLLIN) {
-                let messages = self.socket.recv_multipart(0)?;
-                callback(messages, &mut ())?;
+                let messages =
+                    self.socket
+                        .recv_multipart(0)
+                        .context("Failed to receive message")?;
+
+                callback(messages, &mut ())
+                    .context("Error in event callback")?;
             }
         })?;
 
@@ -90,7 +103,9 @@ Thirdly, we commit one of the worst sins you can commit in an event-loop-based s
 self.mpsc_receiver
     .process_events(readiness, token, |evt, _| {
         if let calloop::channel::Event::Msg(msg) = evt {
-            self.socket.send_multipart(msg, 0)?;
+            self.socket
+                .send_multipart(msg, 0)
+                .context("Failed to send message")?;
         }
     })?;
 ```
@@ -108,7 +123,7 @@ where
     T::Item: Into<zmq::Message>,
 {
     // Calloop components.
-    socket_source: calloop::generic::Generic<calloop::generic::Fd>,
+    socket_source: calloop::generic::Generic<std::os::unix::io::RawFd>,
     mpsc_receiver: calloop::channel::Channel<T>,
     wake_ping_receiver: calloop::ping::PingSource,
 
@@ -141,18 +156,26 @@ And our "zsocket is writeable" code becomes:
 ```rust,noplayground
 self.socket
     .process_events(readiness, token, |_, _| {
-        let events = self.socket.get_events()?;
+        let events = self
+            .socket
+            .get_events()
+            .context("Failed to read ZeroMQ events")?;
     
         if events.contains(zmq::POLLOUT) {
             if let Some(parts) = self.outbox.pop_front() {
                 self.socket
-                    .send_multipart(parts, 0)?;
+                    .send_multipart(parts, 0)
+                    .context("Failed to send message")?;
             }
        }
 
         if events.contains(zmq::POLLIN) {
-            let messages = self.socket.recv_multipart(0)?;
-            callback(messages, &mut ())?;
+            let messages =
+                self.socket
+                    .recv_multipart(0)
+                    .context("Failed to receive message")?;
+            callback(messages, &mut ())
+                .context("Error in event callback")?;
         }
     })?;
 

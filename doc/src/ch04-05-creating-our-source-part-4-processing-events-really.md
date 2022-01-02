@@ -5,18 +5,26 @@ We have three events that could wake up our event source: the ping, the channel,
 Also notice that in the zsocket `process_events()` call, we don't use any of the arguments, including the event itself. That file descriptor is merely a signalling mechanism! Sending and receiving messages is what will actually clear any pending events on it, and reset it to a state where it will wake the event loop later.
 
 ```rust,noplayground
-let events = self.socket.events()?;
+let events = self
+    .socket
+    .get_events()
+    .context("Failed to read ZeroMQ events")?;
 
 if events.contains(zmq::POLLOUT) {
     if let Some(parts) = self.outbox.pop_front() {
         self.socket
-            .send_multipart(parts, 0)?;
+            .send_multipart(parts, 0)
+            .context("Failed to send message")?;
     }
 }
 
 if events.contains(zmq::POLLIN) {
-    let messages = self.socket.recv_multipart(0)?;
-    callback(messages, &mut ())?;
+    let messages =
+        self.socket
+            .recv_multipart(0)
+            .context("Failed to receive message")?;
+    callback(messages, &mut ())
+        .context("Error in event callback")?;
 }
 ```
 
@@ -28,7 +36,7 @@ fn process_events<F>(
     readiness: calloop::Readiness,
     token: calloop::Token,
     mut callback: F,
-) -> io::Result<calloop::PostAction>
+) -> Result<calloop::PostAction, Self::Error>
 where
     F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
 {
@@ -48,18 +56,26 @@ where
 
 	// Always process any pending zsocket events.
 
-    let events = self.socket.get_events()?;
+    let events = self
+        .socket
+        .get_events()
+        .context("Failed to read ZeroMQ events")?;
 
     if events.contains(zmq::POLLOUT) {
         if let Some(parts) = self.outbox.pop_front() {
             self.socket
-                .send_multipart(parts, 0)?;
+                .send_multipart(parts, 0)
+                .context("Failed to send message")?;
         }
     }
 
     if events.contains(zmq::POLLIN) {
-        let messages = self.socket.recv_multipart(0)?;
-        callback(messages, &mut ())?;
+        let messages =
+            self.socket
+                .recv_multipart(0)
+                .context("Failed to receive message")?;
+        callback(messages, &mut ())
+            .context("Error in event callback")?;
     }
 
     Ok(calloop::PostAction::Continue)
@@ -90,23 +106,32 @@ The full solution is to recognise that any user action on a ZeroMQ socket can ca
 
 ```rust,noplayground
 loop {
-    let events = self.socket.get_events()?;
+    let events = self
+        .socket
+        .get_events()
+        .context("Failed to read ZeroMQ events")?;
+
     let mut used_socket = false;
 
     if events.contains(zmq::POLLOUT) {
         if let Some(parts) = self.outbox.pop_front() {
             self.socket
                 .as_ref()
-                .send_multipart(parts, 0)?;
+                .send_multipart(parts, 0)
+                .context("Failed to send message")?;
             used_socket = true;
         }
     }
 
     if events.contains(zmq::POLLIN) {
-        let messages = self.socket.recv_multipart(0)?;
+        let messages =
+            self.socket
+                .recv_multipart(0)
+                .context("Failed to receive message")?;
         used_socket = true;
 
-        callback(messages, &mut ())?;
+        callback(messages, &mut ())
+            .context("Error in event callback")?;
     }
 
     if !used_socket {

@@ -6,10 +6,14 @@ This is the full source code for a Calloop event source based on a ZeroMQ socket
 {{#rustdoc_include zmqsource.rs}}
 ```
 
-Dependencies are only `calloop` and `zmq`:
+Dependencies are:
+- calloop (whatever version this document was built from)
+- zmq 0.9
+- anyhow 1.0
 
 ```toml
 [dependencies]
-calloop = "0.8"
+calloop = { path = '../..' }
 zmq = "0.9"
+anyhow = "1.0"
 ```
