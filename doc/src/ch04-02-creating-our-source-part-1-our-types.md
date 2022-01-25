@@ -1,4 +1,5 @@
 # Creating our source, part I: our types
+
 In the last chapter we worked out a list of the event sources we need to compose into a new type:
 
 1. `calloop::generic::Generic`
@@ -55,7 +56,7 @@ where
 ```
 
 > ### Enforcing single messages
-> Remember that it's not just `Vec<T>` and other sequence types that implement `IntoIterator` — `Option<T>` implements it too! There is also `std::iter::Once<T>`. So if a user of our API wants to enforce that at most (or exactly) one message is sent, they can use this API with `T` being, say, `Option<zmq::Message>`.
+> Remember that it's not just `Vec<T>` and other sequence types that implement `IntoIterator` — `Option<T>` implements it too! There is also `std::iter::Once<T>`. So if a user of our API wants to enforce that all "multi"-part messages actually contain exactly one part, they can use this API with `T` being, say, `std::iter::Once<zmq::Message>` (or even just `[zmq::Message; 1]` in Rust 2021 edition).
 
 ## Associated types
 The `EventSource` trait has three associated types:

@@ -2,7 +2,7 @@
 
 ## API
 
-If you're looking for calloop's API documentation, they are available [on `docs.rs`](https://docs.rs/calloop/) for the released versions. There are also [the docs of the current developpment version](api).
+If you're looking for calloop's API documentation, they are available [on `docs.rs`](https://docs.rs/calloop/) for the released versions. There are also [the docs of the current development version](api).
 
 ## Tutorial
 
