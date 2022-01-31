@@ -7,6 +7,13 @@
   altered in a breaking way. MSRV is bumped to 1.49.
 - **Breaking:** `generic::Fd` adapter is removed, as since that rust version `RawFd` implements
   `AsRawFd`, allowing it to be used directly in `Generic`.
+- **Breaking:** The `EventSource` trait has a new associated type `Error`. This determines the type
+  of the error variant returned by `EventSource::process_events()`. It must be convertible into
+  `Box<dyn std::error::Error + Sync + Send>`.
+- **Breaking:** All library-provided event sources now have their own error types for the
+  associated `Error` type on the `EventSource` trait.
+- **Breaking:** Many API functions now use Calloop's own error type (`calloop::Error`) instead of
+  `std::io::Error` as the error variants of their returned results.
 
 ## 0.9.2 -- 2021-12-27
 
