@@ -20,5 +20,5 @@ task:
   test_script:
     - . $HOME/.cargo/env
     - env LLVM_PROFILE_FILE="calloop-%p-%m.profraw" RUSTFLAGS="-Zinstrument-coverage" cargo test --all-features
-    - grcov . --binary-path ./target/debug -s . -t lcov --branch --llvm --ignore-not-existing --ignore "/*" --ignore "tests/*" --excl-br-start "mod tests \{" --excl-start "mod tests \{" --excl-br-line "#\[derive\(" --excl-line "#\[derive\(" -o lcov.info
+    - grcov . --binary-path ./target/debug -s . -t lcov --branch --llvm --ignore-not-existing --keep-only "src/sys/*" --excl-br-start "mod tests \{" --excl-start "mod tests \{" --excl-br-line "#\[derive\(" --excl-line "#\[derive\(" -o lcov.info
     - bash -c 'bash <(curl -s https://codecov.io/bash) -f lcov.info'
