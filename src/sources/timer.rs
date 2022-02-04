@@ -280,7 +280,7 @@ impl<T> std::cmp::Eq for TimeoutData<T> {}
 struct TimerScheduler {
     current_deadline: Arc<Mutex<Option<Instant>>>,
     kill_switch: Arc<AtomicBool>,
-    thread: std::thread::JoinHandle<()>,
+    thread: Option<std::thread::JoinHandle<()>>,
 }
 
 type TimerSource = PingSource;
@@ -326,7 +326,7 @@ impl TimerScheduler {
         let scheduler = TimerScheduler {
             current_deadline,
             kill_switch,
-            thread,
+            thread: Some(thread),
         };
         Ok((scheduler, ping_source))
     }
@@ -336,11 +336,11 @@ impl TimerScheduler {
         if let Some(current_deadline) = *deadline_guard {
             if new_deadline < current_deadline || current_deadline <= Instant::now() {
                 *deadline_guard = Some(new_deadline);
-                self.thread.thread().unpark();
+                self.thread.as_ref().unwrap().thread().unpark();
             }
         } else {
             *deadline_guard = Some(new_deadline);
-            self.thread.thread().unpark();
+            self.thread.as_ref().unwrap().thread().unpark();
         }
     }
 
@@ -352,6 +352,9 @@ impl TimerScheduler {
 impl Drop for TimerScheduler {
     fn drop(&mut self) {
         self.kill_switch.store(true, Ordering::Release);
+        let thread = self.thread.take().unwrap();
+        thread.thread().unpark();
+        let _ = thread.join();
     }
 }
 
