@@ -697,18 +697,15 @@ mod tests {
 
     #[test]
     fn change_interests() {
-        use nix::sys::socket::{socketpair, AddressFamily, SockFlag, SockType};
-        use nix::unistd::{read, write};
+        use nix::sys::socket::{recv, socketpair, AddressFamily, MsgFlags, SockFlag, SockType};
+        use nix::unistd::write;
         let mut event_loop = EventLoop::<bool>::try_new().unwrap();
 
         let (sock1, sock2) = socketpair(
             AddressFamily::Unix,
             SockType::Stream,
             None,
-            #[cfg(not(target_os = "macos"))]
-            SockFlag::SOCK_NONBLOCK,
-            #[cfg(target_os = "macos")] // FIXME: This is an issue
-            SockFlag::empty(),
+            SockFlag::empty(), // recv with DONTWAIT will suffice for platforms without SockFlag::SOCK_NONBLOCKING such as macOS
         )
         .unwrap();
 
@@ -718,7 +715,7 @@ mod tests {
             // read all contents available to drain the socket
             let mut buf = [0u8; 32];
             loop {
-                match read(fd, &mut buf) {
+                match recv(fd, &mut buf, MsgFlags::MSG_DONTWAIT) {
                     Ok(0) => break, // closed pipe, we are now inert
                     Ok(_) => {}
                     Err(e) => {
