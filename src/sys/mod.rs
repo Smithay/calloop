@@ -44,7 +44,7 @@ pub enum Mode {
     /// Edge-triggering
     ///
     /// This FD will report events only when it *gains* one of the requested interests.
-    /// it must thus be fully processed befor it'll generate events again. If the same
+    /// it must thus be fully processed before it'll generate events again. If the same
     /// FD is inserted on multiple event loops, it may be that not all of them are notified
     /// of readiness, and not necessarily always the same(s) (at least one is notified).
     Edge,
