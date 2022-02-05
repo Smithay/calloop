@@ -705,7 +705,10 @@ mod tests {
             AddressFamily::Unix,
             SockType::Stream,
             None,
+            #[cfg(not(target_os = "macos"))]
             SockFlag::SOCK_NONBLOCK,
+            #[cfg(target_os = "macos")] // FIXME: This is an issue
+            SockFlag::empty(),
         )
         .unwrap();
 

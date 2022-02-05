@@ -13,7 +13,7 @@ use std::{os::unix::io::RawFd, sync::Arc};
 
 use nix::{
     fcntl::OFlag,
-    unistd::{close, pipe2, read, write},
+    unistd::{close, read, write},
 };
 
 use super::generic::Generic;
@@ -24,8 +24,37 @@ use crate::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, Tok
 /// you are given a [`Ping`] instance, which can be cloned and used to ping the
 /// event loop, and a [`PingSource`], which you can insert in your event loop to
 /// receive the pings.
-pub fn make_ping() -> crate::Result<(Ping, PingSource)> {
-    let (read, write) = pipe2(OFlag::O_CLOEXEC | OFlag::O_NONBLOCK)?;
+pub fn make_ping() -> std::io::Result<(Ping, PingSource)> {
+    #[cfg(not(target_os = "macos"))]
+    let (read, write) = {
+        use nix::unistd::pipe2;
+
+        pipe2(OFlag::O_CLOEXEC | OFlag::O_NONBLOCK)?
+    };
+
+    // macOS does not have pipe2, but we can emulate the behavior of pipe2 by setting the flags after calling pipe.
+    #[cfg(target_os = "macos")]
+    let (read, write) = {
+        use nix::{
+            fcntl::{fcntl, FcntlArg},
+            unistd::pipe,
+        };
+
+        let (read, write) = pipe()?;
+
+        let read_flags = OFlag::from_bits_truncate(fcntl(read, FcntlArg::F_GETFD)?)
+            | OFlag::O_CLOEXEC
+            | OFlag::O_NONBLOCK;
+        let write_flags = OFlag::from_bits_truncate(fcntl(write, FcntlArg::F_GETFD)?)
+            | OFlag::O_CLOEXEC
+            | OFlag::O_NONBLOCK;
+
+        fcntl(read, FcntlArg::F_SETFL(read_flags))?;
+        fcntl(write, FcntlArg::F_SETFL(write_flags))?;
+
+        (read, write)
+    };
+
     let source = PingSource {
         pipe: Generic::new(read, Interest::READ, Mode::Level),
     };
