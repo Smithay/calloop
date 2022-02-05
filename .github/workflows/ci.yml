@@ -39,7 +39,9 @@ jobs:
           args: --ignore-tests --all-features --exclude-files "doc/*"
 
       - name: Upload to codecov.io
-        uses: codecov/codecov-action@v1
+        uses: codecov/codecov-action@v2
+        with:
+          files: ./cobertura.xml
 
   ci-macos:
     name: CI (macOS)
