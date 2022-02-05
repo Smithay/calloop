@@ -11,14 +11,16 @@ use epoll::Epoll as Poller;
     target_os = "dragonfly",
     target_os = "freebsd",
     target_os = "netbsd",
-    target_os = "openbsd"
+    target_os = "openbsd",
+    target_os = "macos"
 ))]
 mod kqueue;
 #[cfg(any(
     target_os = "dragonfly",
     target_os = "freebsd",
     target_os = "netbsd",
-    target_os = "openbsd"
+    target_os = "openbsd",
+    target_os = "macos"
 ))]
 use kqueue::Kqueue as Poller;
 use slotmap::Key;
