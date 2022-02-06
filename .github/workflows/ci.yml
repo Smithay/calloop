@@ -78,10 +78,10 @@ jobs:
           args: --all-features
         env:
           LLVM_PROFILE_FILE: "calloop-%p-%m.profraw"
-          RUSTFLAGS: "-Zinstrument-coverage"
+          RUSTFLAGS: "-Zinstrument-coverage=except-unused-functions"
 
       - name: Coverage
-        run: grcov . --binary-path ./target/debug -s . -t lcov --branch --llvm --ignore-not-existing --keep-only "src/sys/*" --excl-br-start "mod tests \{" --excl-start "mod tests \{" --excl-br-line "#\[derive\(" --excl-line "#\[derive\(" -o lcov.info
+        run: grcov . --binary-path ./target/debug -s . -t lcov --branch --llvm --ignore-not-existing --excl-br-start "mod tests \{" --excl-start "mod tests \{" --excl-br-line "#\[derive\(" --excl-line "#\[derive\(" -o lcov.info
     
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v2
