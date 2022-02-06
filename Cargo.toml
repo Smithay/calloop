@@ -30,6 +30,7 @@ executor = ["futures-util"]
 
 [package.metadata.docs.rs]
 all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [[test]]
 name = "signals"

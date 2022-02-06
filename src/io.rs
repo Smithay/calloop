@@ -266,6 +266,7 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
  */
 
 #[cfg(feature = "futures-io")]
+#[cfg_attr(docsrs, doc(cfg(feature = "futures-io")))]
 impl<'l, F: AsRawFd + std::io::Read> AsyncRead for Async<'l, F> {
     fn poll_read(
         mut self: Pin<&mut Self>,
@@ -295,6 +296,7 @@ impl<'l, F: AsRawFd + std::io::Read> AsyncRead for Async<'l, F> {
 }
 
 #[cfg(feature = "futures-io")]
+#[cfg_attr(docsrs, doc(cfg(feature = "futures-io")))]
 impl<'l, F: AsRawFd + std::io::Write> AsyncWrite for Async<'l, F> {
     fn poll_write(
         mut self: Pin<&mut Self>,

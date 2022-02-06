@@ -7,10 +7,12 @@ use crate::{sys::TokenFactory, Poll, Readiness, Token};
 
 pub mod channel;
 #[cfg(feature = "executor")]
+#[cfg_attr(docsrs, doc(cfg(feature = "executor")))]
 pub mod futures;
 pub mod generic;
 pub mod ping;
 #[cfg(target_os = "linux")]
+#[cfg_attr(docsrs, doc(cfg(target_os = "linux")))]
 pub mod signals;
 pub mod timer;
 
