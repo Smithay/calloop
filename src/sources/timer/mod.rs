@@ -9,14 +9,38 @@
 
 use std::cell::RefCell;
 use std::collections::BinaryHeap;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc, Mutex,
-};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use super::ping::{make_ping, PingError, PingSource};
 use crate::{EventSource, Poll, PostAction, Readiness, Token, TokenFactory};
+
+#[cfg(target_os = "linux")]
+mod timerfd;
+#[cfg(target_os = "linux")]
+use timerfd::{TimerScheduler, TimerSource};
+
+#[cfg(any(
+    target_os = "dragonfly",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd",
+    target_os = "macos"
+))]
+mod threaded;
+
+#[cfg(any(
+    target_os = "dragonfly",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd",
+    target_os = "macos"
+))]
+use threaded::{TimerScheduler, TimerSource};
+
+/// An error arising from processing events for a timer.
+#[derive(thiserror::Error, Debug)]
+#[error(transparent)]
+pub struct TimerError(Box<dyn std::error::Error + Sync + Send>);
 
 /// A Timer event source
 ///
@@ -122,23 +146,21 @@ impl<T> EventSource for Timer<T> {
             inner: self.inner.clone(),
         };
         let inner = &self.inner;
-        self.source
-            .process_events(readiness, token, |(), &mut ()| {
-                loop {
-                    let next_expired: Option<T> = {
-                        let mut guard = inner.lock().unwrap();
-                        guard.next_expired()
-                    };
-                    if let Some(val) = next_expired {
-                        callback(val, &mut handle);
-                    } else {
-                        break;
-                    }
+        self.source.process_events(readiness, token, |(), &mut ()| {
+            loop {
+                let next_expired: Option<T> = {
+                    let mut guard = inner.lock().unwrap();
+                    guard.next_expired()
+                };
+                if let Some(val) = next_expired {
+                    callback(val, &mut handle);
+                } else {
+                    break;
                 }
-                // now compute the next timeout and signal if necessary
-                inner.lock().unwrap().reschedule();
-            })
-            .map_err(TimerError)
+            }
+            // now compute the next timeout and signal if necessary
+            inner.lock().unwrap().reschedule();
+        })
     }
 
     fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
@@ -271,97 +293,6 @@ impl<T> std::cmp::PartialEq for TimeoutData<T> {
 }
 
 impl<T> std::cmp::Eq for TimeoutData<T> {}
-
-/*
- * Scheduling
- */
-
-#[derive(Debug)]
-struct TimerScheduler {
-    current_deadline: Arc<Mutex<Option<Instant>>>,
-    kill_switch: Arc<AtomicBool>,
-    thread: Option<std::thread::JoinHandle<()>>,
-}
-
-type TimerSource = PingSource;
-
-impl TimerScheduler {
-    fn new() -> crate::Result<(TimerScheduler, TimerSource)> {
-        let current_deadline = Arc::new(Mutex::new(None::<Instant>));
-        let thread_deadline = current_deadline.clone();
-
-        let kill_switch = Arc::new(AtomicBool::new(false));
-        let thread_kill = kill_switch.clone();
-
-        let (ping, ping_source) = make_ping()?;
-
-        let thread = std::thread::Builder::new()
-            .name("calloop timer".into())
-            .spawn(move || loop {
-                // stop if requested
-                if thread_kill.load(Ordering::Acquire) {
-                    return;
-                }
-                // otherwise check the timeout
-                let opt_deadline: Option<Instant> = {
-                    // subscope to ensure the mutex does not remain locked while the thread is parked
-                    let guard = thread_deadline.lock().unwrap();
-                    *guard
-                };
-                if let Some(deadline) = opt_deadline {
-                    if let Some(remaining) = deadline.checked_duration_since(Instant::now()) {
-                        // it is not yet expired, go to sleep until it
-                        std::thread::park_timeout(remaining);
-                    } else {
-                        // it is expired, wake the event loop and go to sleep
-                        ping.ping();
-                        std::thread::park();
-                    }
-                } else {
-                    // there is none, got to sleep
-                    std::thread::park();
-                }
-            })?;
-
-        let scheduler = TimerScheduler {
-            current_deadline,
-            kill_switch,
-            thread: Some(thread),
-        };
-        Ok((scheduler, ping_source))
-    }
-
-    fn reschedule(&mut self, new_deadline: Instant) {
-        let mut deadline_guard = self.current_deadline.lock().unwrap();
-        if let Some(current_deadline) = *deadline_guard {
-            if new_deadline < current_deadline || current_deadline <= Instant::now() {
-                *deadline_guard = Some(new_deadline);
-                self.thread.as_ref().unwrap().thread().unpark();
-            }
-        } else {
-            *deadline_guard = Some(new_deadline);
-            self.thread.as_ref().unwrap().thread().unpark();
-        }
-    }
-
-    fn deschedule(&mut self) {
-        *(self.current_deadline.lock().unwrap()) = None;
-    }
-}
-
-impl Drop for TimerScheduler {
-    fn drop(&mut self) {
-        self.kill_switch.store(true, Ordering::Release);
-        let thread = self.thread.take().unwrap();
-        thread.thread().unpark();
-        let _ = thread.join();
-    }
-}
-
-/// An error arising from processing events for a timer.
-#[derive(thiserror::Error, Debug)]
-#[error(transparent)]
-pub struct TimerError(PingError);
 
 /*
  * Tests

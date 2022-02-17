@@ -14,6 +14,7 @@
   associated `Error` type on the `EventSource` trait.
 - **Breaking:** Many API functions now use Calloop's own error type (`calloop::Error`) instead of
   `std::io::Error` as the error variants of their returned results.
+- On Linux `Timer<T>` is now driven by `timerfd`.
 
 ## 0.9.2 -- 2021-12-27
 
