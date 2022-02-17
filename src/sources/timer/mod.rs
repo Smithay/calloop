@@ -14,11 +14,6 @@ use std::time::{Duration, Instant};
 
 use crate::{EventSource, Poll, PostAction, Readiness, Token, TokenFactory};
 
-#[cfg(target_os = "linux")]
-mod timerfd;
-#[cfg(target_os = "linux")]
-use timerfd::{TimerScheduler, TimerSource};
-
 #[cfg(any(
     target_os = "dragonfly",
     target_os = "freebsd",
@@ -27,6 +22,8 @@ use timerfd::{TimerScheduler, TimerSource};
     target_os = "macos"
 ))]
 mod threaded;
+#[cfg(target_os = "linux")]
+mod timerfd;
 
 #[cfg(any(
     target_os = "dragonfly",
@@ -36,11 +33,23 @@ mod threaded;
     target_os = "macos"
 ))]
 use threaded::{TimerScheduler, TimerSource};
+#[cfg(target_os = "linux")]
+use timerfd::{TimerScheduler, TimerSource};
 
 /// An error arising from processing events for a timer.
 #[derive(thiserror::Error, Debug)]
-#[error(transparent)]
-pub struct TimerError(Box<dyn std::error::Error + Sync + Send>);
+#[error("{0}")]
+pub struct TimerError(
+    #[cfg(target_os = "linux")] std::io::Error,
+    #[cfg(any(
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd",
+        target_os = "macos"
+    ))]
+    crate::ping::PingError,
+);
 
 /// A Timer event source
 ///
@@ -146,21 +155,23 @@ impl<T> EventSource for Timer<T> {
             inner: self.inner.clone(),
         };
         let inner = &self.inner;
-        self.source.process_events(readiness, token, |(), &mut ()| {
-            loop {
-                let next_expired: Option<T> = {
-                    let mut guard = inner.lock().unwrap();
-                    guard.next_expired()
-                };
-                if let Some(val) = next_expired {
-                    callback(val, &mut handle);
-                } else {
-                    break;
+        self.source
+            .process_events(readiness, token, |(), &mut ()| {
+                loop {
+                    let next_expired: Option<T> = {
+                        let mut guard = inner.lock().unwrap();
+                        guard.next_expired()
+                    };
+                    if let Some(val) = next_expired {
+                        callback(val, &mut handle);
+                    } else {
+                        break;
+                    }
                 }
-            }
-            // now compute the next timeout and signal if necessary
-            inner.lock().unwrap().reschedule();
-        })
+                // now compute the next timeout and signal if necessary
+                inner.lock().unwrap().reschedule();
+            })
+            .map_err(TimerError)
     }
 
     fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {

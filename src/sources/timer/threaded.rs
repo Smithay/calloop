@@ -4,10 +4,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use crate::ping::{make_ping, Ping, PingSource};
+use crate::ping::{make_ping, Ping, PingError, PingSource};
 use crate::{EventSource, Poll, PostAction, Readiness, Token, TokenFactory};
-
-use super::TimerError;
 
 #[derive(Debug)]
 pub struct TimerSource {
@@ -25,7 +23,7 @@ impl EventSource for TimerSource {
     type Event = ();
     type Metadata = ();
     type Ret = ();
-    type Error = TimerError;
+    type Error = PingError;
 
     fn process_events<C>(
         &mut self,
@@ -36,11 +34,9 @@ impl EventSource for TimerSource {
     where
         C: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
-        self.source
-            .process_events(readiness, token, |_, &mut _| {
-                callback((), &mut ());
-            })
-            .map_err(|err| TimerError(err.into()))
+        self.source.process_events(readiness, token, |_, &mut _| {
+            callback((), &mut ());
+        })
     }
 
     fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
