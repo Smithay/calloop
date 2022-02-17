@@ -4,12 +4,10 @@ use std::os::unix::io::{AsRawFd, RawFd};
 use std::time::Instant;
 
 use nix::sys::time::TimeSpec;
-use nix::sys::timerfd::{self, Expiration, TimerFd, TimerSetTimeFlags};
+use nix::sys::timerfd::{ClockId, Expiration, TimerFd, TimerFlags, TimerSetTimeFlags};
 
 use crate::generic::Generic;
 use crate::{EventSource, Poll, PostAction, Readiness, Token, TokenFactory};
-
-use super::TimerError;
 
 #[derive(Debug)]
 pub struct TimerScheduler {
@@ -20,8 +18,8 @@ pub struct TimerScheduler {
 impl TimerScheduler {
     pub fn new() -> crate::Result<(Self, TimerSource)> {
         let timerfd = TimerFd::new(
-            timerfd::ClockId::CLOCK_MONOTONIC,
-            timerfd::TimerFlags::TFD_CLOEXEC,
+            ClockId::CLOCK_MONOTONIC,
+            TimerFlags::TFD_CLOEXEC | TimerFlags::TFD_NONBLOCK,
         )?;
 
         let source = TimerSource::new(&timerfd);
@@ -79,7 +77,7 @@ impl EventSource for TimerSource {
     type Event = ();
     type Metadata = ();
     type Ret = ();
-    type Error = TimerError;
+    type Error = std::io::Error;
 
     fn process_events<C>(
         &mut self,
@@ -90,12 +88,10 @@ impl EventSource for TimerSource {
     where
         C: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
-        self.source
-            .process_events(readiness, token, |_, &mut _| {
-                callback((), &mut ());
-                Ok(PostAction::Continue)
-            })
-            .map_err(|err| TimerError(err.into()))
+        self.source.process_events(readiness, token, |_, &mut _| {
+            callback((), &mut ());
+            Ok(PostAction::Continue)
+        })
     }
 
     fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
