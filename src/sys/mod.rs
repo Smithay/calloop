@@ -236,7 +236,7 @@ impl Poll {
             if self.tokens.insert(index, token_ptr).is_some() {
                 // If there is already a file descriptor associated with a
                 // token, then replacing that entry will leak the token, but
-                // converting it back into an Rc might leave a dangling pointer
+                // converting it back into a Box might leave a dangling pointer
                 // somewhere. We can theoretically continue safely by choosing
                 // to leak, but one of our assumptions is no longer valid, so
                 // panic.
