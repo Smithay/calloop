@@ -53,7 +53,10 @@ pub struct Generic<F: AsRawFd, E = std::io::Error> {
     pub interest: Interest,
     /// The programmed mode
     pub mode: Mode,
-    token: Box<Token>,
+
+    // This token is used by the event loop logic to look up this source when an
+    // event occurs.
+    token: Option<Token>,
 
     // This allows us to make the associated error and return types generic.
     _error_type: PhantomData<E>,
@@ -67,7 +70,7 @@ impl<F: AsRawFd> Generic<F, std::io::Error> {
             file,
             interest,
             mode,
-            token: Box::new(Token::invalid()),
+            token: None,
             _error_type: PhantomData::default(),
         }
     }
@@ -78,7 +81,7 @@ impl<F: AsRawFd> Generic<F, std::io::Error> {
             file,
             interest,
             mode,
-            token: Box::new(Token::invalid()),
+            token: None,
             _error_type: PhantomData::default(),
         }
     }
@@ -110,23 +113,20 @@ where
     where
         C: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
-        if token != *self.token {
+        // If the token is invalid or not ours, skip processing.
+        if self.token != Some(token) {
             return Ok(PostAction::Continue);
         }
+
         callback(readiness, &mut self.file)
     }
 
     fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
-        let token = Box::new(token_factory.token());
-        unsafe {
-            poll.register(
-                self.file.as_raw_fd(),
-                self.interest,
-                self.mode,
-                &*token as *const _,
-            )?;
-        }
-        self.token = token;
+        let token = token_factory.token();
+
+        poll.register(self.file.as_raw_fd(), self.interest, self.mode, token)?;
+
+        self.token = Some(token);
         Ok(())
     }
 
@@ -135,22 +135,17 @@ where
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<()> {
-        let token = Box::new(token_factory.token());
-        unsafe {
-            poll.reregister(
-                self.file.as_raw_fd(),
-                self.interest,
-                self.mode,
-                &*token as *const _,
-            )?;
-        }
-        self.token = token;
+        let token = token_factory.token();
+
+        poll.reregister(self.file.as_raw_fd(), self.interest, self.mode, token)?;
+
+        self.token = Some(token);
         Ok(())
     }
 
     fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
         poll.unregister(self.file.as_raw_fd())?;
-        self.token = Box::new(Token::invalid());
+        self.token = None;
         Ok(())
     }
 }

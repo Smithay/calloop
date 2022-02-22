@@ -21,6 +21,7 @@ futures-util = { version = "0.3.5", optional = true, default-features = false, f
 futures-io = { version = "0.3.5", optional = true }
 slotmap = "1.0"
 thiserror = "1.0"
+vec_map = "0.8.2"
 
 [dev-dependencies]
 futures = "0.3.5"

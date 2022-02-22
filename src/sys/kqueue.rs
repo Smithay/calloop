@@ -43,19 +43,27 @@ impl Kqueue {
         let ret = buffer
             .iter()
             .take(nevents)
-            .map(|event| PollEvent {
-                readiness: Readiness {
-                    readable: event.filter() == Ok(EventFilter::EVFILT_READ),
-                    writable: event.filter() == Ok(EventFilter::EVFILT_WRITE),
-                    error: event.flags().contains(EventFlag::EV_ERROR) && event.data() != 0,
-                },
-                token: unsafe { *(event.udata() as usize as *const Token) },
+            .map(|event| {
+                // The kevent data field in Rust's libc FFI bindings is an
+                // intptr_t, which is specified to allow this kind of
+                // conversion.
+                let token_ptr = event.udata() as usize as *const Token;
+                PollEvent {
+                    readiness: Readiness {
+                        readable: event.filter() == Ok(EventFilter::EVFILT_READ),
+                        writable: event.filter() == Ok(EventFilter::EVFILT_WRITE),
+                        error: event.flags().contains(EventFlag::EV_ERROR) && event.data() != 0,
+                    },
+                    // Why this is safe: it points to memory boxed and owned by
+                    // the parent Poller type.
+                    token: unsafe { *token_ptr },
+                }
             })
             .collect();
         Ok(ret)
     }
 
-    pub unsafe fn register(
+    pub fn register(
         &mut self,
         fd: RawFd,
         interest: Interest,
@@ -65,7 +73,7 @@ impl Kqueue {
         self.reregister(fd, interest, mode, token)
     }
 
-    pub unsafe fn reregister(
+    pub fn reregister(
         &mut self,
         fd: RawFd,
         interest: Interest,

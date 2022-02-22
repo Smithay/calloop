@@ -1,4 +1,5 @@
-use std::os::unix::io::RawFd;
+use std::{convert::TryInto, os::unix::io::RawFd};
+use vec_map::VecMap;
 
 use crate::loop_logic::CalloopKey;
 
@@ -23,7 +24,6 @@ mod kqueue;
     target_os = "macos"
 ))]
 use kqueue::Kqueue as Poller;
-use slotmap::Key;
 
 /// Possible modes for registering a file descriptor
 #[derive(Copy, Clone, Debug)]
@@ -149,25 +149,6 @@ pub struct Token {
     pub(crate) sub_id: u32,
 }
 
-#[allow(dead_code)]
-impl Token {
-    /// Produces an invalid Token, that is not recognized by the
-    /// event loop.
-    ///
-    /// Can be used as a placeholder to avoid `Option<Token>`
-    pub fn invalid() -> Token {
-        Token {
-            key: CalloopKey::null(),
-            sub_id: std::u32::MAX,
-        }
-    }
-
-    /// Check if this token is the invalid token
-    pub fn is_invalid(self) -> bool {
-        self.key.is_null()
-    }
-}
-
 /// The polling system
 ///
 /// This type represents the polling system of calloop, on which you
@@ -180,6 +161,21 @@ impl Token {
 /// source and delegate the implementations to it.
 pub struct Poll {
     poller: Poller,
+
+    // It is essential for safe use of this type that the pointers passed in to
+    // the underlying poller API are properly managed. Each time an event source
+    // is registered, the token it passes in is Boxed and converted to a raw
+    // pointer to be passed to the polling system by FFI. This pointer is what's
+    // stored in the map. When the event source is re- or unregistered, the same
+    // raw pointer can then be converted back into the Box and dropped, safely
+    // deallocating it. To put it another way, we effectively "own" the Token
+    // memory on behalf of the underlying polling mechanism.
+    //
+    // All the platforms we currently support follow the rule that file
+    // descriptors must be "small", positive integers. This means we can use a
+    // VecMap which has that exact constraint for its keys. If that ever
+    // changes, this will need to be changed to a different structure.
+    tokens: VecMap<*mut Token>,
 }
 
 impl std::fmt::Debug for Poll {
@@ -192,6 +188,7 @@ impl Poll {
     pub(crate) fn new() -> crate::Result<Poll> {
         Ok(Poll {
             poller: Poller::new()?,
+            tokens: VecMap::new(),
         })
     }
 
@@ -209,21 +206,45 @@ impl Poll {
     /// bad file descriptor or if the provided file descriptor is already
     /// registered.
     ///
-    /// # Safety
+    /// # Leaking tokens
     ///
-    /// You must ensure that the `*const Token` pointer provided remains alive
-    /// until your event source is re-registered or unregistered.
-    pub unsafe fn register(
+    /// If your event source is dropped without being unregistered, the token
+    /// passed in here will remain on the heap and continue to be used by the
+    /// polling system even though no event source will match it.
+    pub fn register(
         &mut self,
         fd: RawFd,
         interest: Interest,
         mode: Mode,
-        token: *const Token,
+        token: Token,
     ) -> crate::Result<()> {
-        if (*token).is_invalid() {
-            return Err(crate::Error::InvalidToken);
+        let token_box = Box::new(token);
+        let token_ptr = Box::into_raw(token_box);
+
+        let registration_result = self.poller.register(fd, interest, mode, token_ptr);
+
+        if registration_result.is_err() {
+            // If registration did not work, do not add the file descriptor to
+            // the token map. Instead, reconstruct the Box and drop it. This is
+            // safe because it's from Box::into_raw() above.
+            let token_box = unsafe { Box::from_raw(token_ptr) };
+            std::mem::drop(token_box);
+        } else {
+            // Registration worked, keep the token pointer until it's replaced
+            // or removed.
+            let index = index_from_fd(fd);
+            if self.tokens.insert(index, token_ptr).is_some() {
+                // If there is already a file descriptor associated with a
+                // token, then replacing that entry will leak the token, but
+                // converting it back into a Box might leave a dangling pointer
+                // somewhere. We can theoretically continue safely by choosing
+                // to leak, but one of our assumptions is no longer valid, so
+                // panic.
+                panic!("File descriptor ({}) already registered", fd);
+            }
         }
-        self.poller.register(fd, interest, mode, token)
+
+        registration_result
     }
 
     /// Update the registration for a file descriptor
@@ -231,21 +252,46 @@ impl Poll {
     /// This allows you to change the interest, mode or token of a file
     /// descriptor. Fails if the provided fd is not currently registered.
     ///
-    /// # Safety
-    ///
-    /// You must ensure that the `*const Token` pointer provided remains alive
-    /// until your event source is re-registered or unregistered.
-    pub unsafe fn reregister(
+    /// See note on [`register()`] regarding leaking.
+    pub fn reregister(
         &mut self,
         fd: RawFd,
         interest: Interest,
         mode: Mode,
-        token: *const Token,
+        token: Token,
     ) -> crate::Result<()> {
-        if (*token).is_invalid() {
-            return Err(crate::Error::InvalidToken);
+        let token_box = Box::new(token);
+        let token_ptr = Box::into_raw(token_box);
+
+        let reregistration_result = self.poller.reregister(fd, interest, mode, token_ptr);
+
+        if reregistration_result.is_err() {
+            // If registration did not work, do not add the file descriptor to
+            // the token map. Instead, reconstruct the Box and drop it. This is
+            // safe because it's from Box::into_raw() above.
+            let token_box = unsafe { Box::from_raw(token_ptr) };
+            std::mem::drop(token_box);
+        } else {
+            // Registration worked, drop the old token memory and keep the new
+            // token pointer until it's replaced or removed.
+            let index = index_from_fd(fd);
+            if let Some(previous) = self.tokens.insert(index, token_ptr) {
+                // This is safe because it's from Box::into_raw() from a
+                // previous (re-)register() call.
+                let token_box = unsafe { Box::from_raw(previous) };
+                std::mem::drop(token_box);
+            } else {
+                // If there is no previous token registered for this file
+                // descriptor, either the event source has wrongly called
+                // reregister() without first being registered, or the
+                // underlying poller has a dangling pointer. In the first case,
+                // the reregistration should have failed; in the second case, we
+                // cannot safely proceed.
+                panic!("File descriptor ({}) had no previous registration", fd);
+            }
         }
-        self.poller.reregister(fd, interest, mode, token)
+
+        reregistration_result
     }
 
     /// Unregister a file descriptor
@@ -253,6 +299,34 @@ impl Poll {
     /// This file descriptor will no longer generate events. Fails if the
     /// provided file descriptor is not currently registered.
     pub fn unregister(&mut self, fd: RawFd) -> crate::Result<()> {
-        self.poller.unregister(fd)
+        let unregistration_result = self.poller.unregister(fd);
+
+        if unregistration_result.is_ok() {
+            // The source was unregistered, we can remove the old token data.
+            let index = index_from_fd(fd);
+            if let Some(previous) = self.tokens.remove(index) {
+                // This is safe because it's from Box::into_raw() from a
+                // previous (re-)register() call.
+                let token_box = unsafe { Box::from_raw(previous) };
+                std::mem::drop(token_box);
+            } else {
+                // If there is no previous token registered for this file
+                // descriptor, either the event source has wrongly called
+                // unregister() without first being registered, or the
+                // underlying poller has a dangling pointer. In the first case,
+                // the reregistration should have failed; in the second case, we
+                // cannot safely proceed.
+                panic!("File descriptor ({}) had no previous registration", fd);
+            }
+        }
+
+        unregistration_result
     }
+}
+
+/// Converts a file descriptor into an index for the token map. Panics if the
+/// file descriptor is negative.
+fn index_from_fd(fd: RawFd) -> usize {
+    fd.try_into()
+        .unwrap_or_else(|_| panic!("File descriptor ({}) is invalid", fd))
 }
