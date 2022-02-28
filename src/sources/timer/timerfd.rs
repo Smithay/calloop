@@ -33,7 +33,7 @@ impl TimerScheduler {
 
     pub fn reschedule(&mut self, new_deadline: Instant) {
         let now = Instant::now();
-        let time = TimeSpec::from_duration(new_deadline.duration_since(now));
+        let time = TimeSpec::from_duration(new_deadline.saturating_duration_since(now));
         let time = match self.current_deadline {
             Some(current_deadline) if new_deadline > current_deadline && current_deadline > now => {
                 return;
