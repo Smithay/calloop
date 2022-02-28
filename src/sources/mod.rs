@@ -15,6 +15,7 @@ pub mod ping;
 #[cfg_attr(docsrs, doc(cfg(target_os = "linux")))]
 pub mod signals;
 pub mod timer;
+pub mod transient;
 
 /// Possible actions that can be requested to the event loop by an
 /// event source once its events have been processed
