@@ -3,7 +3,7 @@
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::time::Instant;
 
-use nix::sys::time::TimeSpec;
+use nix::sys::time::{TimeSpec, TimeValLike};
 use nix::sys::timerfd::{ClockId, Expiration, TimerFd, TimerFlags, TimerSetTimeFlags};
 
 use crate::generic::Generic;
@@ -42,6 +42,11 @@ impl TimerScheduler {
         };
 
         self.current_deadline = Some(new_deadline);
+
+        // Calling timerfd_settime() (which is what TimerFd::set() effectively
+        // does) with a zero duration will disarm the timer. It should be
+        // handled before this point.
+        assert_ne!(time, TimeSpec::zero());
 
         let expiration = Expiration::OneShot(time);
         let flags = TimerSetTimeFlags::empty();
