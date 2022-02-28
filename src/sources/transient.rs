@@ -262,3 +262,411 @@ impl<T: crate::EventSource> crate::EventSource for TransientSource<T> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{
+        channel::{channel, Event},
+        ping::{make_ping, PingSource},
+        Dispatcher, EventSource, PostAction,
+    };
+    use std::{
+        sync::atomic::{AtomicBool, Ordering},
+        time::Duration,
+    };
+
+    // This can be removed in favour of Duration::ZERO when the MSRV is 1.53.0
+    const DURATION_ZERO: Duration = Duration::from_nanos(0);
+
+    #[test]
+    fn test_transient_drop() {
+        // A test source that sets a flag when it's dropped.
+        struct TestSource<'a> {
+            dropped: &'a AtomicBool,
+            ping: PingSource,
+        }
+
+        impl<'a> Drop for TestSource<'a> {
+            fn drop(&mut self) {
+                self.dropped.store(true, Ordering::Relaxed)
+            }
+        }
+
+        impl<'a> crate::EventSource for TestSource<'a> {
+            type Event = ();
+            type Metadata = ();
+            type Ret = ();
+            type Error = Box<dyn std::error::Error + Sync + Send>;
+
+            fn process_events<F>(
+                &mut self,
+                readiness: crate::Readiness,
+                token: crate::Token,
+                callback: F,
+            ) -> Result<crate::PostAction, Self::Error>
+            where
+                F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+            {
+                self.ping.process_events(readiness, token, callback)?;
+                Ok(PostAction::Remove)
+            }
+
+            fn register(
+                &mut self,
+                poll: &mut crate::Poll,
+                token_factory: &mut crate::TokenFactory,
+            ) -> crate::Result<()> {
+                self.ping.register(poll, token_factory)
+            }
+
+            fn reregister(
+                &mut self,
+                poll: &mut crate::Poll,
+                token_factory: &mut crate::TokenFactory,
+            ) -> crate::Result<()> {
+                self.ping.reregister(poll, token_factory)
+            }
+
+            fn unregister(&mut self, poll: &mut crate::Poll) -> crate::Result<()> {
+                self.ping.unregister(poll)
+            }
+        }
+
+        // Test that the inner source is actually dropped when it asks to be
+        // removed from the loop, while the TransientSource remains. We use two
+        // flags for this:
+        // - fired: should be set only when the inner event source has an event
+        // - dropped: set by the drop handler for the inner source (it's an
+        //   AtomicBool becaues it requires a longer lifetime than the fired
+        //   flag)
+        let mut fired = false;
+        let dropped = false.into();
+
+        // The inner source that should be dropped after the first loop run.
+        let (pinger, ping) = make_ping().unwrap();
+        let inner = TestSource {
+            dropped: &dropped,
+            ping,
+        };
+
+        // The TransientSource wrapper.
+        let outer: TransientSource<_> = inner.into();
+
+        let mut event_loop = crate::EventLoop::try_new().unwrap();
+        let handle = event_loop.handle();
+
+        let _token = handle
+            .insert_source(outer, |_, _, fired| {
+                *fired = true;
+            })
+            .unwrap();
+
+        // First loop run: the ping generates an event for the inner source.
+        pinger.ping();
+
+        event_loop.dispatch(DURATION_ZERO, &mut fired).unwrap();
+
+        assert!(fired);
+        assert!(dropped.load(Ordering::Relaxed));
+
+        // Second loop run: the ping does nothing because the receiver has been
+        // dropped.
+        fired = false;
+
+        pinger.ping();
+
+        event_loop.dispatch(DURATION_ZERO, &mut fired).unwrap();
+        assert!(!fired);
+    }
+
+    #[test]
+    fn test_transient_passthrough() {
+        // Test that event processing works when a source is nested inside a
+        // TransientSource. In particular, we want to ensure that the final
+        // event is received even if it corresponds to that same event source
+        // returning `PostAction::Remove`.
+        let (sender, receiver) = channel();
+        let outer: TransientSource<_> = receiver.into();
+
+        let mut event_loop = crate::EventLoop::try_new().unwrap();
+        let handle = event_loop.handle();
+
+        // Our callback puts the receied events in here for us to check later.
+        let mut msg_queue = vec![];
+
+        let _token = handle
+            .insert_source(outer, |msg, _, queue: &mut Vec<_>| {
+                queue.push(msg);
+            })
+            .unwrap();
+
+        // Send some data and drop the sender. We specifically want to test that
+        // we get the "closed" message.
+        sender.send(0u32).unwrap();
+        sender.send(1u32).unwrap();
+        sender.send(2u32).unwrap();
+        sender.send(3u32).unwrap();
+        drop(sender);
+
+        // Run loop once to process events.
+        event_loop.dispatch(DURATION_ZERO, &mut msg_queue).unwrap();
+
+        assert!(matches!(
+            msg_queue.as_slice(),
+            &[
+                Event::Msg(0u32),
+                Event::Msg(1u32),
+                Event::Msg(2u32),
+                Event::Msg(3u32),
+                Event::Closed
+            ]
+        ));
+    }
+
+    #[test]
+    fn test_transient_map() {
+        struct IdSource {
+            id: u32,
+            ping: PingSource,
+        }
+
+        impl EventSource for IdSource {
+            type Event = u32;
+            type Metadata = ();
+            type Ret = ();
+            type Error = Box<dyn std::error::Error + Sync + Send>;
+
+            fn process_events<F>(
+                &mut self,
+                readiness: crate::Readiness,
+                token: crate::Token,
+                mut callback: F,
+            ) -> Result<PostAction, Self::Error>
+            where
+                F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+            {
+                let id = self.id;
+                self.ping
+                    .process_events(readiness, token, |_, md| callback(id, md))?;
+
+                let action = if self.id > 2 {
+                    PostAction::Remove
+                } else {
+                    PostAction::Continue
+                };
+
+                Ok(action)
+            }
+
+            fn register(
+                &mut self,
+                poll: &mut crate::Poll,
+                token_factory: &mut crate::TokenFactory,
+            ) -> crate::Result<()> {
+                self.ping.register(poll, token_factory)
+            }
+
+            fn reregister(
+                &mut self,
+                poll: &mut crate::Poll,
+                token_factory: &mut crate::TokenFactory,
+            ) -> crate::Result<()> {
+                self.ping.reregister(poll, token_factory)
+            }
+
+            fn unregister(&mut self, poll: &mut crate::Poll) -> crate::Result<()> {
+                self.ping.unregister(poll)
+            }
+        }
+
+        struct WrapperSource(TransientSource<IdSource>);
+
+        impl EventSource for WrapperSource {
+            type Event = <IdSource as EventSource>::Event;
+            type Metadata = <IdSource as EventSource>::Metadata;
+            type Ret = <IdSource as EventSource>::Ret;
+            type Error = <IdSource as EventSource>::Error;
+
+            fn process_events<F>(
+                &mut self,
+                readiness: crate::Readiness,
+                token: crate::Token,
+                callback: F,
+            ) -> Result<PostAction, Self::Error>
+            where
+                F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+            {
+                let action = self.0.process_events(readiness, token, callback);
+                self.0.map(|inner| inner.id += 1);
+                action
+            }
+
+            fn register(
+                &mut self,
+                poll: &mut crate::Poll,
+                token_factory: &mut crate::TokenFactory,
+            ) -> crate::Result<()> {
+                self.0.map(|inner| inner.id += 1);
+                self.0.register(poll, token_factory)
+            }
+
+            fn reregister(
+                &mut self,
+                poll: &mut crate::Poll,
+                token_factory: &mut crate::TokenFactory,
+            ) -> crate::Result<()> {
+                self.0.map(|inner| inner.id += 1);
+                self.0.reregister(poll, token_factory)
+            }
+
+            fn unregister(&mut self, poll: &mut crate::Poll) -> crate::Result<()> {
+                self.0.map(|inner| inner.id += 1);
+                self.0.unregister(poll)
+            }
+        }
+
+        // To test the id later.
+        let mut id = 0;
+
+        // Create our source.
+        let (pinger, ping) = make_ping().unwrap();
+        let inner = IdSource { id, ping };
+
+        // The TransientSource wrapper.
+        let outer: TransientSource<_> = inner.into();
+
+        // The top level source.
+        let top = WrapperSource(outer);
+
+        // Create a dispatcher so we can check the source afterwards.
+        let dispatcher = Dispatcher::new(top, |got_id, _, test_id| {
+            *test_id = got_id;
+        });
+
+        let mut event_loop = crate::EventLoop::try_new().unwrap();
+        let handle = event_loop.handle();
+
+        let token = handle.register_dispatcher(dispatcher.clone()).unwrap();
+
+        // First loop run: the ping generates an event for the inner source.
+        // The ID should be 1 after the increment in register().
+        pinger.ping();
+        event_loop.dispatch(DURATION_ZERO, &mut id).unwrap();
+        assert_eq!(id, 1);
+
+        // Second loop run: the ID should be 2 after the previous
+        // process_events().
+        pinger.ping();
+        event_loop.dispatch(DURATION_ZERO, &mut id).unwrap();
+        assert_eq!(id, 2);
+
+        // Third loop run: the ID should be 3 after another process_events().
+        pinger.ping();
+        event_loop.dispatch(DURATION_ZERO, &mut id).unwrap();
+        assert_eq!(id, 3);
+
+        // Fourth loop run: the callback is no longer called by the inner
+        // source, so our local ID is not incremented.
+        pinger.ping();
+        event_loop.dispatch(DURATION_ZERO, &mut id).unwrap();
+        assert_eq!(id, 3);
+
+        // Remove the dispatcher so we can inspect the sources.
+        handle.remove(token);
+
+        let mut top_after = dispatcher.into_source_inner();
+
+        // I expect the inner source to be dropped, so the TransientSource
+        // variant is None (its version of None, not Option::None), so its map()
+        // won't call the passed-in function (hence the unreachable!()) and its
+        // return value should be Option::None.
+        assert!(top_after.0.map(|_| unreachable!()).is_none());
+    }
+
+    #[test]
+    fn test_transient_disable() {
+        // Test that disabling and enabling is handled properly.
+        struct DisablingSource(PingSource);
+
+        impl EventSource for DisablingSource {
+            type Event = ();
+            type Metadata = ();
+            type Ret = ();
+            type Error = Box<dyn std::error::Error + Sync + Send>;
+
+            fn process_events<F>(
+                &mut self,
+                readiness: crate::Readiness,
+                token: crate::Token,
+                callback: F,
+            ) -> Result<PostAction, Self::Error>
+            where
+                F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+            {
+                self.0.process_events(readiness, token, callback)?;
+                Ok(PostAction::Disable)
+            }
+
+            fn register(
+                &mut self,
+                poll: &mut crate::Poll,
+                token_factory: &mut crate::TokenFactory,
+            ) -> crate::Result<()> {
+                self.0.register(poll, token_factory)
+            }
+
+            fn reregister(
+                &mut self,
+                poll: &mut crate::Poll,
+                token_factory: &mut crate::TokenFactory,
+            ) -> crate::Result<()> {
+                self.0.reregister(poll, token_factory)
+            }
+
+            fn unregister(&mut self, poll: &mut crate::Poll) -> crate::Result<()> {
+                self.0.unregister(poll)
+            }
+        }
+
+        // Flag for checking when the source fires.
+        let mut fired = false;
+
+        // Create our source.
+        let (pinger, ping) = make_ping().unwrap();
+
+        let inner = DisablingSource(ping);
+
+        // The TransientSource wrapper.
+        let outer: TransientSource<_> = inner.into();
+
+        let mut event_loop = crate::EventLoop::try_new().unwrap();
+        let handle = event_loop.handle();
+        let token = handle
+            .insert_source(outer, |_, _, fired| {
+                *fired = true;
+            })
+            .unwrap();
+
+        // Ping here and not later, to check that disabling after an event is
+        // triggered but not processed does not discard the event.
+        pinger.ping();
+        event_loop.dispatch(DURATION_ZERO, &mut fired).unwrap();
+        assert!(fired);
+
+        // Source should now be disabled.
+        pinger.ping();
+        fired = false;
+        event_loop.dispatch(DURATION_ZERO, &mut fired).unwrap();
+        assert!(!fired);
+
+        // Re-enable the source.
+        handle.enable(&token).unwrap();
+
+        // Trigger another event.
+        pinger.ping();
+        fired = false;
+        event_loop.dispatch(DURATION_ZERO, &mut fired).unwrap();
+        assert!(fired);
+    }
+}
