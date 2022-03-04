@@ -154,4 +154,5 @@ pub use error::{Error, InsertError, Result};
 
 pub mod io;
 mod loop_logic;
+mod macros;
 mod sources;
