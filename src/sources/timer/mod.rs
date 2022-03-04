@@ -347,6 +347,26 @@ mod tests {
     }
 
     #[test]
+    fn instant_timer() {
+        let mut event_loop = crate::EventLoop::try_new().unwrap();
+
+        let evl_handle = event_loop.handle();
+        let mut fired = false;
+        let timer = Timer::<()>::new().unwrap();
+        let timer_handle = timer.handle();
+        evl_handle
+            .insert_source(timer, move |(), _, f| {
+                *f = true;
+            })
+            .unwrap();
+        timer_handle.add_timeout(Duration::from_nanos(0), ());
+        event_loop.dispatch(None, &mut fired).unwrap();
+
+        // The timer should fire right away.
+        assert!(fired);
+    }
+
+    #[test]
     fn multi_timout_order() {
         let mut event_loop = crate::EventLoop::try_new().unwrap();
 
