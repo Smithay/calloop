@@ -144,6 +144,109 @@ pub trait EventSource {
     }
 }
 
+/// Blanket implementation for boxed event sources. [`EventSource`] is not an
+/// object safe trait, so this does not include trait objects.
+impl<T: EventSource> EventSource for Box<T> {
+    type Event = T::Event;
+    type Metadata = T::Metadata;
+    type Ret = T::Ret;
+    type Error = T::Error;
+
+    fn process_events<F>(
+        &mut self,
+        readiness: Readiness,
+        token: Token,
+        callback: F,
+    ) -> Result<PostAction, Self::Error>
+    where
+        F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+    {
+        T::process_events(&mut **self, readiness, token, callback)
+    }
+
+    fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
+        T::register(&mut **self, poll, token_factory)
+    }
+
+    fn reregister(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> crate::Result<()> {
+        T::reregister(&mut **self, poll, token_factory)
+    }
+
+    fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
+        T::unregister(&mut **self, poll)
+    }
+
+    fn pre_run<F>(&mut self, callback: F) -> crate::Result<()>
+    where
+        F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+    {
+        T::pre_run(&mut **self, callback)
+    }
+
+    fn post_run<F>(&mut self, callback: F) -> crate::Result<()>
+    where
+        F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+    {
+        T::post_run(&mut **self, callback)
+    }
+}
+
+/// Blanket implementation for exclusive references to event sources.
+/// [`EventSource`] is not an object safe trait, so this does not include trait
+/// objects.
+impl<T: EventSource> EventSource for &mut T {
+    type Event = T::Event;
+    type Metadata = T::Metadata;
+    type Ret = T::Ret;
+    type Error = T::Error;
+
+    fn process_events<F>(
+        &mut self,
+        readiness: Readiness,
+        token: Token,
+        callback: F,
+    ) -> Result<PostAction, Self::Error>
+    where
+        F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+    {
+        T::process_events(&mut **self, readiness, token, callback)
+    }
+
+    fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
+        T::register(&mut **self, poll, token_factory)
+    }
+
+    fn reregister(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> crate::Result<()> {
+        T::reregister(&mut **self, poll, token_factory)
+    }
+
+    fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
+        T::unregister(&mut **self, poll)
+    }
+
+    fn pre_run<F>(&mut self, callback: F) -> crate::Result<()>
+    where
+        F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+    {
+        T::pre_run(&mut **self, callback)
+    }
+
+    fn post_run<F>(&mut self, callback: F) -> crate::Result<()>
+    where
+        F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+    {
+        T::post_run(&mut **self, callback)
+    }
+}
+
 pub(crate) struct DispatcherInner<S, F> {
     source: S,
     callback: F,
@@ -381,5 +484,100 @@ where
         if let Some(callabck) = self.as_mut() {
             callabck(data);
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::time::Duration;
+
+    use crate::{ping::make_ping, EventLoop};
+
+    // Test event source boxing.
+    #[test]
+    fn test_boxed_source() {
+        let mut fired = false;
+
+        let (pinger, source) = make_ping().unwrap();
+        let boxed = Box::new(source);
+
+        let mut event_loop = EventLoop::try_new().unwrap();
+        let handle = event_loop.handle();
+
+        let token = handle
+            .insert_source(boxed, |_, _, fired| *fired = true)
+            .unwrap();
+
+        pinger.ping();
+
+        event_loop
+            .dispatch(Duration::new(0, 0), &mut fired)
+            .unwrap();
+
+        assert!(fired);
+        fired = false;
+
+        handle.update(&token).unwrap();
+
+        pinger.ping();
+
+        event_loop
+            .dispatch(Duration::new(0, 0), &mut fired)
+            .unwrap();
+
+        assert!(fired);
+        fired = false;
+
+        handle.remove(token);
+
+        event_loop
+            .dispatch(Duration::new(0, 0), &mut fired)
+            .unwrap();
+
+        assert!(!fired);
+    }
+
+    // Test event source trait methods via mut ref.
+    #[test]
+    fn test_mut_ref_source() {
+        let mut fired = false;
+
+        let (pinger, mut source) = make_ping().unwrap();
+        let source_ref = &mut source;
+
+        let mut event_loop = EventLoop::try_new().unwrap();
+        let handle = event_loop.handle();
+
+        let token = handle
+            .insert_source(source_ref, |_, _, fired| *fired = true)
+            .unwrap();
+
+        pinger.ping();
+
+        event_loop
+            .dispatch(Duration::new(0, 0), &mut fired)
+            .unwrap();
+
+        assert!(fired);
+        fired = false;
+
+        handle.update(&token).unwrap();
+
+        pinger.ping();
+
+        event_loop
+            .dispatch(Duration::new(0, 0), &mut fired)
+            .unwrap();
+
+        assert!(fired);
+        fired = false;
+
+        handle.remove(token);
+
+        event_loop
+            .dispatch(Duration::new(0, 0), &mut fired)
+            .unwrap();
+
+        assert!(!fired);
     }
 }
