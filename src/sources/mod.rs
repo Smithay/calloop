@@ -74,8 +74,8 @@ pub trait EventSource {
     ///
     /// Set to `()` if not needed.
     type Ret;
-    /// The error type returned from [`process_events()`] (not the user
-    /// callback!).
+    /// The error type returned from
+    /// [`process_events()`](Self::process_events()) (not the user callback!).
     type Error: Into<Box<dyn std::error::Error + Sync + Send>>;
 
     /// Process any relevant events
