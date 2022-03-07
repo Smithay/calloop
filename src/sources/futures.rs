@@ -162,7 +162,7 @@ impl<T> EventSource for Executor<T> {
 /// An error arising from processing events in an async executor event source.
 #[derive(thiserror::Error, Debug)]
 pub enum ExecutorError {
-    /// Error while reading new futures added via [`Executor::schedule()`].
+    /// Error while reading new futures added via [`Scheduler::schedule()`].
     #[error("error adding new futures")]
     NewFutureError(ChannelError),
 

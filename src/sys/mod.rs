@@ -252,7 +252,7 @@ impl Poll {
     /// This allows you to change the interest, mode or token of a file
     /// descriptor. Fails if the provided fd is not currently registered.
     ///
-    /// See note on [`register()`] regarding leaking.
+    /// See note on [`register()`](Self::register()) regarding leaking.
     pub fn reregister(
         &mut self,
         fd: RawFd,

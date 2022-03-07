@@ -1,7 +1,9 @@
 //! Macros for helping with common operations in Calloop.
 
 /// Register a set of event sources. Effectively calls
-/// [`EventSource::register()`] for all the sources provided. Usage:
+/// [`EventSource::register()`] for all the sources provided.
+///
+/// Usage:
 ///
 /// ```none,actually-rust-but-see-https://github.com/rust-lang/rust/issues/63193
 /// calloop::batch_register!(
@@ -17,6 +19,8 @@
 /// things with a particular source, you'll need to leave it off the list. Also
 /// note that this only does try-or-early-return error handling in the order
 /// that you list the sources; if you need anything else, don't use this macro.
+///
+/// [`EventSource::register()`]: crate::EventSource::register()
 #[macro_export]
 macro_rules! batch_register {
     ($poll:ident, $token_fac:ident, $( $source:expr ),* $(,)?) => {
@@ -30,7 +34,9 @@ macro_rules! batch_register {
 }
 
 /// Reregister a set of event sources. Effectively calls
-/// [`EventSource::reregister()`] for all the sources provided. Usage:
+/// [`EventSource::reregister()`] for all the sources provided.
+///
+/// Usage:
 ///
 /// ```none,actually-rust-but-see-https://github.com/rust-lang/rust/issues/63193
 /// calloop::batch_reregister!(
@@ -46,6 +52,8 @@ macro_rules! batch_register {
 /// things with a particular source, you'll need to leave it off the list. Also
 /// note that this only does try-or-early-return error handling in the order
 /// that you list the sources; if you need anything else, don't use this macro.
+///
+/// [`EventSource::reregister()`]: crate::EventSource::reregister()
 #[macro_export]
 macro_rules! batch_reregister {
     ($poll:ident, $token_fac:ident, $( $source:expr ),* $(,)?) => {
@@ -59,7 +67,9 @@ macro_rules! batch_reregister {
 }
 
 /// Unregister a set of event sources. Effectively calls
-/// [`EventSource::unregister()`] for all the sources provided. Usage:
+/// [`EventSource::unregister()`] for all the sources provided.
+///
+/// Usage:
 ///
 /// ```none,actually-rust-but-see-https://github.com/rust-lang/rust/issues/63193
 /// calloop::batch_unregister!(
@@ -75,6 +85,8 @@ macro_rules! batch_reregister {
 /// things with a particular source, you'll need to leave it off the list. Also
 /// note that this only does try-or-early-return error handling in the order
 /// that you list the sources; if you need anything else, don't use this macro.
+///
+/// [`EventSource::unregister()`]: crate::EventSource::unregister()
 #[macro_export]
 macro_rules! batch_unregister {
     ($poll:ident, $( $source:expr ),* $(,)?) => {
