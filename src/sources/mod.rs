@@ -1,5 +1,6 @@
 use std::{
     cell::{Ref, RefCell, RefMut},
+    ops::{BitOr, BitOrAssign},
     rc::Rc,
 };
 
@@ -18,8 +19,19 @@ pub mod timer;
 pub mod transient;
 
 /// Possible actions that can be requested to the event loop by an
-/// event source once its events have been processed
-#[derive(Debug)]
+/// event source once its events have been processed.
+///
+/// `PostAction` values can be combined with the `|` (bit-or) operator (or with
+/// `|=`) with the result that:
+/// - if both values are identical, the result is that value
+/// - if they are different, the result is [`Reregister`]
+///
+/// Bit-or-ing these results is useful for composed sources to combine the
+/// results of their child sources, but note that it only applies to the child
+/// sources. For example, if every child source returns `Continue`, the result
+/// will be `Continue`, but the parent source might still need to return
+/// `Reregister` or something else depending on any additional logic it uses.
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum PostAction {
     /// Continue listening for events on this source as before
     Continue,
@@ -33,6 +45,28 @@ pub enum PostAction {
     ///
     /// Has the same effect as [`LoopHandle::kill`](crate::LoopHandle#method.kill)
     Remove,
+}
+
+/// Combines `PostAction` values returned from nested event sources.
+impl BitOr for PostAction {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        if matches!(self, x if x == rhs) {
+            self
+        } else {
+            Self::Reregister
+        }
+    }
+}
+
+/// Combines `PostAction` values returned from nested event sources.
+impl BitOrAssign for PostAction {
+    fn bitor_assign(&mut self, rhs: Self) {
+        if *self != rhs {
+            *self = Self::Reregister;
+        }
+    }
 }
 
 /// Trait representing an event source
@@ -579,5 +613,100 @@ mod test {
             .unwrap();
 
         assert!(!fired);
+    }
+
+    // Test PostAction combinations.
+    #[test]
+    fn post_action_combine() {
+        use super::PostAction::*;
+        assert_eq!(Continue | Continue, Continue);
+        assert_eq!(Continue | Reregister, Reregister);
+        assert_eq!(Continue | Disable, Reregister);
+        assert_eq!(Continue | Remove, Reregister);
+
+        assert_eq!(Reregister | Continue, Reregister);
+        assert_eq!(Reregister | Reregister, Reregister);
+        assert_eq!(Reregister | Disable, Reregister);
+        assert_eq!(Reregister | Remove, Reregister);
+
+        assert_eq!(Disable | Continue, Reregister);
+        assert_eq!(Disable | Reregister, Reregister);
+        assert_eq!(Disable | Disable, Disable);
+        assert_eq!(Disable | Remove, Reregister);
+
+        assert_eq!(Remove | Continue, Reregister);
+        assert_eq!(Remove | Reregister, Reregister);
+        assert_eq!(Remove | Disable, Reregister);
+        assert_eq!(Remove | Remove, Remove);
+    }
+
+    // Test PostAction self-assignment.
+    #[test]
+    fn post_action_combine_assign() {
+        use super::PostAction::*;
+
+        let mut action = Continue;
+        action |= Continue;
+        assert_eq!(action, Continue);
+
+        let mut action = Continue;
+        action |= Reregister;
+        assert_eq!(action, Reregister);
+
+        let mut action = Continue;
+        action |= Disable;
+        assert_eq!(action, Reregister);
+
+        let mut action = Continue;
+        action |= Remove;
+        assert_eq!(action, Reregister);
+
+        let mut action = Reregister;
+        action |= Continue;
+        assert_eq!(action, Reregister);
+
+        let mut action = Reregister;
+        action |= Reregister;
+        assert_eq!(action, Reregister);
+
+        let mut action = Reregister;
+        action |= Disable;
+        assert_eq!(action, Reregister);
+
+        let mut action = Reregister;
+        action |= Remove;
+        assert_eq!(action, Reregister);
+
+        let mut action = Disable;
+        action |= Continue;
+        assert_eq!(action, Reregister);
+
+        let mut action = Disable;
+        action |= Reregister;
+        assert_eq!(action, Reregister);
+
+        let mut action = Disable;
+        action |= Disable;
+        assert_eq!(action, Disable);
+
+        let mut action = Disable;
+        action |= Remove;
+        assert_eq!(action, Reregister);
+
+        let mut action = Remove;
+        action |= Continue;
+        assert_eq!(action, Reregister);
+
+        let mut action = Remove;
+        action |= Reregister;
+        assert_eq!(action, Reregister);
+
+        let mut action = Remove;
+        action |= Disable;
+        assert_eq!(action, Reregister);
+
+        let mut action = Remove;
+        action |= Remove;
+        assert_eq!(action, Remove);
     }
 }
