@@ -24,7 +24,7 @@ pub mod transient;
 /// `PostAction` values can be combined with the `|` (bit-or) operator (or with
 /// `|=`) with the result that:
 /// - if both values are identical, the result is that value
-/// - if they are different, the result is [`Reregister`]
+/// - if they are different, the result is [`Reregister`](PostAction::Reregister)
 ///
 /// Bit-or-ing these results is useful for composed sources to combine the
 /// results of their child sources, but note that it only applies to the child

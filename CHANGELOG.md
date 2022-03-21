@@ -14,7 +14,12 @@
   associated `Error` type on the `EventSource` trait.
 - **Breaking:** Many API functions now use Calloop's own error type (`calloop::Error`) instead of
   `std::io::Error` as the error variants of their returned results.
-- On Linux `Timer<T>` is now driven by `timerfd`.
+- **Breaking:** The `Timer` event source has been completely reworked and is now directly driven by
+  calloop polling mechanism instead of a background thread. Timer multiplexing is now handled by
+  creating multiple `Timer`s, and self-repeating timers is handled by the return value of the
+  associated event callback.
+- **Breaking:** The minimum supported Rust version is now 1.53.0
+- Introduce `EventLoop::try_new_high_precision()` for sub-millisecond accuracy in the event loop
 
 ## 0.9.2 -- 2021-12-27
 

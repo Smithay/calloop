@@ -225,7 +225,7 @@ mod tests {
 
         // nothing is sent, nothing is received
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut got)
+            .dispatch(Some(::std::time::Duration::ZERO), &mut got)
             .unwrap();
 
         assert_eq!(got, (false, false));
@@ -233,7 +233,7 @@ mod tests {
         // a message is send
         tx.send(()).unwrap();
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut got)
+            .dispatch(Some(::std::time::Duration::ZERO), &mut got)
             .unwrap();
 
         assert_eq!(got, (true, false));
@@ -241,7 +241,7 @@ mod tests {
         // the sender is dropped
         ::std::mem::drop(tx);
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut got)
+            .dispatch(Some(::std::time::Duration::ZERO), &mut got)
             .unwrap();
 
         assert_eq!(got, (true, true));
@@ -273,7 +273,7 @@ mod tests {
 
         // nothing is sent, nothing is received
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut received)
+            .dispatch(Some(::std::time::Duration::ZERO), &mut received)
             .unwrap();
 
         assert_eq!(received.0, 0);
@@ -286,7 +286,7 @@ mod tests {
 
         // empty it
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut received)
+            .dispatch(Some(::std::time::Duration::ZERO), &mut received)
             .unwrap();
 
         assert_eq!(received.0, 2);
@@ -298,7 +298,7 @@ mod tests {
 
         // final read of the channel
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut received)
+            .dispatch(Some(::std::time::Duration::ZERO), &mut received)
             .unwrap();
 
         assert_eq!(received.0, 3);

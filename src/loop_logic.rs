@@ -5,7 +5,7 @@ use std::os::unix::io::AsRawFd;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use slotmap::SlotMap;
 
@@ -220,7 +220,22 @@ impl<'l, Data> EventLoop<'l, Data> {
     ///
     /// Fails if the initialization of the polling system failed.
     pub fn try_new() -> crate::Result<Self> {
-        let poll = Poll::new()?;
+        Self::inner_new(false)
+    }
+
+    /// Create a new event loop in high precision mode
+    ///
+    /// On some platforms it requires to setup more resources to enable high-precision
+    /// (sub millisecond) capabilities, so you should use this constructor if you need
+    /// this kind of precision.
+    ///
+    /// Fails if the initialization of the polling system failed.
+    pub fn try_new_high_precision() -> crate::Result<Self> {
+        Self::inner_new(true)
+    }
+
+    fn inner_new(high_precision: bool) -> crate::Result<Self> {
+        let poll = Poll::new(high_precision)?;
         let handle = LoopHandle {
             inner: Rc::new(LoopInner {
                 poll: RefCell::new(poll),
@@ -248,10 +263,10 @@ impl<'l, Data> EventLoop<'l, Data> {
         mut timeout: Option<Duration>,
         data: &mut Data,
     ) -> crate::Result<()> {
+        let now = Instant::now();
         let events = {
             let mut poll = self.handle.inner.poll.borrow_mut();
             loop {
-                let now = std::time::Instant::now();
                 let result = poll.poll(timeout);
 
                 match result {
@@ -467,8 +482,8 @@ mod tests {
     use std::time::Duration;
 
     use crate::{
-        generic::Generic, ping::*, timer::Timer, Dispatcher, Interest, Mode, Poll, PostAction,
-        Readiness, RegistrationToken, Token, TokenFactory,
+        generic::Generic, ping::*, Dispatcher, Interest, Mode, Poll, PostAction, Readiness,
+        RegistrationToken, Token, TokenFactory,
     };
 
     use super::EventLoop;
@@ -484,7 +499,7 @@ mod tests {
         });
 
         event_loop
-            .dispatch(Some(Duration::from_millis(0)), &mut dispatched)
+            .dispatch(Some(Duration::ZERO), &mut dispatched)
             .unwrap();
 
         assert!(dispatched);
@@ -504,7 +519,7 @@ mod tests {
         idle.cancel();
 
         event_loop
-            .dispatch(Duration::from_millis(0), &mut dispatched)
+            .dispatch(Duration::ZERO, &mut dispatched)
             .unwrap();
 
         assert!(!dispatched);
@@ -576,7 +591,7 @@ mod tests {
         ping.ping();
         let mut dispatched = false;
         event_loop
-            .dispatch(Duration::from_millis(0), &mut dispatched)
+            .dispatch(Duration::ZERO, &mut dispatched)
             .unwrap();
         assert!(dispatched);
 
@@ -585,7 +600,7 @@ mod tests {
         event_loop.handle().disable(&ping_token).unwrap();
         let mut dispatched = false;
         event_loop
-            .dispatch(Duration::from_millis(0), &mut dispatched)
+            .dispatch(Duration::ZERO, &mut dispatched)
             .unwrap();
         assert!(!dispatched);
 
@@ -596,7 +611,7 @@ mod tests {
         event_loop.handle().enable(&ping_token).unwrap();
         let mut dispatched = false;
         event_loop
-            .dispatch(Duration::from_millis(0), &mut dispatched)
+            .dispatch(Duration::ZERO, &mut dispatched)
             .unwrap();
         assert!(dispatched);
     }
@@ -678,14 +693,14 @@ mod tests {
         let mut dispatched = 0;
         ping1.ping();
         event_loop
-            .dispatch(Duration::from_millis(0), &mut dispatched)
+            .dispatch(Duration::ZERO, &mut dispatched)
             .unwrap();
         assert_eq!(dispatched, 1);
 
         dispatched = 0;
         ping2.ping();
         event_loop
-            .dispatch(Duration::from_millis(0), &mut dispatched)
+            .dispatch(Duration::ZERO, &mut dispatched)
             .unwrap();
         assert_eq!(dispatched, 2);
 
@@ -693,7 +708,7 @@ mod tests {
         ping1.ping();
         ping2.ping();
         event_loop
-            .dispatch(Duration::from_millis(0), &mut dispatched)
+            .dispatch(Duration::ZERO, &mut dispatched)
             .unwrap();
         assert_eq!(dispatched, 3);
     }
@@ -744,7 +759,7 @@ mod tests {
         // first dispatch, nothing is readable
         let mut dispatched = false;
         event_loop
-            .dispatch(Duration::from_millis(0), &mut dispatched)
+            .dispatch(Duration::ZERO, &mut dispatched)
             .unwrap();
         assert!(!dispatched);
 
@@ -752,14 +767,14 @@ mod tests {
         write(sock2, &[1, 2, 3]).unwrap();
         dispatched = false;
         event_loop
-            .dispatch(Duration::from_millis(0), &mut dispatched)
+            .dispatch(Duration::ZERO, &mut dispatched)
             .unwrap();
         assert!(dispatched);
 
         // All has been read, no longer readable
         dispatched = false;
         event_loop
-            .dispatch(Duration::from_millis(0), &mut dispatched)
+            .dispatch(Duration::ZERO, &mut dispatched)
             .unwrap();
         assert!(!dispatched);
 
@@ -770,7 +785,7 @@ mod tests {
         // the socket is writable
         dispatched = false;
         event_loop
-            .dispatch(Duration::from_millis(0), &mut dispatched)
+            .dispatch(Duration::ZERO, &mut dispatched)
             .unwrap();
         assert!(dispatched);
 
@@ -781,7 +796,7 @@ mod tests {
         // the socket is not readable
         dispatched = false;
         event_loop
-            .dispatch(Duration::from_millis(0), &mut dispatched)
+            .dispatch(Duration::ZERO, &mut dispatched)
             .unwrap();
         assert!(!dispatched);
     }
@@ -805,78 +820,9 @@ mod tests {
 
         let mut opt_src = Some(ping_token);
 
-        event_loop
-            .dispatch(Duration::from_millis(0), &mut opt_src)
-            .unwrap();
+        event_loop.dispatch(Duration::ZERO, &mut opt_src).unwrap();
 
         assert!(opt_src.is_none());
-    }
-
-    #[test]
-    fn non_static_source() {
-        let mut flag = false;
-
-        {
-            let timer = Timer::new().unwrap();
-            let handle = timer.handle();
-            handle.add_timeout(std::time::Duration::from_millis(5), &mut flag);
-
-            let mut fired = false;
-
-            let mut event_loop = EventLoop::<bool>::try_new().unwrap();
-            let _timer_token = event_loop
-                .handle()
-                .insert_source(timer, |flag, _, fired| {
-                    *flag = true;
-                    *fired = true;
-                })
-                .unwrap();
-
-            event_loop
-                .dispatch(Duration::from_millis(500), &mut fired)
-                .unwrap();
-
-            assert!(fired);
-        }
-
-        assert!(flag);
-    }
-
-    #[test]
-    fn non_static_dispatcher() {
-        let mut flag = false;
-
-        {
-            let timer = Timer::<&mut bool>::new().unwrap();
-            let _ = timer
-                .handle()
-                .add_timeout(std::time::Duration::from_millis(5), &mut flag);
-
-            let dispatcher = Dispatcher::new(timer, |flag, _, fired| {
-                *flag = true;
-                *fired = true;
-            });
-
-            let mut fired = false;
-
-            let mut event_loop = EventLoop::<bool>::try_new().unwrap();
-            let disp_token = event_loop
-                .handle()
-                .register_dispatcher(dispatcher.clone())
-                .unwrap();
-
-            event_loop
-                .dispatch(Duration::from_millis(500), &mut fired)
-                .unwrap();
-            assert!(fired);
-
-            event_loop.handle().remove(disp_token);
-
-            let timer = dispatcher.into_source_inner();
-            timer.handle().cancel_all_timeouts();
-        }
-
-        assert!(flag);
     }
 
     #[test]
@@ -901,7 +847,7 @@ mod tests {
             ping.ping();
 
             event_loop
-                .dispatch(Duration::from_millis(0), &mut ref_sender)
+                .dispatch(Duration::ZERO, &mut ref_sender)
                 .unwrap();
         }
 

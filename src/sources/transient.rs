@@ -276,9 +276,6 @@ mod tests {
         time::Duration,
     };
 
-    // This can be removed in favour of Duration::ZERO when the MSRV is 1.53.0
-    const DURATION_ZERO: Duration = Duration::from_nanos(0);
-
     #[test]
     fn test_transient_drop() {
         // A test source that sets a flag when it's dropped.
@@ -365,7 +362,7 @@ mod tests {
         // First loop run: the ping generates an event for the inner source.
         pinger.ping();
 
-        event_loop.dispatch(DURATION_ZERO, &mut fired).unwrap();
+        event_loop.dispatch(Duration::ZERO, &mut fired).unwrap();
 
         assert!(fired);
         assert!(dropped.load(Ordering::Relaxed));
@@ -376,7 +373,7 @@ mod tests {
 
         pinger.ping();
 
-        event_loop.dispatch(DURATION_ZERO, &mut fired).unwrap();
+        event_loop.dispatch(Duration::ZERO, &mut fired).unwrap();
         assert!(!fired);
     }
 
@@ -410,7 +407,7 @@ mod tests {
         drop(sender);
 
         // Run loop once to process events.
-        event_loop.dispatch(DURATION_ZERO, &mut msg_queue).unwrap();
+        event_loop.dispatch(Duration::ZERO, &mut msg_queue).unwrap();
 
         assert!(matches!(
             msg_queue.as_slice(),
@@ -552,24 +549,24 @@ mod tests {
         // First loop run: the ping generates an event for the inner source.
         // The ID should be 1 after the increment in register().
         pinger.ping();
-        event_loop.dispatch(DURATION_ZERO, &mut id).unwrap();
+        event_loop.dispatch(Duration::ZERO, &mut id).unwrap();
         assert_eq!(id, 1);
 
         // Second loop run: the ID should be 2 after the previous
         // process_events().
         pinger.ping();
-        event_loop.dispatch(DURATION_ZERO, &mut id).unwrap();
+        event_loop.dispatch(Duration::ZERO, &mut id).unwrap();
         assert_eq!(id, 2);
 
         // Third loop run: the ID should be 3 after another process_events().
         pinger.ping();
-        event_loop.dispatch(DURATION_ZERO, &mut id).unwrap();
+        event_loop.dispatch(Duration::ZERO, &mut id).unwrap();
         assert_eq!(id, 3);
 
         // Fourth loop run: the callback is no longer called by the inner
         // source, so our local ID is not incremented.
         pinger.ping();
-        event_loop.dispatch(DURATION_ZERO, &mut id).unwrap();
+        event_loop.dispatch(Duration::ZERO, &mut id).unwrap();
         assert_eq!(id, 3);
 
         // Remove the dispatcher so we can inspect the sources.
@@ -651,13 +648,13 @@ mod tests {
         // Ping here and not later, to check that disabling after an event is
         // triggered but not processed does not discard the event.
         pinger.ping();
-        event_loop.dispatch(DURATION_ZERO, &mut fired).unwrap();
+        event_loop.dispatch(Duration::ZERO, &mut fired).unwrap();
         assert!(fired);
 
         // Source should now be disabled.
         pinger.ping();
         fired = false;
-        event_loop.dispatch(DURATION_ZERO, &mut fired).unwrap();
+        event_loop.dispatch(Duration::ZERO, &mut fired).unwrap();
         assert!(!fired);
 
         // Re-enable the source.
@@ -666,7 +663,7 @@ mod tests {
         // Trigger another event.
         pinger.ping();
         fired = false;
-        event_loop.dispatch(DURATION_ZERO, &mut fired).unwrap();
+        event_loop.dispatch(Duration::ZERO, &mut fired).unwrap();
         assert!(fired);
     }
 }

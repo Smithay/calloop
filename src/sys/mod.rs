@@ -1,7 +1,7 @@
-use std::{convert::TryInto, os::unix::io::RawFd};
+use std::{cell::RefCell, convert::TryInto, os::unix::io::RawFd, rc::Rc, time::Duration};
 use vec_map::VecMap;
 
-use crate::loop_logic::CalloopKey;
+use crate::{loop_logic::CalloopKey, sources::timer::TimerWheel};
 
 #[cfg(target_os = "linux")]
 mod epoll;
@@ -176,6 +176,7 @@ pub struct Poll {
     // VecMap which has that exact constraint for its keys. If that ever
     // changes, this will need to be changed to a different structure.
     tokens: VecMap<*mut Token>,
+    pub(crate) timers: Rc<RefCell<TimerWheel>>,
 }
 
 impl std::fmt::Debug for Poll {
@@ -186,18 +187,47 @@ impl std::fmt::Debug for Poll {
 }
 
 impl Poll {
-    pub(crate) fn new() -> crate::Result<Poll> {
+    pub(crate) fn new(high_precision: bool) -> crate::Result<Poll> {
         Ok(Poll {
-            poller: Poller::new()?,
+            poller: Poller::new(high_precision)?,
             tokens: VecMap::new(),
+            timers: Rc::new(RefCell::new(TimerWheel::new())),
         })
     }
 
     pub(crate) fn poll(
         &mut self,
-        timeout: Option<std::time::Duration>,
+        mut timeout: Option<std::time::Duration>,
     ) -> crate::Result<Vec<PollEvent>> {
-        self.poller.poll(timeout)
+        let now = std::time::Instant::now();
+        // adjust the timeout for the timers
+        if let Some(next_timeout) = self.timers.borrow().next_deadline() {
+            if next_timeout <= now {
+                timeout = Some(Duration::ZERO);
+            } else if let Some(deadline) = timeout {
+                timeout = Some(std::cmp::min(deadline, next_timeout - now));
+            } else {
+                timeout = Some(next_timeout - now);
+            }
+        };
+
+        let mut events = self.poller.poll(timeout)?;
+
+        // Update 'now' as some time may have elapsed in poll()
+        let now = std::time::Instant::now();
+        let mut timers = self.timers.borrow_mut();
+        while let Some((_, token)) = timers.next_expired(now) {
+            events.push(PollEvent {
+                readiness: Readiness {
+                    readable: true,
+                    writable: false,
+                    error: false,
+                },
+                token,
+            });
+        }
+
+        Ok(events)
     }
 
     /// Register a new file descriptor for polling
