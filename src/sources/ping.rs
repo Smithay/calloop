@@ -203,14 +203,14 @@ mod tests {
 
         let mut dispatched = false;
         event_loop
-            .dispatch(std::time::Duration::from_millis(0), &mut dispatched)
+            .dispatch(std::time::Duration::ZERO, &mut dispatched)
             .unwrap();
         assert!(dispatched);
 
         // Ping has been drained an no longer generates events
         let mut dispatched = false;
         event_loop
-            .dispatch(std::time::Duration::from_millis(0), &mut dispatched)
+            .dispatch(std::time::Duration::ZERO, &mut dispatched)
             .unwrap();
         assert!(!dispatched);
     }
@@ -230,7 +230,7 @@ mod tests {
         // If the sender is closed from the start, the ping should first trigger
         // once, disabling itself but not invoking the callback
         event_loop
-            .dispatch(std::time::Duration::from_millis(0), &mut dispatched)
+            .dispatch(std::time::Duration::ZERO, &mut dispatched)
             .unwrap();
         assert!(!dispatched);
 

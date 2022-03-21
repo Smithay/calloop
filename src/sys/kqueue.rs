@@ -1,6 +1,9 @@
 use std::{io, os::unix::io::RawFd};
 
-use nix::sys::event::{kevent, kevent_ts, kqueue, EventFilter, EventFlag, FilterFlag, KEvent};
+use nix::{
+    libc::{c_long, time_t, timespec},
+    sys::event::{kevent_ts, kqueue, EventFilter, EventFlag, FilterFlag, KEvent},
+};
 
 use super::{Interest, Mode, PollEvent, Readiness, Token};
 
@@ -17,7 +20,8 @@ fn mode_to_flag(mode: Mode) -> EventFlag {
 }
 
 impl Kqueue {
-    pub(crate) fn new() -> crate::Result<Kqueue> {
+    // Kqueue is always high precision
+    pub(crate) fn new(_high_precision: bool) -> crate::Result<Kqueue> {
         let kq = kqueue()?;
         Ok(Kqueue { kq })
     }
@@ -35,10 +39,15 @@ impl Kqueue {
             0,
         ); 32];
 
-        let nevents = match timeout {
-            None => kevent_ts(self.kq, &[], &mut buffer, None),
-            Some(t) => kevent(self.kq, &[], &mut buffer, t.as_millis() as usize),
-        }?;
+        let nevents = kevent_ts(
+            self.kq,
+            &[],
+            &mut buffer,
+            timeout.map(|d| timespec {
+                tv_sec: d.as_secs() as time_t,
+                tv_nsec: d.subsec_nanos() as c_long,
+            }),
+        )?;
 
         let ret = buffer
             .iter()

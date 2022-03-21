@@ -187,7 +187,7 @@ mod tests {
             .unwrap();
 
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut dispached)
+            .dispatch(Some(::std::time::Duration::ZERO), &mut dispached)
             .unwrap();
 
         assert!(!dispached);
@@ -197,7 +197,7 @@ mod tests {
         tx.flush().unwrap();
 
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut dispached)
+            .dispatch(Some(::std::time::Duration::ZERO), &mut dispached)
             .unwrap();
 
         assert!(dispached);
@@ -224,7 +224,7 @@ mod tests {
         let generic_token = handle.register_dispatcher(dispatcher.clone()).unwrap();
 
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut dispached)
+            .dispatch(Some(::std::time::Duration::ZERO), &mut dispached)
             .unwrap();
 
         assert!(!dispached);
@@ -238,7 +238,7 @@ mod tests {
         tx.flush().unwrap();
 
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut dispached)
+            .dispatch(Some(::std::time::Duration::ZERO), &mut dispached)
             .unwrap();
 
         // the source has not been dispatched, as the source is no longer here
@@ -262,7 +262,7 @@ mod tests {
             .unwrap();
 
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut dispached)
+            .dispatch(Some(::std::time::Duration::ZERO), &mut dispached)
             .unwrap();
 
         // the has now been properly dispatched

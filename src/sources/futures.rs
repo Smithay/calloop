@@ -194,7 +194,7 @@ mod tests {
         let fut = async { 42 };
 
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut got)
+            .dispatch(Some(::std::time::Duration::ZERO), &mut got)
             .unwrap();
 
         // the future is not yet inserted, and thus has not yet run
@@ -203,7 +203,7 @@ mod tests {
         sched.schedule(fut).unwrap();
 
         event_loop
-            .dispatch(Some(::std::time::Duration::from_millis(0)), &mut got)
+            .dispatch(Some(::std::time::Duration::ZERO), &mut got)
             .unwrap();
 
         // the future has run
