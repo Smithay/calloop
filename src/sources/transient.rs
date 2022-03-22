@@ -264,7 +264,7 @@ impl<T: crate::EventSource> crate::EventSource for TransientSource<T> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::{
         channel::{channel, Event},

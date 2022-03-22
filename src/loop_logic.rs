@@ -45,15 +45,15 @@ pub struct LoopHandle<'l, Data> {
     inner: Rc<LoopInner<'l, Data>>,
 }
 
-#[cfg(not(tarpaulin_include))]
 impl<'l, Data> std::fmt::Debug for LoopHandle<'l, Data> {
+    #[cfg_attr(coverage, no_coverage)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("LoopHandle { ... }")
     }
 }
 
-#[cfg(not(tarpaulin_include))]
 impl<'l, Data> Clone for LoopHandle<'l, Data> {
+    #[cfg_attr(coverage, no_coverage)]
     fn clone(&self) -> Self {
         LoopHandle {
             inner: self.inner.clone(),
@@ -208,8 +208,8 @@ pub struct EventLoop<'l, Data> {
     ping: crate::sources::ping::Ping,
 }
 
-#[cfg(not(tarpaulin_include))]
 impl<'l, Data> std::fmt::Debug for EventLoop<'l, Data> {
+    #[cfg_attr(coverage, no_coverage)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("EventLoop { ... }")
     }
@@ -433,8 +433,8 @@ pub struct LoopSignal {
     ping: crate::sources::ping::Ping,
 }
 
-#[cfg(not(tarpaulin_include))]
 impl std::fmt::Debug for LoopSignal {
+    #[cfg_attr(coverage, no_coverage)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("LoopSignal { ... }")
     }

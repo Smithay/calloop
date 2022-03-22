@@ -100,7 +100,7 @@ macro_rules! batch_unregister {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use std::time::Duration;
 
     use crate::{

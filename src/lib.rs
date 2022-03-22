@@ -141,6 +141,7 @@
 #![warn(missing_docs, missing_debug_implementations)]
 #![allow(clippy::needless_doctest_main)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![cfg_attr(coverage, feature(no_coverage))]
 
 mod sys;
 
