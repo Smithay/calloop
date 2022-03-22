@@ -74,17 +74,17 @@ pub struct InsertError<T> {
     pub error: Error,
 }
 
-#[cfg(not(tarpaulin_include))]
 impl<T> Debug for InsertError<T> {
+    #[cfg_attr(coverage, no_coverage)]
     fn fmt(&self, formatter: &mut Formatter) -> core::result::Result<(), fmt::Error> {
         write!(formatter, "{:?}", self.error)
     }
 }
 
-#[cfg(not(tarpaulin_include))]
 impl<T> From<InsertError<T>> for crate::Error {
     /// Converts the [`InsertError`] into Calloop's error type, throwing away
     /// the contained source.
+    #[cfg_attr(coverage, no_coverage)]
     fn from(e: InsertError<T>) -> crate::Error {
         e.error
     }

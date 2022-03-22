@@ -38,8 +38,8 @@ pub struct Async<'l, F: AsRawFd> {
     old_flags: OFlag,
 }
 
-#[cfg(not(tarpaulin_include))]
 impl<'l, F: AsRawFd + std::fmt::Debug> std::fmt::Debug for Async<'l, F> {
+    #[cfg_attr(coverage, no_coverage)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Async").field("fd", &self.fd).finish()
     }

@@ -8,14 +8,14 @@ on:
 
 jobs:
   ci-linux:
-    name: CI (Linux)
+    name: CI
 
     strategy:
       fail-fast: false
       matrix:
-        rust: ['1.49.0', 'stable', 'beta']
+        rust: ['1.53.0', 'stable', 'beta']
       
-    runs-on: ubuntu-latest
+    runs-on: 'ubuntu-latest'
 
     steps:
       - name: Checkout sources
@@ -33,20 +33,21 @@ jobs:
           toolchain: ${{ matrix.rust }}
           override: true
 
-      - name: Coverage
-        uses: actions-rs/tarpaulin@v0.1
+      - name: Run tests
+        uses: actions-rs/cargo@v1
         with:
-          args: --ignore-tests --all-features --exclude-files "doc/*"
-
-      - name: Upload to codecov.io
-        uses: codecov/codecov-action@v2
-        with:
-          files: ./cobertura.xml
+          command: test
+          args: --all-features
 
   ci-macos:
-    name: CI (macOS)
+    name: Coverage
 
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['ubuntu-latest', 'macos-latest']
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout sources
@@ -56,7 +57,7 @@ jobs:
         uses: actions/cache@v1
         with:
           path: ~/.cargo
-          key: cargo-nightly
+          key: cargo-nightly-${{ matrix.os }}
 
       - name: Rust toolchain
         uses: actions-rs/toolchain@v1
@@ -78,15 +79,16 @@ jobs:
           args: --all-features
         env:
           LLVM_PROFILE_FILE: "calloop-%p-%m.profraw"
-          RUSTFLAGS: "-Zinstrument-coverage"
+          RUSTFLAGS: "-Cinstrument-coverage --cfg coverage"
 
       - name: Coverage
-        run: grcov . --binary-path ./target/debug -s . -t lcov --branch --llvm --ignore-not-existing --keep-only "src/sys/*" --excl-br-start "mod tests \{" --excl-start "mod tests \{" --excl-br-line "#\[derive\(" --excl-line "#\[derive\(" -o lcov.info
+        run: grcov . --binary-path ./target/debug -s . -t lcov --branch --llvm --ignore-not-existing --ignore 'examples/*' --ignore 'tests/*' --ignore '*/.cargo/registry/*' --excl-br-start "mod tests \{" --excl-start "mod tests \{" --excl-br-line "#\[derive\(" --excl-line "#\[derive\(" -o lcov.info
     
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v2
         with:
           files: ./lcov.info
+          flags: ${{ matrix.os }}
 
   lint:
     runs-on: ubuntu-latest

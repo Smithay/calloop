@@ -151,7 +151,7 @@ where
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use std::io::{Read, Write};
 
     use super::Generic;

@@ -411,8 +411,8 @@ where
 /// Use `into_source_inner` to get the event source back.
 pub struct Dispatcher<'a, S, Data>(Rc<dyn ErasedDispatcher<'a, S, Data> + 'a>);
 
-#[cfg(not(tarpaulin_include))]
 impl<'a, S, Data> std::fmt::Debug for Dispatcher<'a, S, Data> {
+    #[cfg_attr(coverage, no_coverage)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("Dispatcher { ... }")
     }
@@ -484,8 +484,8 @@ pub struct Idle<'i> {
     pub(crate) callback: Rc<RefCell<dyn CancellableIdle + 'i>>,
 }
 
-#[cfg(not(tarpaulin_include))]
 impl<'i> std::fmt::Debug for Idle<'i> {
+    #[cfg_attr(coverage, no_coverage)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("Idle { ... }")
     }
@@ -524,7 +524,7 @@ where
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use std::time::Duration;
 
     use crate::{ping::make_ping, EventLoop};

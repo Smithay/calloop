@@ -35,8 +35,8 @@ pub struct Sender<T> {
     ping: Ping,
 }
 
-#[cfg(not(tarpaulin_include))]
 impl<T> Clone for Sender<T> {
+    #[cfg_attr(coverage, no_coverage)]
     fn clone(&self) -> Sender<T> {
         Sender {
             sender: self.sender.clone(),
@@ -71,8 +71,8 @@ pub struct SyncSender<T> {
     ping: Ping,
 }
 
-#[cfg(not(tarpaulin_include))]
 impl<T> Clone for SyncSender<T> {
+    #[cfg_attr(coverage, no_coverage)]
     fn clone(&self) -> SyncSender<T> {
         SyncSender {
             sender: self.sender.clone(),

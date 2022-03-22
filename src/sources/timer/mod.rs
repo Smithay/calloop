@@ -91,8 +91,8 @@ pub struct TimerHandle<T> {
 }
 
 // Manual impl of `Clone` as #[derive(Clone)] adds a `T: Clone` bound
-#[cfg(not(tarpaulin_include))]
 impl<T> Clone for TimerHandle<T> {
+    #[cfg_attr(coverage, no_coverage)]
     fn clone(&self) -> TimerHandle<T> {
         TimerHandle {
             inner: self.inner.clone(),
