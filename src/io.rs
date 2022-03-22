@@ -38,6 +38,7 @@ pub struct Async<'l, F: AsRawFd> {
     old_flags: OFlag,
 }
 
+#[cfg(not(tarpaulin_include))]
 impl<'l, F: AsRawFd + std::fmt::Debug> std::fmt::Debug for Async<'l, F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Async").field("fd", &self.fd).finish()
@@ -439,6 +440,106 @@ mod tests {
 
         while !received.get() {
             event_loop.dispatch(None, &mut ()).unwrap();
+        }
+    }
+
+    #[test]
+    fn readable() {
+        use std::io::Write;
+
+        let mut event_loop = crate::EventLoop::try_new().unwrap();
+        let handle = event_loop.handle();
+        let (exec, sched) = executor().unwrap();
+        handle
+            .insert_source(exec, move |(), &mut (), got| {
+                *got = true;
+            })
+            .unwrap();
+
+        let (mut tx, rx) = std::os::unix::net::UnixStream::pair().unwrap();
+
+        let mut rx = handle.adapt_io(rx).unwrap();
+        sched
+            .schedule(async move {
+                rx.readable().await;
+            })
+            .unwrap();
+
+        let mut dispatched = false;
+
+        event_loop
+            .dispatch(Some(std::time::Duration::from_millis(100)), &mut dispatched)
+            .unwrap();
+        // The socket is not yet readable, so the readable() future has not completed
+        assert!(!dispatched);
+
+        tx.write_all(&[42]).unwrap();
+        tx.flush().unwrap();
+
+        // Now we should become readable
+        while !dispatched {
+            event_loop.dispatch(None, &mut dispatched).unwrap();
+        }
+    }
+
+    #[test]
+    fn writable() {
+        use std::io::{BufReader, BufWriter, Read, Write};
+
+        let mut event_loop = crate::EventLoop::try_new().unwrap();
+        let handle = event_loop.handle();
+        let (exec, sched) = executor().unwrap();
+        handle
+            .insert_source(exec, move |(), &mut (), got| {
+                *got = true;
+            })
+            .unwrap();
+
+        let (mut tx, mut rx) = std::os::unix::net::UnixStream::pair().unwrap();
+        tx.set_nonblocking(true).unwrap();
+        rx.set_nonblocking(true).unwrap();
+
+        // First, fill the socket buffers
+        {
+            let mut writer = BufWriter::new(&mut tx);
+            let data = vec![42u8; 1024];
+            loop {
+                if writer.write(&data).is_err() {
+                    break;
+                }
+            }
+        }
+
+        // Now, wait for it to be readable
+        let mut tx = handle.adapt_io(tx).unwrap();
+        sched
+            .schedule(async move {
+                tx.writable().await;
+            })
+            .unwrap();
+
+        let mut dispatched = false;
+
+        event_loop
+            .dispatch(Some(std::time::Duration::from_millis(100)), &mut dispatched)
+            .unwrap();
+        // The socket is not yet writable, so the readable() future has not completed
+        assert!(!dispatched);
+
+        // now read everything
+        {
+            let mut reader = BufReader::new(&mut rx);
+            let mut buffer = vec![0u8; 1024];
+            loop {
+                if reader.read(&mut buffer).is_err() {
+                    break;
+                }
+            }
+        }
+
+        // Now we should become writable
+        while !dispatched {
+            event_loop.dispatch(None, &mut dispatched).unwrap();
         }
     }
 }

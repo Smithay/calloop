@@ -45,6 +45,7 @@ pub struct LoopHandle<'l, Data> {
     inner: Rc<LoopInner<'l, Data>>,
 }
 
+#[cfg(not(tarpaulin_include))]
 impl<'l, Data> std::fmt::Debug for LoopHandle<'l, Data> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("LoopHandle { ... }")
@@ -207,6 +208,7 @@ pub struct EventLoop<'l, Data> {
     ping: crate::sources::ping::Ping,
 }
 
+#[cfg(not(tarpaulin_include))]
 impl<'l, Data> std::fmt::Debug for EventLoop<'l, Data> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("EventLoop { ... }")
@@ -431,6 +433,7 @@ pub struct LoopSignal {
     ping: crate::sources::ping::Ping,
 }
 
+#[cfg(not(tarpaulin_include))]
 impl std::fmt::Debug for LoopSignal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("LoopSignal { ... }")
