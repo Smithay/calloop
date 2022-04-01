@@ -20,6 +20,7 @@
   associated event callback.
 - **Breaking:** The minimum supported Rust version is now 1.53.0
 - Introduce `EventLoop::try_new_high_precision()` for sub-millisecond accuracy in the event loop
+- The `PingSource` event source now uses an `eventfd` instead of a pipe on Linux.
 
 ## 0.9.2 -- 2021-12-27
 
