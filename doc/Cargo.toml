@@ -1,0 +1,29 @@
+[package]
+name = "calloop-book"
+version = "0.0.1"
+edition = "2018"
+publish = false
+
+[dependencies]
+calloop = { path = "..", features = ["futures-io", "executor"] }
+anyhow = "1.0.56"
+futures = "0.3.21"
+zmq = "0.9.2"
+
+# Here we create bin targets so each chapter's code may be tested.
+
+[[bin]]
+name = "adapt_io_example"
+path = "./src/adapt_io_example.rs"
+
+[[bin]]
+name = "async_example"
+path = "./src/async_example.rs"
+
+[[bin]]
+name = "timer_example"
+path = "./src/timer_example.rs"
+
+[[bin]]
+name = "zmqsource"
+path = "./src/zmqsource.rs"

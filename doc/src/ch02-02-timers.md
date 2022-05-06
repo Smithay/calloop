@@ -1,77 +1,39 @@
 # Working with timers
 
-To illustrate how timers work in calloop, let's create a program that waits for five seconds, prints a message, and exits. If you've already read the `README` file or [API docs](api), this will look familiar.
+Timer event sources are used to manipulate time-related actions. Those are provided under the [`calloop::timer`](api/calloop/timer/index.html) module, with the `Timer` type at its core.
 
-## The timer event source
+A `Timer` source has a simple behavior: it is programmer to wait for some duration, or until a certain point in time. Once that deadline is reached, the source generates an event.
 
-The first thing we need is an event source — that is, a type that implements the trait `calloop::EventSource`. If we look under `calloop::timer` we'll see the appropriately named `Timer`.
+So with `use calloop::timer::Timer` at the top of our `.rs` file, we can create a timer that will wait for 5 seconds:
 
-`Timer` follows a pattern you'll see used for many event sources in Calloop. There is an event source (`Timer`) that is inserted into the loop. But there is also some other type (in this case, `TimerHandle`) that allows you to control or configure that source even after the loop has taken ownership of the source itself. For example:
-
-- there is an MPSC (multiple producer, single consumer) channel that acts as an event source; the "control" end is simply the sending end of the channel
-
-- there is an `async` executor that acts as an event source; it is created along with a scheduler which lets you add `Future`s
-
-- the `Timer` can give you a `TimerHandle`, which lets you set or cancel timeouts
-
-So with `use calloop::timer::Timer` at the top of our `.rs` file, we just need to do:
-
-```rust
+```rust,noplayground
 {{#rustdoc_include timer_example.rs:decl_source}}
 ```
-
-Many methods in Calloop return a `Result` because creating these sources is inherently risky — most event sources require some kind of underlying operating system resource, which can potentially be exhausted. You will have to decide how to handle such errors.
-
-An extremely important thing to note about our timer handle here is that we are not constrained to use it before we run our event loop. We may call methods on it from other event callbacks, we may clone it and even use it in other threads or futures to dynamically control the `Timer` that is now part of the event loop.
-
-## Calloop's type parameters
-The second argument to `add_timeout()` deserves extra attention. Calloop has a few different type parameters that you'll need to know about to use it properly. The two most important are:
-
-- The event loop itself, `EventLoop`, is parameterised by the type of the shared data that all callbacks receive. This will probably correspond to the "high level" state of your program.
-
-- Event sources ie. implementations of `EventSource`, have an associated type `Event`. This differs from source to source, and always relates to the "control side" of the source.
-
-In the case of a timer, `Timer::Event` is the type of data that you give to the handle: here it is `&'static str`. But what about `EventLoop`'s type parameter? Well, since we want to exit the program after the timer fires, the high level "state" of our program is simply whether our loop is running or not. This is easily controlled by the `LoopSignal` value that `EventLoop::get_signal()` provides us, which has a `stop()` method. So let's make this our shared state:
-
-```rust
-{{#rustdoc_include timer_example.rs:decl_loop}}
-```
-
-This is just the type annotation — something that Rust could infer itself, but it's often helpful to make it explicit here to avoid confusing error messages if you get it wrong in callbacks or method calls. The actual data is provided when we run the loop:
-
-```rust
-{{#rustdoc_include timer_example.rs:run_loop}}
-```
-
-The callback provided in the `run()` method is for when the loop is idle, which we're not using here.
 
 ## Adding sources to the loop
 We have an event source, we have our shared data, and we know how to start our loop running. All that is left is to learn how to combine these things:
 
-```rust
+```rust,noplayground
 {{#rustdoc_include timer_example.rs:insert_source}}
 ```
 
-Breaking this down:
+Breaking this down, the callback we provide receives 3 arguments:
 
-- We obtain a handle from the event loop. Much like the timer handle above, this is a separate type from the event loop and allows us to insert events sources. Event sources can be added to the loop from eg. your main function, within event callbacks, and futures. Note that it is *not* safe to pass across threads!
+- The first one is an [`Instant`](https://doc.rust-lang.org/stable/std/time/struct.Instant.html) representing the time at which this timer was scheduled to expire. Due to how the event loop works, it might be that your callback is not invoked at the exact time where the timer expired (if an other callback was being processed at the time for example), so the original deadline is given if you need precise time tracking.
+- The second argument is just `&mut ()`, as the timers don't use the `EventSource` functionality.
+- The third argumument is the shared data passed to your event loop.
 
-- We insert the source using `LoopHandle::insert_source()`.
+In addition your callback is expected to return a [`TimeoutAction`](api/calloop/timer/enum.TimeoutAction.html), that will instruct calloop what to do next. This enum has 3 values:
 
-- When we insert the source we also provide a callback that will be called on every event generated by the event source. This callback will take the event specific data (our `&'static str`), some source-specific data (the timer's handle) and the shared loop data (a `LoopSignal`).
-
-Our callback does the two things we want to do when five seconds have elapsed: print a message, and stop the loop.
-
-Once the loop stops, the `run()` call will exit and so will `main()`.
+- `Drop` will disable the timer and destroy it, freeing the callback.
+- `ToInstant` will rechedule the callback to fire again at given `Instant`, invoking the same callback again. This is useful if you need to create a timer that fires events at regular intervals, for example to encode key repetition in a graphical app. You would compute the next instant by adding the duration to the previous instant. It is not a problem if that duration is in the past, it'll simply cause the timer to fire again instantly. THis way, even if some other part of your app lags, you'll still have on average the correct amount of events per second.
+- `ToDuration` will reschedule the callback to fire again after a given `Duration`. This is useful if you need to schedule some background task to execute again after some time after it was last completed, when there is no point in catching up some previous lag.
 
 ## The whole program
 
 Putting it all together, we have:
 
-```rust
+```rust,noplayground
 {{#rustdoc_include timer_example.rs:all}}
 ```
-## What next?
-Of course, this is all a bit more wordy than simply `std::thread::sleep()`, so what have we achieved?
 
-The next couple of chapters will show how we can create our own event sources through *composition*, and how to use handles and events in more complex ways.

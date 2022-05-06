@@ -16,7 +16,7 @@ The easiest constructor to use is the [`new()`](api/calloop/generic/struct.Gener
 
 ## Ownership and AsRawFd wrappers
 
-It's important to remember that file descriptors by themselves have no concept of ownership attached to them in Rust — they are simply bare integers. Dropping them does close the resource they refer to, and copying them does not carry information about how many there are.
+It's important to remember that file descriptors by themselves have no concept of ownership attached to them in Rust — they are simply bare integers. Dropping them does not close the resource they refer to, and copying them does not carry information about how many there are.
 
 Typically (eg. in the standard library) they would be an underlying implementation detail of another type that *did* encode ownership somehow. This how you can manage them in any of your own integration code - use drop handlers, reference counting (if necessary) and general RAII principles in a wrapper type, and then implement `AsRawFd` to allow `Generic` to use it. The `Generic` source will take ownership of it, so it will be dropped when the `Generic` is.
 
