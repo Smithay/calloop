@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.10.0 -- 2022-05-06
+
 - **Breaking:** Calloop's internal storage is now backed by a `slotmap`. As a result the
   `RegistrationToken` is now `Copy+Clone`, and the low-level registration API of `Poll` is
   altered in a breaking way. MSRV is bumped to 1.49.
