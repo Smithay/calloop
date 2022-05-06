@@ -39,7 +39,16 @@ jobs:
           command: test
           args: --all-features
 
-  ci-macos:
+      - name: Install libzmq
+        run: sudo apt-get -y install libzmq3-dev
+
+      - name: Build mdBook examples
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --manifest-path doc/Cargo.toml
+
+  coverage:
     name: Coverage
 
     strategy:

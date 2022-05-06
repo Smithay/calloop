@@ -46,7 +46,7 @@ Calloop will take care of a lot of integration and error handling boilerplate fo
 
 However, this comes at the expense of needing to make your program's state much more explicit. For example, take this async code:
 
-```rust,noplayground
+```rust,noplayground,no_run
 do_thing_one().await;
 do_thing_two().await;
 do_thing_three().await;

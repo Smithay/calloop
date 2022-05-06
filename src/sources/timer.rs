@@ -44,6 +44,10 @@ struct Registration {
 }
 
 /// A timer event source
+///
+/// When registered to the event loop, it will trigger an event once its deadline is reached.
+/// If the deadline is in the past relative to the moment of its insertion in the event loop,
+/// the `TImer` will trigger an event as soon as the event loop is dispatched.
 #[derive(Debug)]
 pub struct Timer {
     registration: Option<Registration>,
@@ -67,6 +71,27 @@ impl Timer {
             registration: None,
             deadline,
         }
+    }
+
+    /// Changes the deadline of this timer to an [`Instant`]
+    ///
+    /// If the `Timer` is currently registered in the event loop, it needs to be
+    /// re-registered for this change to take effect.
+    pub fn set_deadline(&mut self, deadline: Instant) {
+        self.deadline = deadline;
+    }
+
+    /// Changes the deadline of this timer to a [`Duration`] from now
+    ///
+    /// If the `Timer` is currently registered in the event loop, it needs to be
+    /// re-registered for this change to take effect.
+    pub fn set_duration(&mut self, duration: Duration) {
+        self.set_deadline(Instant::now() + duration)
+    }
+
+    /// Get the current deadline of this `Timer`
+    pub fn current_deadline(&self) -> Instant {
+        self.deadline
     }
 }
 

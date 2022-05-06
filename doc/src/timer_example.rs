@@ -1,36 +1,27 @@
 // ANCHOR: all
-use calloop::{timer::Timer, EventLoop, LoopSignal};
+use std::time::Duration;
+
+use calloop::{timer::{Timer, TimeoutAction}, EventLoop};
 
 fn main() {
-    // ANCHOR: decl_loop
-    let mut event_loop: EventLoop<LoopSignal> =
-        EventLoop::try_new().expect("Failed to initialize the event loop!");
-    // ANCHOR_END: decl_loop
+    let mut event_loop = EventLoop::try_new()
+        .expect("Failed to initialize the event loop!");
 
     // ANCHOR: decl_source
-    let source = Timer::new().expect("Failed to create timer event source!");
-
-    let timer_handle = source.handle();
-    timer_handle.add_timeout(std::time::Duration::from_secs(5), "Timeout reached!");
+    let timer = Timer::from_duration(Duration::from_secs(5));
     // ANCHOR_END: decl_source
 
     // ANCHOR: insert_source
-    let handle = event_loop.handle();
-
-    handle
-        .insert_source(source, |event, _metadata, shared_data| {
-            println!("Event fired: {}", event);
-            shared_data.stop();
+    event_loop.handle()
+        .insert_source(timer, |deadline, _: &mut (), _shared_data| {
+            println!("Event fired for: {:?}", deadline);
+            TimeoutAction::Drop
         })
         .expect("Failed to insert event source!");
     // ANCHOR_END: insert_source
 
-    // ANCHOR: run_loop
-    let mut shared_data = event_loop.get_signal();
-
     event_loop
-        .run(None, &mut shared_data, |_shared_data| {})
+        .dispatch(None, &mut ())
         .expect("Error during event loop!");
-    // ANCHOR_END: run_loop
 }
 // ANCHOR_END: all
