@@ -20,8 +20,9 @@
 use std::{future::Future, pin::Pin, sync::Arc};
 
 use futures_util::{
+    future::LocalBoxFuture,
     stream::{FuturesUnordered, Stream},
-    task::{waker_ref, ArcWake, Context, LocalFutureObj, Poll as FutPoll},
+    task::{waker_ref, ArcWake, Context, Poll as FutPoll},
 };
 
 use crate::{
@@ -33,31 +34,49 @@ use crate::{
     Poll, PostAction, Readiness, Token, TokenFactory,
 };
 
+/// A shorthand for a `ScopedExecutor` whose inner lifetime is `'static`
+pub type Executor<T> = ScopedExecutor<'static, T>;
+
+/// A shorthand for a `ScopedScheduler` whose inner lifetime is `'static`
+pub type Scheduler<T> = ScopedScheduler<'static, T>;
+
 /// A future executor as an event source
-#[derive(Debug)]
-pub struct Executor<T> {
-    futures: FuturesUnordered<LocalFutureObj<'static, T>>,
-    new_futures: Channel<LocalFutureObj<'static, T>>,
+pub struct ScopedExecutor<'a, T> {
+    futures: FuturesUnordered<LocalBoxFuture<'a, T>>,
+    new_futures: Channel<LocalBoxFuture<'a, T>>,
     ready_futures: PingSource,
     waker: Arc<ExecWaker>,
 }
 
-/// A scheduler to send futures to an executor
-#[derive(Clone, Debug)]
-pub struct Scheduler<T> {
-    sender: Sender<LocalFutureObj<'static, T>>,
+impl<'a, T> std::fmt::Debug for ScopedExecutor<'a, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ScopedExecutor").finish_non_exhaustive()
+    }
 }
 
-impl<T> Scheduler<T> {
+/// A scheduler to send futures to an executor
+#[derive(Clone)]
+pub struct ScopedScheduler<'a, T> {
+    sender: Sender<LocalBoxFuture<'a, T>>,
+}
+
+impl<'a, T> std::fmt::Debug for ScopedScheduler<'a, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ScopedExecutor").finish_non_exhaustive()
+    }
+}
+
+impl<'a, T> ScopedScheduler<'a, T> {
     /// Sends the given future to the executor associated to this scheduler
     ///
     /// Returns an error if the the executor not longer exists.
-    pub fn schedule<Fut: 'static>(&self, future: Fut) -> Result<(), ExecutorDestroyed>
+    pub fn schedule<Fut>(&self, future: Fut) -> Result<(), ExecutorDestroyed>
     where
-        Fut: Future<Output = T>,
+        Fut: Future<Output = T> + 'a,
     {
-        let obj = LocalFutureObj::new(Box::new(future));
-        self.sender.send(obj).map_err(|_| ExecutorDestroyed)
+        self.sender
+            .send(Box::pin(future))
+            .map_err(|_| ExecutorDestroyed)
     }
 }
 
@@ -82,21 +101,21 @@ impl ArcWake for ExecWaker {
 ///
 /// May fail due to OS errors preventing calloop to setup its internal pipes (if your
 /// process has reatched its file descriptor limit for example).
-pub fn executor<T>() -> crate::Result<(Executor<T>, Scheduler<T>)> {
+pub fn executor<'a, T>() -> crate::Result<(ScopedExecutor<'a, T>, ScopedScheduler<'a, T>)> {
     let (ping, ready_futures) = make_ping()?;
     let (sender, new_futures) = channel();
     Ok((
-        Executor {
+        ScopedExecutor {
             futures: FuturesUnordered::new(),
             new_futures,
             ready_futures,
             waker: Arc::new(ExecWaker { ping }),
         },
-        Scheduler { sender },
+        ScopedScheduler { sender },
     ))
 }
 
-impl<T> EventSource for Executor<T> {
+impl<'a, T> EventSource for ScopedExecutor<'a, T> {
     type Event = T;
     type Metadata = ();
     type Ret = ();
@@ -208,5 +227,29 @@ mod tests {
 
         // the future has run
         assert_eq!(got, 42);
+    }
+
+    #[test]
+    fn future_borrow_stack() {
+        let mut done = false;
+        {
+            let fut = async {
+                done = true;
+            };
+
+            let mut event_loop = crate::EventLoop::<()>::try_new().unwrap();
+            let handle = event_loop.handle();
+            let (exec, sched) = executor::<()>().unwrap();
+            handle
+                .insert_source(exec, move |(), &mut (), &mut ()| {})
+                .unwrap();
+
+            sched.schedule(fut).unwrap();
+
+            event_loop
+                .dispatch(Some(::std::time::Duration::ZERO), &mut ())
+                .unwrap();
+        }
+        assert!(done);
     }
 }
