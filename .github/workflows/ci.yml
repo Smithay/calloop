@@ -21,11 +21,18 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v2
 
-      - name: Cargo cache
-        uses: actions/cache@v1
+      - name: Get date for registry cache
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+      - name: Cargo registry cache
+        uses: actions/cache@v2
         with:
-          path: ~/.cargo
-          key: cargo-${{ matrix.rust }}
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ steps.date.outputs.date }}
+          restore-keys: ${{ runner.os }}-cargo-registry-
 
       - name: Rust toolchain
         uses: actions-rs/toolchain@v1
@@ -58,15 +65,26 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
+    env:
+      GRCOV_VERSION: "0.8.10"
+
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
 
-      - name: Cargo cache
-        uses: actions/cache@v1
+      - name: Get date for registry cache
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+
+      - name: Cargo registry cache
+        uses: actions/cache@v2
         with:
-          path: ~/.cargo
-          key: cargo-nightly-${{ matrix.os }}
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ steps.date.outputs.date }}
+          restore-keys: ${{ runner.os }}-cargo-registry-
 
       - name: Rust toolchain
         uses: actions-rs/toolchain@v1
@@ -75,11 +93,20 @@ jobs:
           override: true
           components: llvm-tools-preview # Required for grcov
       
+      - name: grcov cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/bin/grcov
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+          key: ${{ runner.os }}-grcov-${{ env.GRCOV_VERSION }}
+
       - name: Install grcov
         uses: actions-rs/cargo@v1
         with:
           command: install
-          args: grcov
+          args: grcov --version ${{ env.GRCOV_VERSION }}
 
       - name: Run tests
         uses: actions-rs/cargo@v1
@@ -105,6 +132,20 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
+
+      - name: Get date for registry cache
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+
+      - name: Cargo registry cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ steps.date.outputs.date }}
+          restore-keys: ${{ runner.os }}-cargo-registry-
 
       - name: Rust toolchain
         uses: actions-rs/toolchain@v1
