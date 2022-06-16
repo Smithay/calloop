@@ -31,28 +31,24 @@ fn main() -> std::io::Result<()> {
     // Our toy async code.
     let async_friendly_task = async move {
         sender_friendly.send("Hello,").await.ok();
-        receiver_aloof
-            .next()
-            .await
-            .map(|m| println!("Aloof said: {}", m));
+        if let Some(msg) = receiver_aloof.next().await {
+            println!("Aloof said: {}", msg);
+        }
         sender_friendly.send("world!").await.ok();
-        receiver_aloof
-            .next()
-            .await
-            .map(|m| println!("Aloof said: {}", m));
+        if let Some(msg) = receiver_aloof.next().await {
+            println!("Aloof said: {}", msg);
+        }
         "Bye!"
     };
 
     let async_aloof_task = async move {
-        receiver_friendly
-            .next()
-            .await
-            .map(|m| println!("Friendly said: {}", m));
+        if let Some(msg) = receiver_friendly.next().await {
+            println!("Friendly said: {}", msg);
+        }
         sender_aloof.send("Oh,").await.ok();
-        receiver_friendly
-            .next()
-            .await
-            .map(|m| println!("Friendly said: {}", m));
+        if let Some(msg) = receiver_friendly.next().await {
+            println!("Friendly said: {}", msg);
+        }
         sender_aloof.send("it's you.").await.ok();
         "Regards."
     };
