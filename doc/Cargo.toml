@@ -8,7 +8,7 @@ publish = false
 calloop = { path = "..", features = ["futures-io", "executor"] }
 anyhow = "1.0.56"
 futures = "0.3.21"
-zmq = "0.9.2"
+zmq = { version = "0.9.2", features = ["vendored"] }
 
 # Here we create bin targets so each chapter's code may be tested.
 
