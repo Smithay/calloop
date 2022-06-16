@@ -7,6 +7,76 @@ on:
   pull_request:
 
 jobs:
+
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Get date for registry cache
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+
+      - name: Cargo registry cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ steps.date.outputs.date }}
+          restore-keys: ${{ runner.os }}-cargo-registry-
+
+      - name: Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
+
+      - name: Get cargo-cache latest version
+        id: cargocacheversion
+        run: echo "::set-output name=version::$(cargo search 'cargo-cache' --limit 1 | head -n 1 | cut -d ' ' -f 3 | cut -d '"' -f 2)"
+
+      - name: Cargo binaries cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/bin/cargo-cache
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+          key: ${{ runner.os }}-cargo-binaries-${{ steps.cargocacheversion.outputs.version }}
+
+      - name: Install cargo-cache
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: cargo-cache --version ${{ steps.cargocacheversion.outputs.version }}
+
+      - name: Clean cargo cache of old items
+        uses: actions-rs/cargo@v1
+        with:
+          command: cache
+          args: clean-unref
+
+      - name: Get rustc version for caching
+        id: rustcversion
+        run: echo "::set-output name=version::$(rustc --version | cut -d ' ' -f 2)"
+
+      - name: Build cache
+        uses: actions/cache@v2
+        with:
+          path: target
+          key: ${{ runner.os }}-lint-${{ steps.rustcversion.outputs.version }}-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Cargo fmt
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-features --all-targets -- -D warnings
+
   ci-linux:
     name: CI
 
@@ -17,7 +87,7 @@ jobs:
       fail-fast: false
       matrix:
         rust: ['1.53.0', 'stable', 'beta']
-      
+
     runs-on: 'ubuntu-latest'
 
     steps:
@@ -101,6 +171,10 @@ jobs:
           override: true
           components: llvm-tools-preview # Required for grcov
       
+      - name: Get grcov latest version
+        id: grcovversion
+        run: echo "::set-output name=version::$(cargo search 'grcov' --limit 1 | head -n 1 | cut -d ' ' -f 3 | cut -d '"' -f 2)"
+      
       - name: grcov cache
         uses: actions/cache@v2
         with:
@@ -108,13 +182,13 @@ jobs:
             ~/.cargo/bin/grcov
             ~/.cargo/.crates.toml
             ~/.cargo/.crates2.json
-          key: ${{ runner.os }}-grcov-${{ env.GRCOV_VERSION }}
+          key: ${{ runner.os }}-grcov-${{ steps.grcovversion.outputs.version }}
 
       - name: Install grcov
         uses: actions-rs/cargo@v1
         with:
           command: install
-          args: grcov --version ${{ env.GRCOV_VERSION }}
+          args: grcov --version ${{ steps.grcovversion.outputs.version }}
 
       - name: Run tests
         uses: actions-rs/cargo@v1
@@ -133,50 +207,6 @@ jobs:
         with:
           files: ./lcov.info
           flags: ${{ matrix.os }}
-
-  lint:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-
-      - name: Get date for registry cache
-        id: date
-        run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
-
-      - name: Cargo registry cache
-        uses: actions/cache@v2
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-registry-${{ steps.date.outputs.date }}
-          restore-keys: ${{ runner.os }}-cargo-registry-
-
-      - name: Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-          components: rustfmt, clippy
-      
-      - name: Get rustc version for caching
-        id: rustcversion
-        run: echo "::set-output name=version::$(rustc --version | cut -d ' ' -f 2)"
-
-      - name: Build cache
-        uses: actions/cache@v2
-        with:
-          path: target
-          key: ${{ runner.os }}-lint-${{ steps.rustcversion.outputs.version }}-${{ hashFiles('**/Cargo.toml') }}
-
-      - name: Cargo fmt
-        run: cargo fmt --all -- --check
-      
-      - name: Clippy
-        run: cargo clippy --workspace --all-features --all-targets -- -D warnings
 
   doc:
     name: Documentation on Github Pages
