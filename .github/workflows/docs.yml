@@ -14,11 +14,19 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v2
 
-      - name: Cargo cache
-        uses: actions/cache@v1
+      - name: Get date for registry cache
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+
+      - name: Cargo registry cache
+        uses: actions/cache@v2
         with:
-          path: ~/.cargo
-          key: cargo-beta
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ steps.date.outputs.date }}
+          restore-keys: ${{ runner.os }}-cargo-registry-
 
       - name: Rust toolchain
         uses: actions-rs/toolchain@v1
