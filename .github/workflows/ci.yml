@@ -177,3 +177,60 @@ jobs:
       
       - name: Clippy
         run: cargo clippy --workspace --all-features --all-targets -- -D warnings
+
+  doc:
+    name: Documentation on Github Pages
+    runs-on: ubuntu-latest
+
+    needs:
+      - ci-linux
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Get date for registry cache
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+
+      - name: Cargo registry cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ steps.date.outputs.date }}
+          restore-keys: ${{ runner.os }}-cargo-registry-
+
+      - name: Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: beta
+          override: true
+
+      # Combining these docs is order-dependent. The API docs must be copied
+      # into mdBook's source directory for it to copy it to the output directory
+      # as static content.
+
+      - name: Build Documentation
+        uses: actions-rs/cargo@v1
+        with:
+          command: doc
+          args: --no-deps --all-features
+
+      - run: rsync -r target/doc/ doc/src/api
+
+      - name: Build mdBook
+        uses: peaceiris/actions-mdbook@v1
+        with:
+          mdbook-version: '0.4.8'
+
+      - run: mdbook build doc
+
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
+        if: ${{ github.event_name == 'push' }}
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./doc/book
