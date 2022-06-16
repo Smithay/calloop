@@ -54,9 +54,6 @@ jobs:
           path: target
           key: ${{ runner.os }}-test-${{ steps.rustcversion.outputs.version }}-${{ hashFiles('**/Cargo.toml') }}
 
-      - name: Install libzmq
-        run: sudo apt-get -y install libzmq3-dev
-
       - name: Run tests
         uses: actions-rs/cargo@v1
         with:
