@@ -10,6 +10,9 @@ jobs:
   ci-linux:
     name: CI
 
+    needs:
+      - lint
+
     strategy:
       fail-fast: false
       matrix:
@@ -24,6 +27,7 @@ jobs:
       - name: Get date for registry cache
         id: date
         run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+
       - name: Cargo registry cache
         uses: actions/cache@v2
         with:
@@ -40,23 +44,30 @@ jobs:
           toolchain: ${{ matrix.rust }}
           override: true
 
-      - name: Run tests
-        uses: actions-rs/cargo@v1
+      - name: Get rustc version for caching
+        id: rustcversion
+        run: echo "::set-output name=version::$(rustc --version | cut -d ' ' -f 2)"
+
+      - name: Build cache
+        uses: actions/cache@v2
         with:
-          command: test
-          args: --all-features
+          path: target
+          key: ${{ runner.os }}-test-${{ steps.rustcversion.outputs.version }}-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Install libzmq
         run: sudo apt-get -y install libzmq3-dev
 
-      - name: Build mdBook examples
+      - name: Run tests
         uses: actions-rs/cargo@v1
         with:
-          command: build
-          args: --manifest-path doc/Cargo.toml
+          command: test
+          args: --workspace --all-features
 
   coverage:
     name: Coverage
+
+    needs:
+      - ci-linux
 
     strategy:
       fail-fast: false
@@ -89,7 +100,7 @@ jobs:
       - name: Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly # llvm-tools-preview requires nightly
+          toolchain: nightly # required for feature(no_coverage)
           override: true
           components: llvm-tools-preview # Required for grcov
       
@@ -154,6 +165,16 @@ jobs:
           override: true
           components: rustfmt, clippy
       
+      - name: Get rustc version for caching
+        id: rustcversion
+        run: echo "::set-output name=version::$(rustc --version | cut -d ' ' -f 2)"
+
+      - name: Build cache
+        uses: actions/cache@v2
+        with:
+          path: target
+          key: ${{ runner.os }}-lint-${{ steps.rustcversion.outputs.version }}-${{ hashFiles('**/Cargo.toml') }}
+
       - name: Cargo fmt
         run: cargo fmt --all -- --check
       

@@ -11,6 +11,9 @@ autotests = false
 edition = "2018"
 readme = "README.md"
 
+[workspace]
+members = [ "doc" ]
+
 [badges]
 codecov = { repository = "Smithay/calloop" }
 
