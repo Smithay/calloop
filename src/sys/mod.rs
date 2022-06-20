@@ -3,9 +3,9 @@ use vec_map::VecMap;
 
 use crate::{loop_logic::CalloopKey, sources::timer::TimerWheel};
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 mod epoll;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 use epoll::Epoll as Poller;
 
 #[cfg(any(

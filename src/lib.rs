@@ -132,7 +132,13 @@
 //!
 //! ## Platforms support
 //!
-//! Currently, only Linux and the *BSD are supported.
+//! Currently, calloop is tested on Linux, FreeBSD and macOS.
+//!
+//! The following platforms are also enabled at compile time but not tested: Android, NetBSD,
+//! OpenBSD, DragonFlyBSD.
+//!
+//! Those platforms *should* work based on the fact that they have the same polling mechanism as
+//! tested platforms, but some subtle bugs might still occur.
 
 #![warn(missing_docs, missing_debug_implementations)]
 #![allow(clippy::needless_doctest_main)]
