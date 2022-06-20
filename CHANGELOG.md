@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+#### Additions
+
+- The `Channel` now has proxy methods for `Receiver::recv` and `Receiver::try_recv`
+
 ## 0.10.0 -- 2022-05-06
 
 - **Breaking:** Calloop's internal storage is now backed by a `slotmap`. As a result the
