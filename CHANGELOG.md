@@ -5,6 +5,7 @@
 #### Additions
 
 - The `Channel` now has proxy methods for `Receiver::recv` and `Receiver::try_recv`
+- Enable support for `target_os = "android"`
 
 ## 0.10.0 -- 2022-05-06
 
