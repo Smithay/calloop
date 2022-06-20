@@ -131,6 +131,26 @@ pub struct Channel<T> {
 // safe to Send between threads.
 unsafe impl<T: Send> Send for Channel<T> {}
 
+impl<T> Channel<T> {
+    /// Proxy for [`mpsc::Receiver::recv`] to manually poll events.
+    ///
+    /// *Note*: Normally you would want to use the `Channel` by inserting
+    /// it into an event loop instead. Use this for example to immediately
+    /// dispatch pending events after creation.
+    pub fn recv(&self) -> Result<T, mpsc::RecvError> {
+        self.receiver.recv()
+    }
+
+    /// Proxy for [`mpsc::Receiver::try_recv`] to manually poll events.
+    ///
+    /// *Note*: Normally you would want to use the `Channel` by inserting
+    /// it into an event loop instead. Use this for example to immediately
+    /// dispatch pending events after creation.
+    pub fn try_recv(&self) -> Result<T, mpsc::TryRecvError> {
+        self.receiver.try_recv()
+    }
+}
+
 /// Create a new asynchronous channel
 pub fn channel<T>() -> (Sender<T>, Channel<T>) {
     let (sender, receiver) = mpsc::channel();
