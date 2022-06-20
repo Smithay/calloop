@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.10.1 -- 2022-06-20
+
 #### Additions
 
 - The `Channel` now has proxy methods for `Receiver::recv` and `Receiver::try_recv`
