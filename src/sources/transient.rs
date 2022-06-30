@@ -124,6 +124,7 @@ impl<T> TransientSource<T> {
         }
     }
 
+    /// Returns `true` if there is no wrapped event source.
     pub fn is_none(&self) -> bool {
         matches!(self, Self::None)
     }
@@ -271,11 +272,13 @@ impl<T: crate::EventSource> crate::EventSource for TransientSource<T> {
 mod tests {
     use super::*;
     use crate::{
+        batch_register, batch_reregister, batch_unregister,
         channel::{channel, Event},
-        ping::{make_ping, PingSource},
+        ping::{make_ping, Ping, PingSource},
         Dispatcher, EventSource, PostAction,
     };
     use std::{
+        rc::Rc,
         sync::atomic::{AtomicBool, Ordering},
         time::Duration,
     };
@@ -669,5 +672,294 @@ mod tests {
         fired = false;
         event_loop.dispatch(Duration::ZERO, &mut fired).unwrap();
         assert!(fired);
+    }
+
+    #[test]
+    fn test_transient_replace_unregister() {
+        // This is a bit of a complex test, but it essentially boils down to:
+        // how can a "parent" event source containing a TransientSource replace
+        // the "child" source without leaking the source's registration?
+
+        // First, a source that finishes immediately. This is so we cover the
+        // edge case of replacing a source as soon as it wants to be removed.
+        struct FinishImmediatelySource {
+            source: PingSource,
+            data: Option<i32>,
+            registered: bool,
+            dropped: Rc<AtomicBool>,
+        }
+
+        impl FinishImmediatelySource {
+            // The constructor passes out the drop flag so we can check that
+            // this source was or wasn't dropped.
+            fn new(source: PingSource, data: i32) -> (Self, Rc<AtomicBool>) {
+                let dropped = Rc::new(false.into());
+
+                (
+                    Self {
+                        source,
+                        data: Some(data),
+                        registered: false,
+                        dropped: Rc::clone(&dropped),
+                    },
+                    dropped,
+                )
+            }
+        }
+
+        impl EventSource for FinishImmediatelySource {
+            type Event = i32;
+            type Metadata = ();
+            type Ret = ();
+            type Error = Box<dyn std::error::Error + Sync + Send>;
+
+            fn process_events<F>(
+                &mut self,
+                readiness: crate::Readiness,
+                token: crate::Token,
+                mut callback: F,
+            ) -> Result<PostAction, Self::Error>
+            where
+                F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+            {
+                let mut data = self.data.take();
+
+                self.source.process_events(readiness, token, |_, _| {
+                    if let Some(data) = data.take() {
+                        callback(data, &mut ())
+                    }
+                })?;
+
+                self.data = data;
+
+                Ok(if self.data.is_none() {
+                    PostAction::Remove
+                } else {
+                    PostAction::Continue
+                })
+            }
+
+            fn register(
+                &mut self,
+                poll: &mut crate::Poll,
+                token_factory: &mut crate::TokenFactory,
+            ) -> crate::Result<()> {
+                self.registered = true;
+                self.source.register(poll, token_factory)
+            }
+
+            fn reregister(
+                &mut self,
+                poll: &mut crate::Poll,
+                token_factory: &mut crate::TokenFactory,
+            ) -> crate::Result<()> {
+                self.source.reregister(poll, token_factory)
+            }
+
+            fn unregister(&mut self, poll: &mut crate::Poll) -> crate::Result<()> {
+                self.registered = false;
+                self.source.unregister(poll)
+            }
+        }
+
+        // The drop handler sets a flag we can check for debugging (we want to
+        // know that the source itself was dropped), and also checks that the
+        // source was unregistered. Ultimately neither the source nor its
+        // registration should be leaked.
+
+        impl Drop for FinishImmediatelySource {
+            fn drop(&mut self) {
+                assert!(!self.registered, "source dropped while still registered");
+                self.dropped.store(true, Ordering::Relaxed);
+            }
+        }
+
+        // Our wrapper source handles detecting when the child source finishes,
+        // and replacing that child source with another one that will generate
+        // more events. This is one intended use case of the TransientSource.
+
+        struct WrapperSource {
+            current: TransientSource<FinishImmediatelySource>,
+            replacement: Option<FinishImmediatelySource>,
+            dropped: Rc<AtomicBool>,
+            cleanup: bool,
+            ping_rx: PingSource,
+            ping_tx: Ping,
+        }
+
+        impl WrapperSource {
+            // The constructor passes out the drop flag so we can check that
+            // this source was or wasn't dropped.
+            fn new(
+                first: FinishImmediatelySource,
+                second: FinishImmediatelySource,
+            ) -> (Self, Rc<AtomicBool>) {
+                let dropped = Rc::new(false.into());
+                let (ping_tx, ping_rx) = crate::ping::make_ping().unwrap();
+
+                (
+                    Self {
+                        current: first.into(),
+                        replacement: second.into(),
+                        dropped: Rc::clone(&dropped),
+                        cleanup: false,
+                        ping_rx,
+                        ping_tx,
+                    },
+                    dropped,
+                )
+            }
+        }
+
+        impl EventSource for WrapperSource {
+            type Event = i32;
+            type Metadata = ();
+            type Ret = ();
+            type Error = Box<dyn std::error::Error + Sync + Send>;
+
+            fn process_events<F>(
+                &mut self,
+                readiness: crate::Readiness,
+                token: crate::Token,
+                mut callback: F,
+            ) -> Result<PostAction, Self::Error>
+            where
+                F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+            {
+                // This is currently a three stage process:
+                // - let the current source finish and be unregistered
+                // - wake the loop up again
+                // - replace the child source
+                let mut fired = false;
+                let mut pinged = false;
+
+                self.ping_rx.process_events(readiness, token, |(), ()| {
+                    pinged = true;
+                })?;
+
+                let mut post_action =
+                    self.current.process_events(readiness, token, |data, _| {
+                        callback(data, &mut ());
+                        fired = true;
+                    })?;
+
+                if fired {
+                    assert_eq!(post_action, PostAction::Reregister);
+                    // The event source will be unregistered after the current
+                    // process_events() iteration is finished. It will be fine
+                    // to remove only *after* that. So we need to wake up the
+                    // loop for one more iteration after it is unregistered.
+                    self.cleanup = true;
+                    self.ping_tx.ping();
+                }
+
+                if pinged && self.cleanup {
+                    // We woke up the loop to clean up the child source. It
+                    // should be unregistered and dropped now, so it's fine to
+                    // replace.
+                    assert!(self.current.is_none());
+
+                    if let Some(replacement) = self.replacement.take() {
+                        self.current = replacement.into();
+                    }
+
+                    // Parent source is responsible for flagging this.
+                    post_action = PostAction::Reregister;
+                    self.cleanup = false;
+                }
+
+                Ok(post_action)
+            }
+
+            fn register(
+                &mut self,
+                poll: &mut crate::Poll,
+                token_factory: &mut crate::TokenFactory,
+            ) -> crate::Result<()> {
+                batch_register!(poll, token_factory, self.current, self.ping_rx)
+            }
+
+            fn reregister(
+                &mut self,
+                poll: &mut crate::Poll,
+                token_factory: &mut crate::TokenFactory,
+            ) -> crate::Result<()> {
+                batch_reregister!(poll, token_factory, self.current, self.ping_rx)
+            }
+
+            fn unregister(&mut self, poll: &mut crate::Poll) -> crate::Result<()> {
+                batch_unregister!(poll, self.current, self.ping_rx)
+            }
+        }
+
+        impl Drop for WrapperSource {
+            fn drop(&mut self) {
+                self.dropped.store(true, Ordering::Relaxed);
+            }
+        }
+
+        // Construct the various nested sources - FinishImmediatelySource inside
+        // TransientSource inside WrapperSource. The numbers let us verify which
+        // event source fires first.
+        let (ping0_tx, ping0_rx) = crate::ping::make_ping().unwrap();
+        let (ping1_tx, ping1_rx) = crate::ping::make_ping().unwrap();
+        let (inner0, inner0_dropped) = FinishImmediatelySource::new(ping0_rx, 0);
+        let (inner1, inner1_dropped) = FinishImmediatelySource::new(ping1_rx, 1);
+        let (outer, outer_dropped) = WrapperSource::new(inner0, inner1);
+
+        // Now the actual test starts.
+
+        let mut event_loop: crate::EventLoop<(Option<i32>, crate::LoopSignal)> =
+            crate::EventLoop::try_new().unwrap();
+        let handle = event_loop.handle();
+        let signal = event_loop.get_signal();
+
+        // This is how we communicate with the event sources.
+        let mut context = (None, signal);
+
+        let _token = handle
+            .insert_source(outer, |data, _, (evt, sig)| {
+                *evt = Some(data);
+                sig.stop();
+            })
+            .unwrap();
+
+        // Ensure our sources fire.
+        ping0_tx.ping();
+        ping1_tx.ping();
+
+        // Use run() rather than dispatch() because it's not strictly part of
+        // any API contract as to how many runs of the event loop it takes to
+        // replace the nested source.
+        event_loop.run(None, &mut context, |_| {}).unwrap();
+
+        // First, make sure the inner source actually did fire.
+        assert_eq!(context.0.take(), Some(0), "first inner source did not fire");
+
+        // Make sure that the outer source is still alive.
+        assert!(
+            !outer_dropped.load(Ordering::Relaxed),
+            "outer source already dropped"
+        );
+
+        // Make sure that the inner child source IS dropped now.
+        assert!(
+            inner0_dropped.load(Ordering::Relaxed),
+            "first inner source not dropped"
+        );
+
+        // Make sure that, in between the first event and second event, the
+        // replacement child source still exists.
+        assert!(
+            !inner1_dropped.load(Ordering::Relaxed),
+            "replacement inner source dropped"
+        );
+
+        // Run the event loop until we get a second event.
+        event_loop.run(None, &mut context, |_| {}).unwrap();
+
+        // Ensure the replacement source fired (which checks that it was
+        // registered and is being processed by the TransientSource).
+        assert_eq!(context.0.take(), Some(1), "replacement source did not fire");
     }
 }
