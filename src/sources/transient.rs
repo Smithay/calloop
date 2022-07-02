@@ -124,6 +124,10 @@ impl<T> TransientSource<T> {
         }
     }
 
+    pub fn is_none(&self) -> bool {
+        matches!(self, Self::None)
+    }
+
     /// If a caller needs to flag the contained source for removal or
     /// registration, we need to replace the enum variant safely. This requires
     /// having a `None` value in there temporarily while we do the swap.
