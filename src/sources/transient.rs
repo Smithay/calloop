@@ -38,6 +38,9 @@
 /// let mpsc_receiver: TransientSource<Channel> = source.into();
 /// ```
 ///
+/// (If you want to start off with an empty `TransientSource`, you can just use
+/// `Default::default()` instead.)
+///
 /// `TransientSource` implements [`EventSource`](crate::EventSource) and passes
 /// through `process_events()` calls, so in the parent's `process_events()`
 /// implementation you can just do this:
@@ -93,8 +96,43 @@
 /// The `TransientSource` will take care of updating the registration of the
 /// inner source, even if it actually needs to be unregistered or initially
 /// registered.
+///
+/// ## Replacing or removing `TransientSource`s without leaking
+///
+/// It is possible to leak registration if you bypass the API of a
+/// `TransientSource`. "Leak registration" means you may end up with an entry in
+/// `epoll()` that cannot be removed (in the case of file descriptor-based
+/// sources), or an entry in some other data structure (eg. the `Timer`'s
+/// underlying heap structure). No unsoundness or undefined behaviour will
+/// result, but leaking file descriptors can result in errors or panics in a
+/// long running program.
+///
+/// If you want to remove a source before it returns `PostAction::Remove`, use
+/// the [`TransientSource::remove()`] method. If you want to replace a source
+/// with another one, use the [`TransientSource::replace()`] method. Either of
+/// these may be called at any time during processing or from outside the event
+/// loop. Both require either returning `PostAction::Reregister` from the
+/// `process_event()` call that does this, or reregistering the event source
+/// some other way eg. via the top-level loop handle.
+///
+/// If, instead, you directly assign a new source to the variable holding the
+/// `TransientSource`, the inner source will be dropped before it can be
+/// unregistered, resulting in a leak. For example, either of these assignments
+/// will cause a leak of the old source's registration:
+///
+/// ```none,actually-rust-but-see-https://github.com/rust-lang/rust/issues/63193
+/// self.mpsc_receiver = Default::default();
+/// self.mpsc_receiver = new_channel.into();
+/// ```
+#[derive(Debug, Default)]
+pub struct TransientSource<T> {
+    state: TransientSourceState<T>,
+}
+
+/// This is the internal state of the [`TransientSource`], as a separate type so
+/// it's not exposed.
 #[derive(Debug)]
-pub enum TransientSource<T> {
+enum TransientSourceState<T> {
     /// The source should be kept in the loop.
     Keep(T),
     /// The source needs to be registered with the loop.
@@ -103,58 +141,99 @@ pub enum TransientSource<T> {
     Disable(T),
     /// The source needs to be removed from the loop.
     Remove(T),
+    /// The source is being replaced by another. For most API purposes (eg.
+    /// `map()`), this will be treated as the `Register` state enclosing the new
+    /// source.
+    Replace {
+        /// The new source, which will be registered and used from now on.
+        new: T,
+        /// The old source, which will be unregistered and dropped.
+        old: T,
+    },
     /// The source has been removed from the loop and dropped (this might also
     /// be observed if there is a panic while changing states).
     None,
 }
 
-impl<T> TransientSource<T> {
-    /// Apply a function to the enclosed source, if it exists. It will be
-    /// appplied even if the source is ready to be removed or is disabled.
-    pub fn map<F, U>(&mut self, f: F) -> Option<U>
-    where
-        F: FnOnce(&mut T) -> U,
-    {
-        match self {
-            TransientSource::Keep(source)
-            | TransientSource::Register(source)
-            | TransientSource::Disable(source)
-            | TransientSource::Remove(source) => Some(f(source)),
-            TransientSource::None => None,
-        }
+impl<T> Default for TransientSourceState<T> {
+    fn default() -> Self {
+        Self::None
     }
+}
 
-    /// Returns `true` if there is no wrapped event source.
-    pub fn is_none(&self) -> bool {
-        matches!(self, Self::None)
-    }
-
+impl<T> TransientSourceState<T> {
     /// If a caller needs to flag the contained source for removal or
     /// registration, we need to replace the enum variant safely. This requires
     /// having a `None` value in there temporarily while we do the swap.
     ///
     /// If the variant is `None` the value will not change and `replacer` will
-    /// not be called.
+    /// not be called. If the variant is `Replace` then `replacer` will be
+    /// called **on the new source**, which may cause the old source to leak
+    /// registration in the event loop if it has not yet been unregistered.
     ///
     /// The `replacer` function here is expected to be one of the enum variant
     /// constructors eg. `replace(TransientSource::Remove)`.
-    fn replace<F>(&mut self, replacer: F)
+    fn replace_state<F>(&mut self, replacer: F)
     where
         F: FnOnce(T) -> Self,
     {
-        *self = match std::mem::replace(self, TransientSource::None) {
-            TransientSource::Keep(source)
-            | TransientSource::Register(source)
-            | TransientSource::Remove(source)
-            | TransientSource::Disable(source) => replacer(source),
-            TransientSource::None => return,
+        *self = match std::mem::take(self) {
+            Self::Keep(source)
+            | Self::Register(source)
+            | Self::Remove(source)
+            | Self::Disable(source)
+            | Self::Replace { new: source, .. } => replacer(source),
+            Self::None => return,
         };
+    }
+}
+
+impl<T> TransientSource<T> {
+    /// Apply a function to the enclosed source, if it exists and is not about
+    /// to be removed.
+    pub fn map<F, U>(&mut self, f: F) -> Option<U>
+    where
+        F: FnOnce(&mut T) -> U,
+    {
+        match &mut self.state {
+            TransientSourceState::Keep(source)
+            | TransientSourceState::Register(source)
+            | TransientSourceState::Disable(source)
+            | TransientSourceState::Replace { new: source, .. } => Some(f(source)),
+            TransientSourceState::Remove(_) | TransientSourceState::None => None,
+        }
+    }
+
+    /// Returns `true` if there is no wrapped event source.
+    pub fn is_none(&self) -> bool {
+        matches!(self.state, TransientSourceState::None)
+    }
+
+    /// Removes the wrapped event source from the event loop and this wrapper.
+    pub fn remove(&mut self) {
+        self.state.replace_state(TransientSourceState::Remove);
+    }
+
+    /// Replace the currently wrapped source with the given one.  No more events
+    /// will be generated from the old source after this point. The old source
+    /// will not be dropped immediately, it will be kept so that it can be
+    /// deregistered.
+    ///
+    /// If this is called from outside of the event loop, you will need to wake
+    /// up the event loop for any changes to take place. If it is called from
+    /// within the event loop, the sources will be registered and unregistered
+    /// as needed after the current `process_events()` iteration.
+    pub fn replace(&mut self, new: T) {
+        self.state
+            .replace_state(|old| TransientSourceState::Replace { new, old });
     }
 }
 
 impl<T: crate::EventSource> From<T> for TransientSource<T> {
     fn from(source: T) -> Self {
-        Self::Register(source)
+        Self {
+            state: TransientSourceState::Register(source),
+        }
     }
 }
 
@@ -173,7 +252,7 @@ impl<T: crate::EventSource> crate::EventSource for TransientSource<T> {
     where
         F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
-        let reregister = if let TransientSource::Keep(ref mut source) = self {
+        let reregister = if let TransientSourceState::Keep(source) = &mut self.state {
             let child_post_action = source.process_events(readiness, token, callback)?;
 
             match child_post_action {
@@ -187,12 +266,12 @@ impl<T: crate::EventSource> crate::EventSource for TransientSource<T> {
                 // If our nested source needs to be removed or disabled, we need
                 // to swap it out for the "Remove" or "Disable" variant.
                 crate::PostAction::Disable => {
-                    self.replace(TransientSource::Disable);
+                    self.state.replace_state(TransientSourceState::Disable);
                     true
                 }
 
                 crate::PostAction::Remove => {
-                    self.replace(TransientSource::Remove);
+                    self.state.replace_state(TransientSourceState::Remove);
                     true
                 }
             }
@@ -214,18 +293,21 @@ impl<T: crate::EventSource> crate::EventSource for TransientSource<T> {
         poll: &mut crate::Poll,
         token_factory: &mut crate::TokenFactory,
     ) -> crate::Result<()> {
-        match self {
-            TransientSource::Keep(source) => {
+        match &mut self.state {
+            TransientSourceState::Keep(source) => {
                 source.register(poll, token_factory)?;
             }
-            TransientSource::Register(source) | TransientSource::Disable(source) => {
+            TransientSourceState::Register(source)
+            | TransientSourceState::Disable(source)
+            | TransientSourceState::Replace { new: source, .. } => {
                 source.register(poll, token_factory)?;
-                self.replace(TransientSource::Keep);
+                self.state.replace_state(TransientSourceState::Keep);
+                // Drops the disposed source in the Replace case.
             }
-            TransientSource::Remove(_source) => {
-                *self = TransientSource::None;
+            TransientSourceState::Remove(_source) => {
+                self.state.replace_state(|_| TransientSourceState::None);
             }
-            TransientSource::None => (),
+            TransientSourceState::None => (),
         }
         Ok(())
     }
@@ -235,34 +317,45 @@ impl<T: crate::EventSource> crate::EventSource for TransientSource<T> {
         poll: &mut crate::Poll,
         token_factory: &mut crate::TokenFactory,
     ) -> crate::Result<()> {
-        match self {
-            TransientSource::Keep(source) => source.reregister(poll, token_factory)?,
-            TransientSource::Register(source) => {
+        match &mut self.state {
+            TransientSourceState::Keep(source) => source.reregister(poll, token_factory)?,
+            TransientSourceState::Register(source) => {
                 source.register(poll, token_factory)?;
-                self.replace(TransientSource::Keep);
+                self.state.replace_state(TransientSourceState::Keep);
             }
-            TransientSource::Disable(source) => {
+            TransientSourceState::Disable(source) => {
                 source.unregister(poll)?;
             }
-            TransientSource::Remove(source) => {
+            TransientSourceState::Remove(source) => {
                 source.unregister(poll)?;
-                *self = TransientSource::None;
+                self.state.replace_state(|_| TransientSourceState::None);
             }
-            TransientSource::None => (),
+            TransientSourceState::Replace { new, old } => {
+                old.unregister(poll)?;
+                new.register(poll, token_factory)?;
+                self.state.replace_state(TransientSourceState::Keep);
+                // Drops 'dispose'.
+            }
+            TransientSourceState::None => (),
         }
         Ok(())
     }
 
     fn unregister(&mut self, poll: &mut crate::Poll) -> crate::Result<()> {
-        match self {
-            TransientSource::Keep(source)
-            | TransientSource::Register(source)
-            | TransientSource::Disable(source) => source.unregister(poll)?,
-            TransientSource::Remove(source) => {
+        match &mut self.state {
+            TransientSourceState::Keep(source)
+            | TransientSourceState::Register(source)
+            | TransientSourceState::Disable(source) => source.unregister(poll)?,
+            TransientSourceState::Remove(source) => {
                 source.unregister(poll)?;
-                *self = TransientSource::None;
+                self.state.replace_state(|_| TransientSourceState::None);
             }
-            TransientSource::None => (),
+            TransientSourceState::Replace { new, old } => {
+                old.unregister(poll)?;
+                new.unregister(poll)?;
+                self.state.replace_state(TransientSourceState::Register);
+            }
+            TransientSourceState::None => (),
         }
         Ok(())
     }
@@ -272,9 +365,8 @@ impl<T: crate::EventSource> crate::EventSource for TransientSource<T> {
 mod tests {
     use super::*;
     use crate::{
-        batch_register, batch_reregister, batch_unregister,
-        channel::{channel, Event},
-        ping::{make_ping, Ping, PingSource},
+        channel::{channel, Channel, Event},
+        ping::{make_ping, PingSource},
         Dispatcher, EventSource, PostAction,
     };
     use std::{
@@ -782,9 +874,6 @@ mod tests {
             current: TransientSource<FinishImmediatelySource>,
             replacement: Option<FinishImmediatelySource>,
             dropped: Rc<AtomicBool>,
-            cleanup: bool,
-            ping_rx: PingSource,
-            ping_tx: Ping,
         }
 
         impl WrapperSource {
@@ -795,16 +884,12 @@ mod tests {
                 second: FinishImmediatelySource,
             ) -> (Self, Rc<AtomicBool>) {
                 let dropped = Rc::new(false.into());
-                let (ping_tx, ping_rx) = crate::ping::make_ping().unwrap();
 
                 (
                     Self {
                         current: first.into(),
                         replacement: second.into(),
                         dropped: Rc::clone(&dropped),
-                        cleanup: false,
-                        ping_rx,
-                        ping_tx,
                     },
                     dropped,
                 )
@@ -826,46 +911,26 @@ mod tests {
             where
                 F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
             {
-                // This is currently a three stage process:
-                // - let the current source finish and be unregistered
-                // - wake the loop up again
-                // - replace the child source
+                // Did our event source generate an event?
                 let mut fired = false;
-                let mut pinged = false;
 
-                self.ping_rx.process_events(readiness, token, |(), ()| {
-                    pinged = true;
+                let post_action = self.current.process_events(readiness, token, |data, _| {
+                    callback(data, &mut ());
+                    fired = true;
                 })?;
 
-                let mut post_action =
-                    self.current.process_events(readiness, token, |data, _| {
-                        callback(data, &mut ());
-                        fired = true;
-                    })?;
-
                 if fired {
-                    assert_eq!(post_action, PostAction::Reregister);
                     // The event source will be unregistered after the current
-                    // process_events() iteration is finished. It will be fine
-                    // to remove only *after* that. So we need to wake up the
-                    // loop for one more iteration after it is unregistered.
-                    self.cleanup = true;
-                    self.ping_tx.ping();
-                }
-
-                if pinged && self.cleanup {
-                    // We woke up the loop to clean up the child source. It
-                    // should be unregistered and dropped now, so it's fine to
-                    // replace.
-                    assert!(self.current.is_none());
-
+                    // process_events() iteration is finished. The replace()
+                    // method will handle doing that even while we've added a
+                    // new source.
                     if let Some(replacement) = self.replacement.take() {
-                        self.current = replacement.into();
+                        self.current.replace(replacement);
                     }
 
-                    // Parent source is responsible for flagging this.
-                    post_action = PostAction::Reregister;
-                    self.cleanup = false;
+                    // Parent source is responsible for flagging this, but it's
+                    // already set.
+                    assert_eq!(post_action, PostAction::Reregister);
                 }
 
                 Ok(post_action)
@@ -876,7 +941,7 @@ mod tests {
                 poll: &mut crate::Poll,
                 token_factory: &mut crate::TokenFactory,
             ) -> crate::Result<()> {
-                batch_register!(poll, token_factory, self.current, self.ping_rx)
+                self.current.register(poll, token_factory)
             }
 
             fn reregister(
@@ -884,11 +949,11 @@ mod tests {
                 poll: &mut crate::Poll,
                 token_factory: &mut crate::TokenFactory,
             ) -> crate::Result<()> {
-                batch_reregister!(poll, token_factory, self.current, self.ping_rx)
+                self.current.reregister(poll, token_factory)
             }
 
             fn unregister(&mut self, poll: &mut crate::Poll) -> crate::Result<()> {
-                batch_unregister!(poll, self.current, self.ping_rx)
+                self.current.unregister(poll)
             }
         }
 
@@ -961,5 +1026,103 @@ mod tests {
         // Ensure the replacement source fired (which checks that it was
         // registered and is being processed by the TransientSource).
         assert_eq!(context.0.take(), Some(1), "replacement source did not fire");
+    }
+
+    #[test]
+    fn test_transient_remove() {
+        // This tests that calling remove(), even before an event source has
+        // requested its own removal, results in the event source being removed.
+
+        const STOP_AT: i32 = 2;
+
+        // A wrapper source to automate the removal of the inner source.
+        struct WrapperSource {
+            inner: TransientSource<Channel<i32>>,
+        }
+
+        impl EventSource for WrapperSource {
+            type Event = i32;
+            type Metadata = ();
+            type Ret = ();
+            type Error = Box<dyn std::error::Error + Sync + Send>;
+
+            fn process_events<F>(
+                &mut self,
+                readiness: crate::Readiness,
+                token: crate::Token,
+                mut callback: F,
+            ) -> Result<PostAction, Self::Error>
+            where
+                F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+            {
+                let mut remove = false;
+
+                let mut post_action = self.inner.process_events(readiness, token, |evt, _| {
+                    if let Event::Msg(num) = evt {
+                        callback(num, &mut ());
+                        remove = num >= STOP_AT;
+                    }
+                })?;
+
+                if remove {
+                    self.inner.remove();
+                    post_action |= PostAction::Reregister;
+                }
+
+                Ok(post_action)
+            }
+
+            fn register(
+                &mut self,
+                poll: &mut crate::Poll,
+                token_factory: &mut crate::TokenFactory,
+            ) -> crate::Result<()> {
+                self.inner.register(poll, token_factory)
+            }
+
+            fn reregister(
+                &mut self,
+                poll: &mut crate::Poll,
+                token_factory: &mut crate::TokenFactory,
+            ) -> crate::Result<()> {
+                self.inner.reregister(poll, token_factory)
+            }
+
+            fn unregister(&mut self, poll: &mut crate::Poll) -> crate::Result<()> {
+                self.inner.unregister(poll)
+            }
+        }
+
+        // Create our sources and loop.
+
+        let (sender, receiver) = channel();
+        let wrapper = WrapperSource {
+            inner: receiver.into(),
+        };
+
+        let mut event_loop = crate::EventLoop::try_new().unwrap();
+        let handle = event_loop.handle();
+
+        handle
+            .insert_source(wrapper, |num, _, out: &mut Option<_>| {
+                *out = Some(num);
+            })
+            .unwrap();
+
+        // Storage for callback data.
+        let mut out = None;
+
+        // Send some data we expect to get callbacks for.
+        for num in 0..=STOP_AT {
+            sender.send(num).unwrap();
+            event_loop.dispatch(Duration::ZERO, &mut out).unwrap();
+            assert_eq!(out.take(), Some(num));
+        }
+
+        // Now we expect the receiver to be gone.
+        assert!(matches!(
+            sender.send(STOP_AT + 1),
+            Err(std::sync::mpsc::SendError { .. })
+        ));
     }
 }
