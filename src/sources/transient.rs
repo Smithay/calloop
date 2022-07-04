@@ -210,6 +210,12 @@ impl<T> TransientSource<T> {
     }
 
     /// Removes the wrapped event source from the event loop and this wrapper.
+    ///
+    /// If this is called from outside of the event loop, you will need to wake
+    /// up the event loop for any changes to take place. If it is called from
+    /// within the event loop, you must return `PostAction::Reregister` from
+    /// your own event source's `process_events()`, and the source will be
+    /// unregistered as needed after it exits.
     pub fn remove(&mut self) {
         self.state.replace_state(TransientSourceState::Remove);
     }
@@ -221,8 +227,9 @@ impl<T> TransientSource<T> {
     ///
     /// If this is called from outside of the event loop, you will need to wake
     /// up the event loop for any changes to take place. If it is called from
-    /// within the event loop, the sources will be registered and unregistered
-    /// as needed after the current `process_events()` iteration.
+    /// within the event loop, you must return `PostAction::Reregister` from
+    /// your own event source's `process_events()`, and the sources will be
+    /// registered and unregistered as needed after it exits.
     pub fn replace(&mut self, new: T) {
         self.state
             .replace_state(|old| TransientSourceState::Replace { new, old });
