@@ -97,15 +97,13 @@
 /// inner source, even if it actually needs to be unregistered or initially
 /// registered.
 ///
-/// ## Replacing or removing `TransientSource`s without leaking
+/// ## Replacing or removing `TransientSource`s
 ///
-/// It is possible to leak registration if you bypass the API of a
-/// `TransientSource`. "Leak registration" means you may end up with an entry in
-/// `epoll()` that cannot be removed (in the case of file descriptor-based
-/// sources), or an entry in some other data structure (eg. the `Timer`'s
-/// underlying heap structure). No unsoundness or undefined behaviour will
-/// result, but leaking file descriptors can result in errors or panics in a
-/// long running program.
+/// Not properly removing or replacing `TransientSource`s can cause spurious
+/// wakeups of the event loop, and in some cases can leak file descriptors or
+/// fail to free entries in Calloop's internal data structures. No unsoundness
+/// or undefined behaviour will result, but leaking file descriptors can result
+/// in errors or panics.
 ///
 /// If you want to remove a source before it returns `PostAction::Remove`, use
 /// the [`TransientSource::remove()`] method. If you want to replace a source
@@ -117,8 +115,7 @@
 ///
 /// If, instead, you directly assign a new source to the variable holding the
 /// `TransientSource`, the inner source will be dropped before it can be
-/// unregistered, resulting in a leak. For example, either of these assignments
-/// will cause a leak of the old source's registration:
+/// unregistered. For example:
 ///
 /// ```none,actually-rust-but-see-https://github.com/rust-lang/rust/issues/63193
 /// self.mpsc_receiver = Default::default();
