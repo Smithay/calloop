@@ -568,12 +568,28 @@ mod tests {
 
     #[test]
     fn insert_source_no_interest() {
+        use nix::unistd::{close, pipe};
+
+        // Create a pipe to get an arbitrary fd.
+        let (read, write) = pipe().unwrap();
+        // We don't need the write end.
+        close(write).unwrap();
+
+        let source = crate::sources::generic::Generic::new(read, Interest::EMPTY, Mode::Level);
+        let dispatcher = Dispatcher::new(source, |_, _, _| Ok(PostAction::Continue));
+
         let event_loop = EventLoop::<()>::try_new().unwrap();
-        let ret = event_loop.handle().insert_source(
-            crate::sources::generic::Generic::new(0, Interest::EMPTY, Mode::Level),
-            |_, _, _| Ok(PostAction::Continue),
-        );
-        assert!(ret.is_ok());
+        let handle = event_loop.handle();
+        let ret = handle.register_dispatcher(dispatcher.clone());
+
+        if let Ok(token) = ret {
+            // Unwrap the dispatcher+source and close the read end.
+            handle.remove(token);
+            close(dispatcher.into_source_inner().unwrap()).unwrap();
+        } else {
+            // Fail the test.
+            panic!();
+        }
     }
 
     #[test]
