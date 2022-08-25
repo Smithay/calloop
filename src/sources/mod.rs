@@ -31,7 +31,7 @@ pub mod transient;
 /// sources. For example, if every child source returns `Continue`, the result
 /// will be `Continue`, but the parent source might still need to return
 /// `Reregister` or something else depending on any additional logic it uses.
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum PostAction {
     /// Continue listening for events on this source as before
     Continue,

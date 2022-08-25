@@ -143,7 +143,7 @@ impl TokenFactory {
 /// to identify which sub-source produced them.
 ///
 /// You should forward it to the [`Poll`] when registering your file descriptors.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Token {
     pub(crate) key: CalloopKey,
     pub(crate) sub_id: u32,
