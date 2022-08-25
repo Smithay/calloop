@@ -119,6 +119,8 @@ impl<'l, Data> LoopHandle<'l, Data> {
     ///
     /// This callback will be called during a dispatching cycle when the event loop has
     /// finished processing all pending events from the sources and becomes idle.
+    ///
+    /// Idle callbacks are oneshot, meaning the callback is dropped after it is invoked.
     pub fn insert_idle<F: FnOnce(&mut Data) + 'l>(&self, callback: F) -> Idle {
         let mut opt_cb = Some(callback);
         let callback = Rc::new(RefCell::new(Some(move |data: &mut Data| {
