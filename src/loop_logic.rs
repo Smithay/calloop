@@ -1,11 +1,11 @@
 use std::cell::{Cell, RefCell};
 use std::fmt::Debug;
-use std::io;
 use std::os::unix::io::AsRawFd;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use std::{io, mem};
 
 use slotmap::SlotMap;
 
@@ -358,23 +358,58 @@ impl<'l, Data> EventLoop<'l, Data> {
     }
 
     fn dispatch_idles(&mut self, data: &mut Data) {
-        let idles = ::std::mem::take(&mut *self.handle.inner.idles.borrow_mut());
+        // Collect all idle callbacks to prevent RefCell double borrows.
+        let idles = {
+            let mut idles = self.handle.inner.idles.borrow_mut();
+
+            // Idle callbacks are oneshot, replace the Vec
+            mem::take(&mut *idles)
+        };
+
         for idle in idles {
             idle.borrow_mut().dispatch(data);
         }
     }
 
     fn invoke_pre_run(&self, data: &mut Data) -> crate::Result<()> {
-        for (_, source) in self.handle.inner.sources.borrow().iter() {
+        // Collect all keys for the sources dispatch to prevent RefCell double borrows.
+        let keys = {
+            self.handle
+                .inner
+                .sources
+                .borrow()
+                .keys()
+                .collect::<Vec<_>>()
+        };
+
+        for key in keys {
+            // Intentionally end the borrow before invoking event source callbacks.
+            let source = { self.handle.inner.sources.borrow().get(key).unwrap().clone() };
+
             source.pre_run(data)?;
         }
+
         Ok(())
     }
 
     fn invoke_post_run(&self, data: &mut Data) -> crate::Result<()> {
-        for (_, source) in self.handle.inner.sources.borrow().iter() {
+        // Collect all keys for the sources dispatch to prevent RefCell double borrows.
+        let keys = {
+            self.handle
+                .inner
+                .sources
+                .borrow()
+                .keys()
+                .collect::<Vec<_>>()
+        };
+
+        for key in keys {
+            // Intentionally end the borrow before invoking event source callbacks.
+            let source = { self.handle.inner.sources.borrow().get(key).unwrap().clone() };
+
             source.post_run(data)?;
         }
+
         Ok(())
     }
 
