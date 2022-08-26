@@ -24,7 +24,7 @@ slotmap::new_key_type! {
 /// a [`Dispatcher`] is registered. You can use it to [disable](LoopHandle#method.disable),
 /// [enable](LoopHandle#method.enable), [update`](LoopHandle#method.update),
 /// [remove](LoopHandle#method.remove) or [kill](LoopHandle#method.kill) it.
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RegistrationToken {
     key: CalloopKey,
 }
