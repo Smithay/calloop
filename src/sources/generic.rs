@@ -26,7 +26,7 @@
 //!
 //!         // your callback needs to return a Result<PostAction, std::io::Error>
 //!         // if it returns an error, the event loop will consider this event
-//!         // event source as erroring and report it to the user.
+//!         // source as erroring and report it to the user.
 //!         Ok(PostAction::Continue)
 //!     }
 //! );

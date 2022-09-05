@@ -15,6 +15,9 @@ pub mod ping;
 #[cfg(target_os = "linux")]
 #[cfg_attr(docsrs, doc(cfg(target_os = "linux")))]
 pub mod signals;
+#[cfg(target_os = "linux")]
+#[cfg_attr(docsrs, doc(cfg(target_os = "linux")))]
+pub mod socket;
 pub mod timer;
 pub mod transient;
 
