@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.10.2 -- 2022-11-08
+
 #### Bugfixes
 
 - The return value of `LoopHandle::insert_idle` no longer borrows the `LoopHandle`.
