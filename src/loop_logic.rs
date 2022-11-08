@@ -24,7 +24,7 @@ slotmap::new_key_type! {
 /// a [`Dispatcher`] is registered. You can use it to [disable](LoopHandle#method.disable),
 /// [enable](LoopHandle#method.enable), [update`](LoopHandle#method.update),
 /// [remove](LoopHandle#method.remove) or [kill](LoopHandle#method.kill) it.
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct RegistrationToken {
     key: CalloopKey,
 }
@@ -105,7 +105,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
         let ret = sources
             .get(key)
             .unwrap()
-            .register(&mut *poll, &mut TokenFactory::new(key));
+            .register(&mut poll, &mut TokenFactory::new(key));
 
         if let Err(error) = ret {
             sources.remove(key).expect("Source was just inserted?!");
@@ -138,7 +138,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
     pub fn enable(&self, token: &RegistrationToken) -> crate::Result<()> {
         if let Some(source) = self.inner.sources.borrow().get(token.key) {
             source.register(
-                &mut *self.inner.poll.borrow_mut(),
+                &mut self.inner.poll.borrow_mut(),
                 &mut TokenFactory::new(token.key),
             )?;
         }
@@ -152,7 +152,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
     pub fn update(&self, token: &RegistrationToken) -> crate::Result<()> {
         if let Some(source) = self.inner.sources.borrow().get(token.key) {
             if !source.reregister(
-                &mut *self.inner.poll.borrow_mut(),
+                &mut self.inner.poll.borrow_mut(),
                 &mut TokenFactory::new(token.key),
             )? {
                 // we are in a callback, store for later processing
@@ -167,7 +167,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
     /// The source remains in the event loop, but it'll no longer generate events
     pub fn disable(&self, token: &RegistrationToken) -> crate::Result<()> {
         if let Some(source) = self.inner.sources.borrow().get(token.key) {
-            if !source.unregister(&mut *self.inner.poll.borrow_mut())? {
+            if !source.unregister(&mut self.inner.poll.borrow_mut())? {
                 // we are in a callback, store for later processing
                 self.inner.pending_action.set(PostAction::Disable);
             }
@@ -339,7 +339,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                 {
                     // the source has been removed from within its callback, unregister it
                     let mut poll = self.handle.inner.poll.borrow_mut();
-                    if let Err(e) = disp.unregister(&mut *poll) {
+                    if let Err(e) = disp.unregister(&mut poll) {
                         log::warn!(
                             "[calloop] Failed to unregister source from the polling system: {:?}",
                             e
