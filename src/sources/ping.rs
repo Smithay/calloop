@@ -141,7 +141,7 @@ mod tests {
         let wrapper = TransientSource::from(source);
 
         // Check that the source starts off in the wrapper.
-        assert!(!matches!(wrapper, TransientSource::None));
+        assert!(!wrapper.is_none());
 
         // Put the source in the loop.
 
@@ -169,7 +169,7 @@ mod tests {
         let wrapper = dispatcher.into_source_inner();
 
         // Check that the inner source is now gone.
-        assert!(matches!(wrapper, TransientSource::None));
+        assert!(wrapper.is_none());
     }
 
     #[test]
@@ -186,7 +186,7 @@ mod tests {
         let wrapper = TransientSource::from(source);
 
         // Check that the source starts off in the wrapper.
-        assert!(!matches!(wrapper, TransientSource::None));
+        assert!(!wrapper.is_none());
 
         // Put the source in the loop.
 
@@ -215,7 +215,7 @@ mod tests {
         let wrapper = dispatcher.into_source_inner();
 
         // Check that the inner source is now gone.
-        assert!(matches!(wrapper, TransientSource::None));
+        assert!(wrapper.is_none());
     }
 
     #[test]
@@ -234,7 +234,7 @@ mod tests {
         let sender2 = sender1.clone();
 
         // Check that the source starts off in the wrapper.
-        assert!(!matches!(wrapper, TransientSource::None));
+        assert!(!wrapper.is_none());
 
         // Put the source in the loop.
 
@@ -285,6 +285,6 @@ mod tests {
         let wrapper = dispatcher.into_source_inner();
 
         // Check that the inner source is now gone.
-        assert!(matches!(wrapper, TransientSource::None));
+        assert!(wrapper.is_none());
     }
 }

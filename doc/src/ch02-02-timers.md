@@ -2,7 +2,7 @@
 
 Timer event sources are used to manipulate time-related actions. Those are provided under the [`calloop::timer`](api/calloop/timer/index.html) module, with the `Timer` type at its core.
 
-A `Timer` source has a simple behavior: it is programmer to wait for some duration, or until a certain point in time. Once that deadline is reached, the source generates an event.
+A `Timer` source has a simple behavior: it is programmed to wait for some duration, or until a certain point in time. Once that deadline is reached, the source generates an event.
 
 So with `use calloop::timer::Timer` at the top of our `.rs` file, we can create a timer that will wait for 5 seconds:
 
