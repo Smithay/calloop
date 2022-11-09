@@ -128,7 +128,14 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --workspace --all-features
+          args: --all-features
+
+      - name: Run book tests
+        uses: actions-rs/cargo@v1
+        if: ${{ matrix.rust == 'stable' || matrix.rust == 'beta' }}
+        with:
+          command: test
+          args: --all-features --manifest-path ./doc/Cargo.toml
 
   coverage:
     name: Coverage
