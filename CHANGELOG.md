@@ -7,6 +7,12 @@
 - **Breaking:** The `TransientSource` is now an opaque type. It provides API methods for removing or
   replacing the wrapped source. This mitigates a potential leak of registration data if the
   TransientSource is replaced by direct assignment in a parent source.
+  
+## 0.10.2 -- 2022-11-08
+
+#### Bugfixes
+
+- The return value of `LoopHandle::insert_idle` no longer borrows the `LoopHandle`.
 
 ## 0.10.1 -- 2022-06-20
 
