@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+#### Bugfixes
+
+- Fixed a crash due to double borrow when handling pre/post run hooks
+
 #### Breaking changes
 
 - **Breaking:** The `TransientSource` is now an opaque type. It provides API methods for removing or
