@@ -358,23 +358,58 @@ impl<'l, Data> EventLoop<'l, Data> {
     }
 
     fn dispatch_idles(&mut self, data: &mut Data) {
-        let idles = ::std::mem::take(&mut *self.handle.inner.idles.borrow_mut());
+        let idles = std::mem::take(&mut *self.handle.inner.idles.borrow_mut());
         for idle in idles {
             idle.borrow_mut().dispatch(data);
         }
     }
 
     fn invoke_pre_run(&self, data: &mut Data) -> crate::Result<()> {
-        for (_, source) in self.handle.inner.sources.borrow().iter() {
+        let keys = self
+            .handle
+            .inner
+            .sources
+            .borrow()
+            .keys()
+            .collect::<Vec<_>>();
+
+        for key in keys {
+            let source = self
+                .handle()
+                .inner
+                .sources
+                .borrow()
+                .get(key)
+                .unwrap()
+                .clone();
+
             source.pre_run(data)?;
         }
+
         Ok(())
     }
 
     fn invoke_post_run(&self, data: &mut Data) -> crate::Result<()> {
-        for (_, source) in self.handle.inner.sources.borrow().iter() {
+        let keys = self
+            .handle
+            .inner
+            .sources
+            .borrow()
+            .keys()
+            .collect::<Vec<_>>();
+        for key in keys {
+            let source = self
+                .handle()
+                .inner
+                .sources
+                .borrow()
+                .get(key)
+                .unwrap()
+                .clone();
+
             source.post_run(data)?;
         }
+
         Ok(())
     }
 
