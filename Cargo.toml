@@ -1,6 +1,6 @@
 [package]
 name = "calloop"
-version = "0.10.2"
+version = "0.10.3"
 authors = ["Elinor Berger <elinor@safaradeg.net>"]
 documentation = "https://docs.rs/calloop/"
 repository = "https://github.com/Smithay/calloop"
@@ -19,7 +19,7 @@ codecov = { repository = "Smithay/calloop" }
 
 [dependencies]
 log = "0.4"
-nix = { version = "0.24", default-features = false, features = ["event", "fs", "signal", "socket", "time"] }
+nix = { version = "0.25", default-features = false, features = ["event", "fs", "signal", "socket", "time"] }
 futures-util = { version = "0.3.5", optional = true, default-features = false, features = ["std"]}
 futures-io = { version = "0.3.5", optional = true }
 slotmap = "1.0"
