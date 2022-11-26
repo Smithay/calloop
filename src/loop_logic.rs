@@ -365,24 +365,16 @@ impl<'l, Data> EventLoop<'l, Data> {
     }
 
     fn invoke_pre_run(&self, data: &mut Data) -> crate::Result<()> {
-        let keys = self
+        let sources = self
             .handle
             .inner
             .sources
             .borrow()
-            .keys()
+            .values()
+            .cloned()
             .collect::<Vec<_>>();
 
-        for key in keys {
-            let source = self
-                .handle()
-                .inner
-                .sources
-                .borrow()
-                .get(key)
-                .unwrap()
-                .clone();
-
+        for source in sources {
             source.pre_run(data)?;
         }
 
@@ -390,23 +382,16 @@ impl<'l, Data> EventLoop<'l, Data> {
     }
 
     fn invoke_post_run(&self, data: &mut Data) -> crate::Result<()> {
-        let keys = self
+        let sources = self
             .handle
             .inner
             .sources
             .borrow()
-            .keys()
+            .values()
+            .cloned()
             .collect::<Vec<_>>();
-        for key in keys {
-            let source = self
-                .handle()
-                .inner
-                .sources
-                .borrow()
-                .get(key)
-                .unwrap()
-                .clone();
 
+        for source in sources {
             source.post_run(data)?;
         }
 
