@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.10.4 -- 2022-12-05
+
 #### Bugfixes
 
 - Fixed a crash due to double borrow when handling pre/post run hooks
