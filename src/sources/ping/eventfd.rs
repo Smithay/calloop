@@ -18,12 +18,16 @@
 //! can then check the LSB and if it's set, we know it was a close event. This
 //! only works if a close event never fires more than once.
 
-use std::{os::unix::io::RawFd, sync::Arc};
+use std::{
+    os::unix::io::{AsRawFd, FromRawFd},
+    sync::Arc,
+};
 
+use io_lifetimes::{AsFd, BorrowedFd, OwnedFd};
 use nix::sys::eventfd::{eventfd, EfdFlags};
 use nix::unistd::{read, write};
 
-use super::{CloseOnDrop, PingError};
+use super::PingError;
 use crate::{
     generic::Generic, EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory,
 };
@@ -43,15 +47,14 @@ pub fn make_ping() -> std::io::Result<(Ping, PingSource)> {
     // to make sure the fd is not closed until all holders of it have dropped
     // it.
 
-    let fd_arc = Arc::new(CloseOnDrop(read));
+    let fd = Arc::new(unsafe { OwnedFd::from_raw_fd(read) });
 
     let ping = Ping {
-        event: Arc::new(FlagOnDrop(Arc::clone(&fd_arc))),
+        event: Arc::new(FlagOnDrop(Arc::clone(&fd))),
     };
 
     let source = PingSource {
-        event: Generic::new(read, Interest::READ, Mode::Level),
-        _fd: fd_arc,
+        event: Generic::new(ArcAsFd(fd), Interest::READ, Mode::Level),
     };
 
     Ok((ping, source))
@@ -60,9 +63,9 @@ pub fn make_ping() -> std::io::Result<(Ping, PingSource)> {
 // Helper functions for the event source IO.
 
 #[inline]
-fn send_ping(fd: RawFd, count: u64) -> std::io::Result<()> {
+fn send_ping(fd: BorrowedFd<'_>, count: u64) -> std::io::Result<()> {
     assert!(count > 0);
-    match write(fd, &count.to_ne_bytes()) {
+    match write(fd.as_raw_fd(), &count.to_ne_bytes()) {
         // The write succeeded, the ping will wake up the loop.
         Ok(_) => Ok(()),
 
@@ -76,12 +79,12 @@ fn send_ping(fd: RawFd, count: u64) -> std::io::Result<()> {
 }
 
 #[inline]
-fn drain_ping(fd: RawFd) -> std::io::Result<u64> {
+fn drain_ping(fd: BorrowedFd<'_>) -> std::io::Result<u64> {
     // The eventfd counter is effectively a u64.
     const NBYTES: usize = 8;
     let mut buf = [0u8; NBYTES];
 
-    match read(fd, &mut buf) {
+    match read(fd.as_raw_fd(), &mut buf) {
         // Reading from an eventfd should only ever produce 8 bytes. No looping
         // is required.
         Ok(NBYTES) => Ok(u64::from_ne_bytes(buf)),
@@ -93,15 +96,20 @@ fn drain_ping(fd: RawFd) -> std::io::Result<u64> {
     }
 }
 
+// Rust 1.64.0 adds an `AsFd` implementation for `Arc`, so this won't be needed
+#[derive(Debug)]
+struct ArcAsFd(Arc<OwnedFd>);
+
+impl AsFd for ArcAsFd {
+    fn as_fd(&self) -> BorrowedFd {
+        self.0.as_fd()
+    }
+}
+
 // The event source is simply a generic source with one of the eventfds.
 #[derive(Debug)]
 pub struct PingSource {
-    event: Generic<RawFd>,
-
-    // This is held only to ensure that there is an owner of the fd that lives
-    // as long as the Generic source, so that the fd is not closed unexpectedly
-    // when all the senders are dropped.
-    _fd: Arc<CloseOnDrop>,
+    event: Generic<ArcAsFd>,
 }
 
 impl EventSource for PingSource {
@@ -120,8 +128,8 @@ impl EventSource for PingSource {
         C: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
         self.event
-            .process_events(readiness, token, |_, &mut fd| {
-                let counter = drain_ping(fd)?;
+            .process_events(readiness, token, |_, fd| {
+                let counter = drain_ping(fd.as_fd())?;
 
                 // If the LSB is set, it means we were closed. If anything else
                 // is also set, it means we were pinged. The two are not
@@ -169,7 +177,7 @@ pub struct Ping {
 impl Ping {
     /// Send a ping to the `PingSource`.
     pub fn ping(&self) {
-        if let Err(e) = send_ping(self.event.0 .0, INCREMENT_PING) {
+        if let Err(e) = send_ping(self.event.0.as_fd(), INCREMENT_PING) {
             log::warn!("[calloop] Failed to write a ping: {:?}", e);
         }
     }
@@ -178,11 +186,11 @@ impl Ping {
 /// This manages signalling to the PingSource when it's dropped. There should
 /// only ever be one of these per PingSource.
 #[derive(Debug)]
-struct FlagOnDrop(Arc<CloseOnDrop>);
+struct FlagOnDrop(Arc<OwnedFd>);
 
 impl Drop for FlagOnDrop {
     fn drop(&mut self) {
-        if let Err(e) = send_ping(self.0 .0, INCREMENT_CLOSE) {
+        if let Err(e) = send_ping(self.0.as_fd(), INCREMENT_CLOSE) {
             log::warn!("[calloop] Failed to send close ping: {:?}", e);
         }
     }

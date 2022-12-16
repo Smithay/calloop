@@ -1,5 +1,9 @@
-use std::{io, os::unix::io::RawFd};
+use std::{
+    io,
+    os::unix::io::{AsRawFd, RawFd},
+};
 
+use io_lifetimes::BorrowedFd;
 use nix::{
     libc::{c_long, time_t, timespec},
     sys::event::{kevent_ts, kqueue, EventFilter, EventFlag, FilterFlag, KEvent},
@@ -74,7 +78,7 @@ impl Kqueue {
 
     pub fn register(
         &mut self,
-        fd: RawFd,
+        fd: BorrowedFd<'_>,
         interest: Interest,
         mode: Mode,
         token: *const Token,
@@ -84,7 +88,7 @@ impl Kqueue {
 
     pub fn reregister(
         &mut self,
-        fd: RawFd,
+        fd: BorrowedFd<'_>,
         interest: Interest,
         mode: Mode,
         token: *const Token,
@@ -102,7 +106,7 @@ impl Kqueue {
 
         let changes = [
             KEvent::new(
-                fd as usize,
+                fd.as_raw_fd() as usize,
                 EventFilter::EVFILT_WRITE,
                 write_flags,
                 FilterFlag::empty(),
@@ -110,7 +114,7 @@ impl Kqueue {
                 token as usize as isize,
             ),
             KEvent::new(
-                fd as usize,
+                fd.as_raw_fd() as usize,
                 EventFilter::EVFILT_READ,
                 read_flags,
                 FilterFlag::empty(),
@@ -152,10 +156,10 @@ impl Kqueue {
         Ok(())
     }
 
-    pub fn unregister(&mut self, fd: RawFd) -> crate::Result<()> {
+    pub fn unregister(&mut self, fd: BorrowedFd<'_>) -> crate::Result<()> {
         let changes = [
             KEvent::new(
-                fd as usize,
+                fd.as_raw_fd() as usize,
                 EventFilter::EVFILT_WRITE,
                 EventFlag::EV_DELETE,
                 FilterFlag::empty(),
@@ -163,7 +167,7 @@ impl Kqueue {
                 0,
             ),
             KEvent::new(
-                fd as usize,
+                fd.as_raw_fd() as usize,
                 EventFilter::EVFILT_READ,
                 EventFlag::EV_DELETE,
                 FilterFlag::empty(),

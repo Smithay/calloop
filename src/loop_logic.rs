@@ -1,7 +1,6 @@
 use std::cell::{Cell, RefCell};
 use std::fmt::Debug;
 use std::io;
-use std::os::unix::io::AsRawFd;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -10,6 +9,7 @@ use std::time::{Duration, Instant};
 #[cfg(feature = "block_on")]
 use std::future::Future;
 
+use io_lifetimes::AsFd;
 use slotmap::SlotMap;
 
 use crate::sources::{Dispatcher, EventSource, Idle, IdleDispatcher};
@@ -197,7 +197,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
     ///
     /// The produced futures can be polled in any executor, and notably the one provided by
     /// calloop.
-    pub fn adapt_io<F: AsRawFd>(&self, fd: F) -> crate::Result<crate::io::Async<'l, F>> {
+    pub fn adapt_io<F: AsFd>(&self, fd: F) -> crate::Result<crate::io::Async<'l, F>> {
         crate::io::Async::new(self.inner.clone(), fd)
     }
 }
@@ -676,9 +676,12 @@ mod tests {
 
     #[test]
     fn insert_bad_source() {
+        use std::os::unix::io::FromRawFd;
+
         let event_loop = EventLoop::<()>::try_new().unwrap();
+        let fd = unsafe { io_lifetimes::OwnedFd::from_raw_fd(420) };
         let ret = event_loop.handle().insert_source(
-            crate::sources::generic::Generic::new(420, Interest::READ, Mode::Level),
+            crate::sources::generic::Generic::new(fd, Interest::READ, Mode::Level),
             |_, _, _| Ok(PostAction::Continue),
         );
         assert!(ret.is_err());
@@ -687,9 +690,11 @@ mod tests {
     #[test]
     fn insert_source_no_interest() {
         use nix::unistd::{close, pipe};
+        use std::os::unix::io::FromRawFd;
 
         // Create a pipe to get an arbitrary fd.
         let (read, write) = pipe().unwrap();
+        let read = unsafe { io_lifetimes::OwnedFd::from_raw_fd(read) };
         // We don't need the write end.
         close(write).unwrap();
 
@@ -703,7 +708,6 @@ mod tests {
         if let Ok(token) = ret {
             // Unwrap the dispatcher+source and close the read end.
             handle.remove(token);
-            close(dispatcher.into_source_inner().unwrap()).unwrap();
         } else {
             // Fail the test.
             panic!();
@@ -851,6 +855,7 @@ mod tests {
     fn change_interests() {
         use nix::sys::socket::{recv, socketpair, AddressFamily, MsgFlags, SockFlag, SockType};
         use nix::unistd::write;
+        use std::os::unix::io::{AsRawFd, FromRawFd};
         let mut event_loop = EventLoop::<bool>::try_new().unwrap();
 
         let (sock1, sock2) = socketpair(
@@ -860,14 +865,15 @@ mod tests {
             SockFlag::empty(), // recv with DONTWAIT will suffice for platforms without SockFlag::SOCK_NONBLOCKING such as macOS
         )
         .unwrap();
+        let sock1 = unsafe { io_lifetimes::OwnedFd::from_raw_fd(sock1) };
 
         let source = Generic::new(sock1, Interest::READ, Mode::Level);
-        let dispatcher = Dispatcher::new(source, |_, &mut fd, dispatched| {
+        let dispatcher = Dispatcher::new(source, |_, fd, dispatched| {
             *dispatched = true;
             // read all contents available to drain the socket
             let mut buf = [0u8; 32];
             loop {
-                match recv(fd, &mut buf, MsgFlags::MSG_DONTWAIT) {
+                match recv(fd.as_raw_fd(), &mut buf, MsgFlags::MSG_DONTWAIT) {
                     Ok(0) => break, // closed pipe, we are now inert
                     Ok(_) => {}
                     Err(e) => {

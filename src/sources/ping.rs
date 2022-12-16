@@ -9,9 +9,6 @@
 //! block to construct event sources whose source of event is not file descriptor, but rather an
 //! userspace source (like an other thread).
 
-use nix::unistd::close;
-use std::os::unix::io::RawFd;
-
 // The ping source has platform-dependent implementations provided by modules
 // under this one. These modules should expose:
 // - a make_ping() function
@@ -57,17 +54,6 @@ pub type PingSource = platform::PingSource;
 #[derive(thiserror::Error, Debug)]
 #[error(transparent)]
 pub struct PingError(Box<dyn std::error::Error + Sync + Send>);
-
-#[derive(Debug)]
-struct CloseOnDrop(RawFd);
-
-impl Drop for CloseOnDrop {
-    fn drop(&mut self) {
-        if let Err(e) = close(self.0) {
-            log::warn!("[calloop] Failed to close ping fd: {:?}", e);
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {

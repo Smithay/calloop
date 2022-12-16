@@ -2,12 +2,16 @@
 //! syscall. Sending a ping involves writing to one end of a pipe, and the other
 //! end becoming readable is what wakes up the event loop.
 
-use std::{os::unix::io::RawFd, sync::Arc};
+use std::{
+    os::unix::io::{AsRawFd, FromRawFd, RawFd},
+    sync::Arc,
+};
 
+use io_lifetimes::OwnedFd;
 use nix::fcntl::OFlag;
-use nix::unistd::{close, read, write};
+use nix::unistd::{read, write};
 
-use super::{CloseOnDrop, PingError};
+use super::PingError;
 use crate::{
     generic::Generic, EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory,
 };
@@ -47,11 +51,14 @@ fn make_ends() -> std::io::Result<(RawFd, RawFd)> {
 pub fn make_ping() -> std::io::Result<(Ping, PingSource)> {
     let (read, write) = make_ends()?;
 
+    let read = unsafe { OwnedFd::from_raw_fd(read) };
+    let write = unsafe { OwnedFd::from_raw_fd(write) };
+
     let source = PingSource {
         pipe: Generic::new(read, Interest::READ, Mode::Level),
     };
     let ping = Ping {
-        pipe: Arc::new(CloseOnDrop(write)),
+        pipe: Arc::new(write),
     };
     Ok((ping, source))
 }
@@ -68,7 +75,7 @@ fn send_ping(fd: RawFd) -> std::io::Result<()> {
 // the pipe.
 #[derive(Debug)]
 pub struct PingSource {
-    pipe: Generic<RawFd>,
+    pipe: Generic<OwnedFd>,
 }
 
 impl EventSource for PingSource {
@@ -87,13 +94,13 @@ impl EventSource for PingSource {
         C: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
         self.pipe
-            .process_events(readiness, token, |_, &mut fd| {
+            .process_events(readiness, token, |_, fd| {
                 let mut buf = [0u8; 32];
                 let mut read_something = false;
                 let mut action = PostAction::Continue;
 
                 loop {
-                    match read(fd, &mut buf) {
+                    match read(fd.as_raw_fd(), &mut buf) {
                         Ok(0) => {
                             // The other end of the pipe was closed, mark ourselves
                             // for removal.
@@ -137,25 +144,17 @@ impl EventSource for PingSource {
     }
 }
 
-impl Drop for PingSource {
-    fn drop(&mut self) {
-        if let Err(e) = close(self.pipe.file) {
-            log::warn!("[calloop] Failed to close read ping: {:?}", e);
-        }
-    }
-}
-
 // The sending end of the ping writes zeroes to the write end of the pipe.
 #[derive(Clone, Debug)]
 pub struct Ping {
-    pipe: Arc<CloseOnDrop>,
+    pipe: Arc<OwnedFd>,
 }
 
 // The sending end of the ping writes zeroes to the write end of the pipe.
 impl Ping {
     /// Send a ping to the `PingSource`
     pub fn ping(&self) {
-        if let Err(e) = send_ping(self.pipe.0) {
+        if let Err(e) = send_ping(self.pipe.as_raw_fd()) {
             log::warn!("[calloop] Failed to write a ping: {:?}", e);
         }
     }
