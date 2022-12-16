@@ -122,7 +122,7 @@ where
     fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
         let token = token_factory.token();
 
-        poll.register(self.file.as_fd(), self.interest, self.mode, token)?;
+        poll.register(&self.file, self.interest, self.mode, token)?;
 
         self.token = Some(token);
         Ok(())
@@ -135,14 +135,14 @@ where
     ) -> crate::Result<()> {
         let token = token_factory.token();
 
-        poll.reregister(self.file.as_fd(), self.interest, self.mode, token)?;
+        poll.reregister(&self.file, self.interest, self.mode, token)?;
 
         self.token = Some(token);
         Ok(())
     }
 
     fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
-        poll.unregister(self.file.as_fd())?;
+        poll.unregister(&self.file)?;
         self.token = None;
         Ok(())
     }
