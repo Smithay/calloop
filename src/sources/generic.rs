@@ -15,7 +15,7 @@
 //! # let mut event_loop = calloop::EventLoop::<()>::try_new()
 //! #                .expect("Failed to initialize the event loop!");
 //! # let handle = event_loop.handle();
-//! # let io_object = 0;
+//! # let io_object = std::io::stdin();
 //! handle.insert_source(
 //!     // wrap your IO object in a Generic, here we register for read readiness
 //!     // in level-triggering mode
@@ -36,17 +36,15 @@
 //! It can also help you implementing your own event sources: just have
 //! these `Generic<_>` as fields of your event source, and delegate the
 //! [`EventSource`](crate::EventSource) implementation to them.
-//!
-//! If you need to directly work with a [`RawFd`](std::os::unix::io::RawFd), rather than an
-//! FD-backed object, see [`Generic::from_fd`](Generic#method.from_fd).
 
-use std::{marker::PhantomData, os::unix::io::AsRawFd};
+use io_lifetimes::AsFd;
+use std::marker::PhantomData;
 
 use crate::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
 
 /// A generic event source wrapping a FD-backed type
 #[derive(Debug)]
-pub struct Generic<F: AsRawFd, E = std::io::Error> {
+pub struct Generic<F: AsFd, E = std::io::Error> {
     /// The wrapped FD-backed type
     pub file: F,
     /// The programmed interest
@@ -62,7 +60,7 @@ pub struct Generic<F: AsRawFd, E = std::io::Error> {
     _error_type: PhantomData<E>,
 }
 
-impl<F: AsRawFd> Generic<F, std::io::Error> {
+impl<F: AsFd> Generic<F, std::io::Error> {
     /// Wrap a FD-backed type into a `Generic` event source that uses
     /// [`std::io::Error`] as its error type.
     pub fn new(file: F, interest: Interest, mode: Mode) -> Generic<F, std::io::Error> {
@@ -87,7 +85,7 @@ impl<F: AsRawFd> Generic<F, std::io::Error> {
     }
 }
 
-impl<F: AsRawFd, E> Generic<F, E> {
+impl<F: AsFd, E> Generic<F, E> {
     /// Unwrap the `Generic` source to retrieve the underlying type
     pub fn unwrap(self) -> F {
         self.file
@@ -96,7 +94,7 @@ impl<F: AsRawFd, E> Generic<F, E> {
 
 impl<F, E> EventSource for Generic<F, E>
 where
-    F: AsRawFd,
+    F: AsFd,
     E: Into<Box<dyn std::error::Error + Send + Sync>>,
 {
     type Event = Readiness;
@@ -124,7 +122,7 @@ where
     fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
         let token = token_factory.token();
 
-        poll.register(self.file.as_raw_fd(), self.interest, self.mode, token)?;
+        poll.register(self.file.as_fd(), self.interest, self.mode, token)?;
 
         self.token = Some(token);
         Ok(())
@@ -137,14 +135,14 @@ where
     ) -> crate::Result<()> {
         let token = token_factory.token();
 
-        poll.reregister(self.file.as_raw_fd(), self.interest, self.mode, token)?;
+        poll.reregister(self.file.as_fd(), self.interest, self.mode, token)?;
 
         self.token = Some(token);
         Ok(())
     }
 
     fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
-        poll.unregister(self.file.as_raw_fd())?;
+        poll.unregister(self.file.as_fd())?;
         self.token = None;
         Ok(())
     }

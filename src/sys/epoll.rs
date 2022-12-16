@@ -2,6 +2,7 @@ use std::os::unix::io::{AsRawFd, RawFd};
 
 use super::{Interest, Mode, PollEvent, Readiness, Token};
 
+use io_lifetimes::BorrowedFd;
 use nix::sys::{
     epoll::{
         epoll_create1, epoll_ctl, epoll_wait, EpollCreateFlags, EpollEvent, EpollFlags, EpollOp,
@@ -127,28 +128,40 @@ impl Epoll {
 
     pub fn register(
         &mut self,
-        fd: RawFd,
+        fd: BorrowedFd<'_>,
         interest: Interest,
         mode: Mode,
         token: *const Token,
     ) -> crate::Result<()> {
         let mut event = EpollEvent::new(make_flags(interest, mode), token as usize as u64);
-        epoll_ctl(self.epoll_fd, EpollOp::EpollCtlAdd, fd, &mut event).map_err(Into::into)
+        epoll_ctl(
+            self.epoll_fd,
+            EpollOp::EpollCtlAdd,
+            fd.as_raw_fd(),
+            &mut event,
+        )
+        .map_err(Into::into)
     }
 
     pub fn reregister(
         &mut self,
-        fd: RawFd,
+        fd: BorrowedFd<'_>,
         interest: Interest,
         mode: Mode,
         token: *const Token,
     ) -> crate::Result<()> {
         let mut event = EpollEvent::new(make_flags(interest, mode), token as usize as u64);
-        epoll_ctl(self.epoll_fd, EpollOp::EpollCtlMod, fd, &mut event).map_err(Into::into)
+        epoll_ctl(
+            self.epoll_fd,
+            EpollOp::EpollCtlMod,
+            fd.as_raw_fd(),
+            &mut event,
+        )
+        .map_err(Into::into)
     }
 
-    pub fn unregister(&mut self, fd: RawFd) -> crate::Result<()> {
-        epoll_ctl(self.epoll_fd, EpollOp::EpollCtlDel, fd, None).map_err(Into::into)
+    pub fn unregister(&mut self, fd: BorrowedFd<'_>) -> crate::Result<()> {
+        epoll_ctl(self.epoll_fd, EpollOp::EpollCtlDel, fd.as_raw_fd(), None).map_err(Into::into)
     }
 }
 

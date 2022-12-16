@@ -11,8 +11,9 @@
 //! they'll inherit their parent signal mask.
 
 use std::convert::TryFrom;
-use std::os::raw::c_int;
+use std::os::{raw::c_int, unix::io::AsRawFd};
 
+use io_lifetimes::{AsFd, BorrowedFd};
 use nix::sys::signal::SigSet;
 pub use nix::sys::signal::Signal;
 pub use nix::sys::signalfd::siginfo;
@@ -39,10 +40,20 @@ impl Event {
     }
 }
 
+// Wrap `nix` SignalFd type with `AsFd` impl
+#[derive(Debug)]
+struct SignalFdWrapper(SignalFd);
+
+impl AsFd for SignalFdWrapper {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        unsafe { BorrowedFd::borrow_raw(self.0.as_raw_fd()) }
+    }
+}
+
 /// An event source for receiving Unix signals
 #[derive(Debug)]
 pub struct Signals {
-    sfd: Generic<SignalFd>,
+    sfd: Generic<SignalFdWrapper>,
     mask: SigSet,
 }
 
@@ -60,7 +71,7 @@ impl Signals {
         let sfd = SignalFd::with_flags(&mask, SfdFlags::SFD_NONBLOCK | SfdFlags::SFD_CLOEXEC)?;
 
         Ok(Signals {
-            sfd: Generic::new(sfd, Interest::READ, Mode::Level),
+            sfd: Generic::new(SignalFdWrapper(sfd), Interest::READ, Mode::Level),
             mask,
         })
     }
@@ -74,7 +85,7 @@ impl Signals {
             self.mask.add(s);
         }
         self.mask.thread_block()?;
-        self.sfd.file.set_mask(&self.mask)?;
+        self.sfd.file.0.set_mask(&self.mask)?;
         Ok(())
     }
 
@@ -89,7 +100,7 @@ impl Signals {
             removed.add(s);
         }
         removed.thread_unblock()?;
-        self.sfd.file.set_mask(&self.mask)?;
+        self.sfd.file.0.set_mask(&self.mask)?;
         Ok(())
     }
 
@@ -105,7 +116,7 @@ impl Signals {
 
         self.mask.thread_unblock()?;
         new_mask.thread_block()?;
-        self.sfd.file.set_mask(&new_mask)?;
+        self.sfd.file.0.set_mask(&new_mask)?;
         self.mask = new_mask;
 
         Ok(())
@@ -139,7 +150,7 @@ impl EventSource for Signals {
         self.sfd
             .process_events(readiness, token, |_, sfd| {
                 loop {
-                    match sfd.read_signal() {
+                    match sfd.0.read_signal() {
                         Ok(Some(info)) => callback(Event { info }, &mut ()),
                         Ok(None) => break,
                         Err(e) => {

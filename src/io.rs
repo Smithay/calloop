@@ -12,6 +12,7 @@ use std::pin::Pin;
 use std::rc::Rc;
 use std::task::{Context, Poll as TaskPoll, Waker};
 
+use io_lifetimes::{AsFd, BorrowedFd};
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
 
 #[cfg(feature = "futures-io")]
@@ -31,30 +32,30 @@ use crate::{
 /// `AsyncWrite` if the underlying type implements `Read` and/or `Write`.
 ///
 /// Note that this adapter and the futures procuded from it and *not* threadsafe.
-pub struct Async<'l, F: AsRawFd> {
+pub struct Async<'l, F: AsFd> {
     fd: Option<F>,
     dispatcher: Rc<RefCell<IoDispatcher>>,
     inner: Rc<dyn IoLoopInner + 'l>,
     old_flags: OFlag,
 }
 
-impl<'l, F: AsRawFd + std::fmt::Debug> std::fmt::Debug for Async<'l, F> {
+impl<'l, F: AsFd + std::fmt::Debug> std::fmt::Debug for Async<'l, F> {
     #[cfg_attr(coverage, no_coverage)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Async").field("fd", &self.fd).finish()
     }
 }
 
-impl<'l, F: AsRawFd> Async<'l, F> {
+impl<'l, F: AsFd> Async<'l, F> {
     pub(crate) fn new<Data>(inner: Rc<LoopInner<'l, Data>>, fd: F) -> crate::Result<Async<'l, F>> {
-        let rawfd = fd.as_raw_fd();
+        let rawfd = fd.as_fd().as_raw_fd();
         // set non-blocking
         let old_flags = fcntl(rawfd, FcntlArg::F_GETFL)?;
         let old_flags = unsafe { OFlag::from_bits_unchecked(old_flags) };
         fcntl(rawfd, FcntlArg::F_SETFL(old_flags | OFlag::O_NONBLOCK))?;
         // register in the loop
         let dispatcher = Rc::new(RefCell::new(IoDispatcher {
-            fd: rawfd,
+            fd: fd.as_fd().as_raw_fd(),
             token: None,
             waker: None,
             is_registered: false,
@@ -114,11 +115,11 @@ impl<'l, F: AsRawFd> Async<'l, F> {
 
 /// A future that resolves once the associated object becomes ready for reading
 #[derive(Debug)]
-pub struct Readable<'s, 'l, F: AsRawFd> {
+pub struct Readable<'s, 'l, F: AsFd> {
     io: &'s mut Async<'l, F>,
 }
 
-impl<'s, 'l, F: AsRawFd> std::future::Future for Readable<'s, 'l, F> {
+impl<'s, 'l, F: AsFd> std::future::Future for Readable<'s, 'l, F> {
     type Output = ();
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> TaskPoll<()> {
         let io = &mut self.as_mut().io;
@@ -134,11 +135,11 @@ impl<'s, 'l, F: AsRawFd> std::future::Future for Readable<'s, 'l, F> {
 
 /// A future that resolves once the associated object becomes ready for writing
 #[derive(Debug)]
-pub struct Writable<'s, 'l, F: AsRawFd> {
+pub struct Writable<'s, 'l, F: AsFd> {
     io: &'s mut Async<'l, F>,
 }
 
-impl<'s, 'l, F: AsRawFd> std::future::Future for Writable<'s, 'l, F> {
+impl<'s, 'l, F: AsFd> std::future::Future for Writable<'s, 'l, F> {
     type Output = ();
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> TaskPoll<()> {
         let io = &mut self.as_mut().io;
@@ -152,7 +153,7 @@ impl<'s, 'l, F: AsRawFd> std::future::Future for Writable<'s, 'l, F> {
     }
 }
 
-impl<'l, F: AsRawFd> Drop for Async<'l, F> {
+impl<'l, F: AsFd> Drop for Async<'l, F> {
     fn drop(&mut self) {
         self.inner.kill(&self.dispatcher);
         // restore flags
@@ -163,7 +164,7 @@ impl<'l, F: AsRawFd> Drop for Async<'l, F> {
     }
 }
 
-impl<'l, F: AsRawFd> Unpin for Async<'l, F> {}
+impl<'l, F: AsFd> Unpin for Async<'l, F> {}
 
 trait IoLoopInner {
     fn register(&self, dispatcher: &RefCell<IoDispatcher>) -> crate::Result<()>;
@@ -175,7 +176,7 @@ impl<'l, Data> IoLoopInner for LoopInner<'l, Data> {
     fn register(&self, dispatcher: &RefCell<IoDispatcher>) -> crate::Result<()> {
         let disp = dispatcher.borrow();
         self.poll.borrow_mut().register(
-            disp.fd,
+            unsafe { BorrowedFd::borrow_raw(disp.fd) },
             Interest::EMPTY,
             Mode::OneShot,
             disp.token.expect("No token for IO dispatcher"),
@@ -185,7 +186,7 @@ impl<'l, Data> IoLoopInner for LoopInner<'l, Data> {
     fn reregister(&self, dispatcher: &RefCell<IoDispatcher>) -> crate::Result<()> {
         let disp = dispatcher.borrow();
         self.poll.borrow_mut().reregister(
-            disp.fd,
+            unsafe { BorrowedFd::borrow_raw(disp.fd) },
             disp.interest,
             Mode::OneShot,
             disp.token.expect("No token for IO dispatcher"),
@@ -207,7 +208,7 @@ impl<'l, Data> IoLoopInner for LoopInner<'l, Data> {
 }
 
 struct IoDispatcher {
-    fd: RawFd,
+    fd: RawFd, // FIXME: `BorrowedFd`? How to statically verify it doesn't outlive file?
     token: Option<Token>,
     waker: Option<Waker>,
     is_registered: bool,
@@ -249,7 +250,7 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
     fn unregister(&self, poll: &mut Poll) -> crate::Result<bool> {
         let disp = self.borrow();
         if disp.is_registered {
-            poll.unregister(disp.fd)?;
+            poll.unregister(unsafe { BorrowedFd::borrow_raw(disp.fd) })?;
         }
         Ok(true)
     }
@@ -268,7 +269,7 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
 
 #[cfg(feature = "futures-io")]
 #[cfg_attr(docsrs, doc(cfg(feature = "futures-io")))]
-impl<'l, F: AsRawFd + std::io::Read> AsyncRead for Async<'l, F> {
+impl<'l, F: AsFd + std::io::Read> AsyncRead for Async<'l, F> {
     fn poll_read(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -298,7 +299,7 @@ impl<'l, F: AsRawFd + std::io::Read> AsyncRead for Async<'l, F> {
 
 #[cfg(feature = "futures-io")]
 #[cfg_attr(docsrs, doc(cfg(feature = "futures-io")))]
-impl<'l, F: AsRawFd + std::io::Write> AsyncWrite for Async<'l, F> {
+impl<'l, F: AsFd + std::io::Write> AsyncWrite for Async<'l, F> {
     fn poll_write(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,

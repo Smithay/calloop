@@ -1,4 +1,5 @@
-use std::{cell::RefCell, convert::TryInto, os::unix::io::RawFd, rc::Rc, time::Duration};
+use io_lifetimes::BorrowedFd;
+use std::{cell::RefCell, convert::TryInto, os::unix::io::AsRawFd, rc::Rc, time::Duration};
 use vec_map::VecMap;
 
 use crate::{loop_logic::CalloopKey, sources::timer::TimerWheel};
@@ -244,7 +245,7 @@ impl Poll {
     /// polling system even though no event source will match it.
     pub fn register(
         &mut self,
-        fd: RawFd,
+        fd: BorrowedFd<'_>,
         interest: Interest,
         mode: Mode,
         token: Token,
@@ -271,7 +272,7 @@ impl Poll {
                 // somewhere. We can theoretically continue safely by choosing
                 // to leak, but one of our assumptions is no longer valid, so
                 // panic.
-                panic!("File descriptor ({}) already registered", fd);
+                panic!("File descriptor ({}) already registered", fd.as_raw_fd());
             }
         }
 
@@ -286,7 +287,7 @@ impl Poll {
     /// See note on [`register()`](Self::register()) regarding leaking.
     pub fn reregister(
         &mut self,
-        fd: RawFd,
+        fd: BorrowedFd<'_>,
         interest: Interest,
         mode: Mode,
         token: Token,
@@ -318,7 +319,10 @@ impl Poll {
                 // underlying poller has a dangling pointer. In the first case,
                 // the reregistration should have failed; in the second case, we
                 // cannot safely proceed.
-                panic!("File descriptor ({}) had no previous registration", fd);
+                panic!(
+                    "File descriptor ({}) had no previous registration",
+                    fd.as_raw_fd()
+                );
             }
         }
 
@@ -329,7 +333,7 @@ impl Poll {
     ///
     /// This file descriptor will no longer generate events. Fails if the
     /// provided file descriptor is not currently registered.
-    pub fn unregister(&mut self, fd: RawFd) -> crate::Result<()> {
+    pub fn unregister(&mut self, fd: BorrowedFd<'_>) -> crate::Result<()> {
         let unregistration_result = self.poller.unregister(fd);
 
         if unregistration_result.is_ok() {
@@ -347,7 +351,10 @@ impl Poll {
                 // underlying poller has a dangling pointer. In the first case,
                 // the reregistration should have failed; in the second case, we
                 // cannot safely proceed.
-                panic!("File descriptor ({}) had no previous registration", fd);
+                panic!(
+                    "File descriptor ({}) had no previous registration",
+                    fd.as_raw_fd()
+                );
             }
         }
 
@@ -357,7 +364,8 @@ impl Poll {
 
 /// Converts a file descriptor into an index for the token map. Panics if the
 /// file descriptor is negative.
-fn index_from_fd(fd: RawFd) -> usize {
-    fd.try_into()
-        .unwrap_or_else(|_| panic!("File descriptor ({}) is invalid", fd))
+fn index_from_fd(fd: BorrowedFd) -> usize {
+    fd.as_raw_fd()
+        .try_into()
+        .unwrap_or_else(|_| panic!("File descriptor ({}) is invalid", fd.as_raw_fd()))
 }
