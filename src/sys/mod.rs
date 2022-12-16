@@ -1,4 +1,4 @@
-use io_lifetimes::BorrowedFd;
+use io_lifetimes::{AsFd, BorrowedFd};
 use std::{cell::RefCell, convert::TryInto, os::unix::io::AsRawFd, rc::Rc, time::Duration};
 use vec_map::VecMap;
 
@@ -243,9 +243,9 @@ impl Poll {
     /// If your event source is dropped without being unregistered, the token
     /// passed in here will remain on the heap and continue to be used by the
     /// polling system even though no event source will match it.
-    pub fn register(
+    pub fn register<F: AsFd>(
         &mut self,
-        fd: BorrowedFd<'_>,
+        fd: F,
         interest: Interest,
         mode: Mode,
         token: Token,
@@ -253,7 +253,7 @@ impl Poll {
         let token_box = Box::new(token);
         let token_ptr = Box::into_raw(token_box);
 
-        let registration_result = self.poller.register(fd, interest, mode, token_ptr);
+        let registration_result = self.poller.register(fd.as_fd(), interest, mode, token_ptr);
 
         if registration_result.is_err() {
             // If registration did not work, do not add the file descriptor to
@@ -264,7 +264,7 @@ impl Poll {
         } else {
             // Registration worked, keep the token pointer until it's replaced
             // or removed.
-            let index = index_from_fd(fd);
+            let index = index_from_fd(fd.as_fd());
             if self.tokens.insert(index, token_ptr).is_some() {
                 // If there is already a file descriptor associated with a
                 // token, then replacing that entry will leak the token, but
@@ -272,7 +272,10 @@ impl Poll {
                 // somewhere. We can theoretically continue safely by choosing
                 // to leak, but one of our assumptions is no longer valid, so
                 // panic.
-                panic!("File descriptor ({}) already registered", fd.as_raw_fd());
+                panic!(
+                    "File descriptor ({}) already registered",
+                    fd.as_fd().as_raw_fd()
+                );
             }
         }
 
@@ -285,9 +288,9 @@ impl Poll {
     /// descriptor. Fails if the provided fd is not currently registered.
     ///
     /// See note on [`register()`](Self::register()) regarding leaking.
-    pub fn reregister(
+    pub fn reregister<F: AsFd>(
         &mut self,
-        fd: BorrowedFd<'_>,
+        fd: F,
         interest: Interest,
         mode: Mode,
         token: Token,
@@ -295,7 +298,9 @@ impl Poll {
         let token_box = Box::new(token);
         let token_ptr = Box::into_raw(token_box);
 
-        let reregistration_result = self.poller.reregister(fd, interest, mode, token_ptr);
+        let reregistration_result = self
+            .poller
+            .reregister(fd.as_fd(), interest, mode, token_ptr);
 
         if reregistration_result.is_err() {
             // If registration did not work, do not add the file descriptor to
@@ -306,7 +311,7 @@ impl Poll {
         } else {
             // Registration worked, drop the old token memory and keep the new
             // token pointer until it's replaced or removed.
-            let index = index_from_fd(fd);
+            let index = index_from_fd(fd.as_fd());
             if let Some(previous) = self.tokens.insert(index, token_ptr) {
                 // This is safe because it's from Box::into_raw() from a
                 // previous (re-)register() call.
@@ -321,7 +326,7 @@ impl Poll {
                 // cannot safely proceed.
                 panic!(
                     "File descriptor ({}) had no previous registration",
-                    fd.as_raw_fd()
+                    fd.as_fd().as_raw_fd()
                 );
             }
         }
@@ -333,12 +338,12 @@ impl Poll {
     ///
     /// This file descriptor will no longer generate events. Fails if the
     /// provided file descriptor is not currently registered.
-    pub fn unregister(&mut self, fd: BorrowedFd<'_>) -> crate::Result<()> {
-        let unregistration_result = self.poller.unregister(fd);
+    pub fn unregister<F: AsFd>(&mut self, fd: F) -> crate::Result<()> {
+        let unregistration_result = self.poller.unregister(fd.as_fd());
 
         if unregistration_result.is_ok() {
             // The source was unregistered, we can remove the old token data.
-            let index = index_from_fd(fd);
+            let index = index_from_fd(fd.as_fd());
             if let Some(previous) = self.tokens.remove(index) {
                 // This is safe because it's from Box::into_raw() from a
                 // previous (re-)register() call.
@@ -353,7 +358,7 @@ impl Poll {
                 // cannot safely proceed.
                 panic!(
                     "File descriptor ({}) had no previous registration",
-                    fd.as_raw_fd()
+                    fd.as_fd().as_raw_fd()
                 );
             }
         }
