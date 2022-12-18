@@ -6,6 +6,10 @@
 
 - Fixed a crash due to double borrow when handling pre/post run hooks
 
+#### Additions
+
+- With the `block_on` feature enabled, the `EventLoop` method now has a `block_on` method that runs a future to completion on the event loop.
+
 #### Breaking changes
 
 - **Breaking:** The `TransientSource` is now an opaque type. It provides API methods for removing or

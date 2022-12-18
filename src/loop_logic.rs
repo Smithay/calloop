@@ -7,6 +7,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+#[cfg(feature = "block_on")]
+use std::future::Future;
+
 use slotmap::SlotMap;
 
 use crate::sources::{Dispatcher, EventSource, Idle, IdleDispatcher};
@@ -204,7 +207,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
 /// This loop can host several event sources, that can be dynamically added or removed.
 pub struct EventLoop<'l, Data> {
     handle: LoopHandle<'l, Data>,
-    stop_signal: Arc<AtomicBool>,
+    signals: Arc<Signals>,
     ping: crate::sources::ping::Ping,
 }
 
@@ -213,6 +216,16 @@ impl<'l, Data> std::fmt::Debug for EventLoop<'l, Data> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("EventLoop { ... }")
     }
+}
+
+/// Signals related to the event loop.
+struct Signals {
+    /// Signal to stop the event loop.
+    stop: AtomicBool,
+
+    /// Signal that the future is ready.
+    #[cfg(feature = "block_on")]
+    future_ready: AtomicBool,
 }
 
 impl<'l, Data> EventLoop<'l, Data> {
@@ -248,7 +261,11 @@ impl<'l, Data> EventLoop<'l, Data> {
         handle.insert_source(ping_source, |_, _, _| {})?;
         Ok(EventLoop {
             handle,
-            stop_signal: Arc::new(AtomicBool::new(false)),
+            signals: Arc::new(Signals {
+                stop: AtomicBool::new(false),
+                #[cfg(feature = "block_on")]
+                future_ready: AtomicBool::new(false),
+            }),
             ping,
         })
     }
@@ -424,7 +441,7 @@ impl<'l, Data> EventLoop<'l, Data> {
     /// To be used in conjunction with the `run()` method.
     pub fn get_signal(&self) -> LoopSignal {
         LoopSignal {
-            signal: self.stop_signal.clone(),
+            signal: self.signals.clone(),
             ping: self.ping.clone(),
         }
     }
@@ -448,9 +465,9 @@ impl<'l, Data> EventLoop<'l, Data> {
         F: FnMut(&mut Data),
     {
         let timeout = timeout.into();
-        self.stop_signal.store(false, Ordering::Release);
+        self.signals.stop.store(false, Ordering::Release);
         self.invoke_pre_run(data)?;
-        while !self.stop_signal.load(Ordering::Acquire) {
+        while !self.signals.stop.load(Ordering::Acquire) {
             self.dispatch_events(timeout, data)?;
             self.dispatch_idles(data);
             cb(data);
@@ -458,13 +475,94 @@ impl<'l, Data> EventLoop<'l, Data> {
         self.invoke_post_run(data)?;
         Ok(())
     }
+
+    /// Block a future on this event loop.
+    ///
+    /// This will run the provided future on this event loop, blocking until it is
+    /// resolved.
+    ///
+    /// If [`LoopSignal::stop()`] is called before the future is resolved, this function returns
+    /// `None`.
+    #[cfg(feature = "block_on")]
+    pub fn block_on<R>(
+        &mut self,
+        future: impl Future<Output = R>,
+        data: &mut Data,
+        mut cb: impl FnMut(&mut Data),
+    ) -> crate::Result<Option<R>> {
+        use std::task::{Context, Poll, Wake, Waker};
+
+        /// A waker that will wake up the event loop when it is ready to make progress.
+        struct EventLoopWaker {
+            /// A signal that can be used to wake up the event loop.
+            ping: crate::sources::ping::Ping,
+
+            /// The signals to set.
+            signals: Arc<Signals>,
+        }
+
+        impl Wake for EventLoopWaker {
+            fn wake(self: Arc<Self>) {
+                // Set the waker.
+                self.signals.future_ready.store(true, Ordering::Release);
+                self.ping.ping();
+            }
+
+            fn wake_by_ref(self: &Arc<Self>) {
+                // Set the waker.
+                self.signals.future_ready.store(true, Ordering::Release);
+                self.ping.ping();
+            }
+        }
+
+        // Pin the future to the stack.
+        pin_utils::pin_mut!(future);
+
+        // Create a waker that will wake up the event loop when it is ready to make progress.
+        let waker = {
+            let handle = EventLoopWaker {
+                ping: self.ping.clone(),
+                signals: self.signals.clone(),
+            };
+
+            Waker::from(Arc::new(handle))
+        };
+        let mut context = Context::from_waker(&waker);
+
+        // Begin running the loop.
+        let mut output = None;
+
+        self.signals.stop.store(false, Ordering::Release);
+        self.signals.future_ready.store(true, Ordering::Release);
+
+        self.invoke_pre_run(data)?;
+
+        while !self.signals.stop.load(Ordering::Acquire) {
+            // If the future is ready to be polled, poll it.
+            if self.signals.future_ready.swap(false, Ordering::AcqRel) {
+                // Poll the future and break the loop if it's ready.
+                if let Poll::Ready(result) = future.as_mut().poll(&mut context) {
+                    output = Some(result);
+                    break;
+                }
+            }
+
+            // Otherwise, block on the event loop.
+            self.dispatch_events(None, data)?;
+            self.dispatch_idles(data);
+            cb(data);
+        }
+
+        self.invoke_post_run(data)?;
+        Ok(output)
+    }
 }
 
 /// A signal that can be shared between thread to stop or wakeup a running
 /// event loop
 #[derive(Clone)]
 pub struct LoopSignal {
-    signal: Arc<AtomicBool>,
+    signal: Arc<Signals>,
     ping: crate::sources::ping::Ping,
 }
 
@@ -483,7 +581,7 @@ impl LoopSignal {
     ///
     /// This is only usefull if you are using the `EventLoop::run()` method.
     pub fn stop(&self) {
-        self.signal.store(true, Ordering::Release);
+        self.signal.stop.store(true, Ordering::Release);
     }
 
     /// Wake up the event loop
@@ -890,6 +988,66 @@ mod tests {
         receiver.recv().unwrap();
         // sender still usable (e.g. for another EventLoop)
         drop(sender);
+    }
+
+    #[cfg(feature = "block_on")]
+    #[test]
+    fn block_on_test() {
+        use crate::sources::timer::TimeoutFuture;
+        use std::time::Duration;
+
+        let mut evl = EventLoop::<()>::try_new().unwrap();
+
+        let mut data = 22;
+        let timeout = {
+            let data = &mut data;
+            let evl_handle = evl.handle();
+
+            async move {
+                TimeoutFuture::from_duration(&evl_handle, Duration::from_secs(2)).await;
+                *data = 32;
+                11
+            }
+        };
+
+        let result = evl.block_on(timeout, &mut (), |&mut ()| {}).unwrap();
+        assert_eq!(result, Some(11));
+        assert_eq!(data, 32);
+    }
+
+    #[cfg(feature = "block_on")]
+    #[test]
+    fn block_on_early_cancel() {
+        use crate::sources::timer;
+        use std::time::Duration;
+
+        let mut evl = EventLoop::<()>::try_new().unwrap();
+
+        let mut data = 22;
+        let timeout = {
+            let data = &mut data;
+            let evl_handle = evl.handle();
+
+            async move {
+                timer::TimeoutFuture::from_duration(&evl_handle, Duration::from_secs(2)).await;
+                *data = 32;
+                11
+            }
+        };
+
+        let timer_source = timer::Timer::from_duration(Duration::from_secs(1));
+        let handle = evl.get_signal();
+        let _timer_token = evl
+            .handle()
+            .insert_source(timer_source, move |_, _, _| {
+                handle.stop();
+                timer::TimeoutAction::Drop
+            })
+            .unwrap();
+
+        let result = evl.block_on(timeout, &mut (), |&mut ()| {}).unwrap();
+        assert_eq!(result, None);
+        assert_eq!(data, 22);
     }
 
     // A dummy EventSource to test insertion and removal of sources
