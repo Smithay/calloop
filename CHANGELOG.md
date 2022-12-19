@@ -18,6 +18,7 @@
   TransientSource is replaced by direct assignment in a parent source.
 - **Breaking:** `Timer::current_deadline` returns `Option<Instant>`, so that it can return `None`
   in the event of an overflow.
+- **Breaking:** Use `AsFd` instead of `AsRawFd`/`RawFd`.
   
 ## 0.10.2 -- 2022-11-08
 
