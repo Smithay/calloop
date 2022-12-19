@@ -1,6 +1,6 @@
 //! A Calloop event source implementation for ZeroMQ sockets.
 
-use std::{collections, io, os::unix::io::RawFd};
+use std::{collections, io};
 
 use anyhow::Context;
 
@@ -48,7 +48,7 @@ where
 {
     // Calloop components.
     /// Event source for ZeroMQ socket.
-    socket_source: calloop::generic::Generic<RawFd>,
+    socket: calloop::generic::Generic<calloop::generic::FdWrapper<zmq::Socket>>,
 
     /// Event source for channel.
     mpsc_receiver: calloop::channel::Channel<T>,
@@ -62,9 +62,6 @@ where
     wake_ping_sender: calloop::ping::Ping,
 
     // ZeroMQ socket.
-    /// The underlying ZeroMQ socket that we're proxying things to.
-    socket: zmq::Socket,
-
     /// FIFO queue for the messages to be published.
     outbox: collections::VecDeque<T>,
 }
@@ -80,15 +77,15 @@ where
         let (mpsc_sender, mpsc_receiver) = calloop::channel::channel();
         let (wake_ping_sender, wake_ping_receiver) = calloop::ping::make_ping()?;
 
-        let fd = socket.get_fd()?;
-
-        let socket_source =
-            calloop::generic::Generic::new(fd, calloop::Interest::READ, calloop::Mode::Edge);
+        let socket = calloop::generic::Generic::new(
+            unsafe { calloop::generic::FdWrapper::new(socket) },
+            calloop::Interest::READ,
+            calloop::Mode::Edge,
+        );
 
         Ok((
             Self {
                 socket,
-                socket_source,
                 mpsc_receiver,
                 wake_ping_receiver,
                 wake_ping_sender,
@@ -164,6 +161,7 @@ where
             // on the socket that warrants reading the events again.
             let events = self
                 .socket
+                .file
                 .get_events()
                 .context("Failed to read ZeroMQ events")?;
 
@@ -172,6 +170,7 @@ where
             if events.contains(zmq::POLLOUT) {
                 if let Some(parts) = self.outbox.pop_front() {
                     self.socket
+                        .file
                         .send_multipart(parts, 0)
                         .context("Failed to send message")?;
                     used_socket = true;
@@ -183,6 +182,7 @@ where
                 // sending, which includes all parts of a multipart message.
                 let messages = self
                     .socket
+                    .file
                     .recv_multipart(0)
                     .context("Failed to receive message")?;
                 used_socket = true;
@@ -205,7 +205,7 @@ where
         poll: &mut calloop::Poll,
         token_factory: &mut calloop::TokenFactory,
     ) -> calloop::Result<()> {
-        self.socket_source.register(poll, token_factory)?;
+        self.socket.register(poll, token_factory)?;
         self.mpsc_receiver.register(poll, token_factory)?;
         self.wake_ping_receiver.register(poll, token_factory)?;
 
@@ -219,7 +219,7 @@ where
         poll: &mut calloop::Poll,
         token_factory: &mut calloop::TokenFactory,
     ) -> calloop::Result<()> {
-        self.socket_source.reregister(poll, token_factory)?;
+        self.socket.reregister(poll, token_factory)?;
         self.mpsc_receiver.reregister(poll, token_factory)?;
         self.wake_ping_receiver.reregister(poll, token_factory)?;
 
@@ -229,7 +229,7 @@ where
     }
 
     fn unregister(&mut self, poll: &mut calloop::Poll) -> calloop::Result<()> {
-        self.socket_source.unregister(poll)?;
+        self.socket.unregister(poll)?;
         self.mpsc_receiver.unregister(poll)?;
         self.wake_ping_receiver.unregister(poll)?;
         Ok(())
@@ -247,14 +247,14 @@ where
         //
         // - https://stackoverflow.com/a/38338578/188535
         // - http://api.zeromq.org/4-0:zmq-ctx-term
-        self.socket.set_linger(0).ok();
-        self.socket.set_rcvtimeo(0).ok();
-        self.socket.set_sndtimeo(0).ok();
+        self.socket.file.set_linger(0).ok();
+        self.socket.file.set_rcvtimeo(0).ok();
+        self.socket.file.set_sndtimeo(0).ok();
 
         // Double result because (a) possible failure on call and (b) possible
         // failure decoding.
-        if let Ok(Ok(last_endpoint)) = self.socket.get_last_endpoint() {
-            self.socket.disconnect(&last_endpoint).ok();
+        if let Ok(Ok(last_endpoint)) = self.socket.file.get_last_endpoint() {
+            self.socket.file.disconnect(&last_endpoint).ok();
         }
     }
 }
