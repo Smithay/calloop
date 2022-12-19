@@ -51,7 +51,7 @@ struct Registration {
 #[derive(Debug)]
 pub struct Timer {
     registration: Option<Registration>,
-    deadline: Instant,
+    deadline: Option<Instant>,
 }
 
 impl Timer {
@@ -62,14 +62,17 @@ impl Timer {
 
     /// Create a timer that will fire after a given duration from now
     pub fn from_duration(duration: Duration) -> Timer {
-        Self::from_deadline(Instant::now() + duration)
+        Self {
+            registration: None,
+            deadline: Instant::now().checked_add(duration),
+        }
     }
 
     /// Create a timer that will fire at a given instant
     pub fn from_deadline(deadline: Instant) -> Timer {
         Timer {
             registration: None,
-            deadline,
+            deadline: Some(deadline),
         }
     }
 
@@ -78,7 +81,7 @@ impl Timer {
     /// If the `Timer` is currently registered in the event loop, it needs to be
     /// re-registered for this change to take effect.
     pub fn set_deadline(&mut self, deadline: Instant) {
-        self.deadline = deadline;
+        self.deadline = Some(deadline);
     }
 
     /// Changes the deadline of this timer to a [`Duration`] from now
@@ -86,12 +89,17 @@ impl Timer {
     /// If the `Timer` is currently registered in the event loop, it needs to be
     /// re-registered for this change to take effect.
     pub fn set_duration(&mut self, duration: Duration) {
-        self.set_deadline(Instant::now() + duration)
+        self.deadline = Instant::now().checked_add(duration);
     }
 
     /// Get the current deadline of this `Timer`
+    ///
+    /// # Panics
+    ///
+    /// If a previous call to `from_deadline` or `set_deadline` caused this
+    /// timer to overflow, this functions panics.
     pub fn current_deadline(&self) -> Instant {
-        self.deadline
+        self.deadline.expect("Timer overflowed")
     }
 }
 
@@ -110,14 +118,21 @@ impl EventSource for Timer {
     where
         F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
-        if let Some(ref registration) = self.registration {
+        if let (Some(ref registration), Some(ref deadline)) = (&self.registration, &self.deadline) {
             if registration.token != token {
                 return Ok(PostAction::Continue);
             }
-            let new_deadline = match callback(self.deadline, &mut ()) {
+            let new_deadline = match callback(*deadline, &mut ()) {
                 TimeoutAction::Drop => return Ok(PostAction::Remove),
                 TimeoutAction::ToInstant(instant) => instant,
-                TimeoutAction::ToDuration(duration) => Instant::now() + duration,
+                TimeoutAction::ToDuration(duration) => match Instant::now().checked_add(duration) {
+                    Some(new_deadline) => new_deadline,
+                    None => {
+                        // The timer has overflowed, meaning we have no choice but to drop it.
+                        self.deadline = None;
+                        return Ok(PostAction::Remove);
+                    }
+                },
             };
             // If we received an event, we MUST have a valid counter value
             registration.wheel.borrow_mut().insert_reuse(
@@ -125,20 +140,24 @@ impl EventSource for Timer {
                 new_deadline,
                 registration.token,
             );
-            self.deadline = new_deadline;
+            self.deadline = Some(new_deadline);
         }
         Ok(PostAction::Continue)
     }
 
     fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
-        let wheel = poll.timers.clone();
-        let token = token_factory.token();
-        let counter = wheel.borrow_mut().insert(self.deadline, token);
-        self.registration = Some(Registration {
-            token,
-            wheel,
-            counter,
-        });
+        // Only register a deadline if we haven't overflowed.
+        if let Some(deadline) = self.deadline {
+            let wheel = poll.timers.clone();
+            let token = token_factory.token();
+            let counter = wheel.borrow_mut().insert(deadline, token);
+            self.registration = Some(Registration {
+                token,
+                wheel,
+                counter,
+            });
+        }
+
         Ok(())
     }
 
@@ -276,7 +295,7 @@ impl std::cmp::Eq for TimeoutData {}
 
 /// A future that resolves once a certain timeout is expired
 pub struct TimeoutFuture {
-    deadline: Instant,
+    deadline: Option<Instant>,
     waker: Rc<RefCell<Option<Waker>>>,
 }
 
@@ -292,12 +311,23 @@ impl std::fmt::Debug for TimeoutFuture {
 impl TimeoutFuture {
     /// Create a future that resolves after a given duration
     pub fn from_duration<Data>(handle: &LoopHandle<'_, Data>, duration: Duration) -> TimeoutFuture {
-        Self::from_deadline(handle, Instant::now() + duration)
+        Self::from_deadline_inner(handle, Instant::now().checked_add(duration))
     }
 
     /// Create a future that resolves at a given instant
     pub fn from_deadline<Data>(handle: &LoopHandle<'_, Data>, deadline: Instant) -> TimeoutFuture {
-        let timer = Timer::from_deadline(deadline);
+        Self::from_deadline_inner(handle, Some(deadline))
+    }
+
+    /// Create a future that resolves at a given instant
+    fn from_deadline_inner<Data>(
+        handle: &LoopHandle<'_, Data>,
+        deadline: Option<Instant>,
+    ) -> TimeoutFuture {
+        let timer = Timer {
+            deadline,
+            registration: None,
+        };
         let waker = Rc::new(RefCell::new(None::<Waker>));
         let waker2 = waker.clone();
         handle
@@ -320,9 +350,16 @@ impl std::future::Future for TimeoutFuture {
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
-        if std::time::Instant::now() >= self.deadline {
-            return std::task::Poll::Ready(());
+        match self.deadline {
+            None => return std::task::Poll::Pending,
+            
+            Some(deadline) => {
+                if Instant::now() >= deadline {
+                    return std::task::Poll::Ready(());
+                }
+            }
         }
+        
         *self.waker.borrow_mut() = Some(cx.waker().clone());
         std::task::Poll::Pending
     }
@@ -529,6 +566,8 @@ mod tests {
             TimeoutFuture::from_duration(&event_loop.handle(), Duration::from_millis(500));
         let timeout_2 =
             TimeoutFuture::from_duration(&event_loop.handle(), Duration::from_millis(1500));
+        // This one should never go off.
+        let timeout_3 = TimeoutFuture::from_duration(&event_loop.handle(), Duration::MAX);
 
         let (exec, sched) = crate::sources::futures::executor().unwrap();
         event_loop
@@ -540,6 +579,7 @@ mod tests {
 
         sched.schedule(timeout_1).unwrap();
         sched.schedule(timeout_2).unwrap();
+        sched.schedule(timeout_3).unwrap();
 
         // We do a 0-timeout dispatch after every regular dispatch to let the timeout triggers
         // flow back to the executor
@@ -567,5 +607,45 @@ mod tests {
             .dispatch(Some(Duration::ZERO), &mut dispatched)
             .unwrap();
         assert_eq!(dispatched, 2);
+    }
+
+    #[test]
+    fn no_overflow() {
+        let mut event_loop = EventLoop::try_new().unwrap();
+
+        let mut dispatched = 0;
+
+        event_loop
+            .handle()
+            .insert_source(
+                Timer::from_duration(Duration::from_millis(500)),
+                |_, &mut (), dispatched| {
+                    *dispatched += 1;
+                    TimeoutAction::Drop
+                },
+            )
+            .unwrap();
+
+        event_loop
+            .handle()
+            .insert_source(Timer::from_duration(Duration::MAX), |_, &mut (), _| {
+                panic!("This timer should never go off")
+            })
+            .unwrap();
+
+        event_loop
+            .dispatch(Some(Duration::from_millis(250)), &mut dispatched)
+            .unwrap();
+        assert_eq!(dispatched, 0);
+
+        event_loop
+            .dispatch(Some(Duration::from_millis(510)), &mut dispatched)
+            .unwrap();
+        assert_eq!(dispatched, 1);
+
+        event_loop
+            .dispatch(Some(Duration::from_millis(510)), &mut dispatched)
+            .unwrap();
+        assert_eq!(dispatched, 1);
     }
 }
