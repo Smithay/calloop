@@ -104,6 +104,7 @@ self.mpsc_receiver
     .process_events(readiness, token, |evt, _| {
         if let calloop::channel::Event::Msg(msg) = evt {
             self.socket
+                .file
                 .send_multipart(msg, 0)
                 .context("Failed to send message")?;
         }
@@ -123,15 +124,12 @@ where
     T::Item: Into<zmq::Message>,
 {
     // Calloop components.
-    socket_source: calloop::generic::Generic<std::os::unix::io::RawFd>,
+    socket: calloop::generic::Generic<calloop::generic::FdWrapper<zmq::Socket>>,
     mpsc_receiver: calloop::channel::Channel<T>,
     wake_ping_receiver: calloop::ping::PingSource,
 
     /// Sending end of the ping source.
     wake_ping_sender: calloop::ping::Ping,
-
-    /// The underlying ZeroMQ socket.
-    socket: zmq::Socket,
 
     /// FIFO queue for the messages to be published.
     outbox: std::collections::VecDeque<T>,
@@ -155,15 +153,18 @@ And our "zsocket is writeable" code becomes:
 
 ```rust,noplayground
 self.socket
+    .file
     .process_events(readiness, token, |_, _| {
         let events = self
             .socket
+            .file
             .get_events()
             .context("Failed to read ZeroMQ events")?;
     
         if events.contains(zmq::POLLOUT) {
             if let Some(parts) = self.outbox.pop_front() {
                 self.socket
+                    .file
                     .send_multipart(parts, 0)
                     .context("Failed to send message")?;
             }
@@ -172,6 +173,7 @@ self.socket
         if events.contains(zmq::POLLIN) {
             let messages =
                 self.socket
+                    .file
                     .recv_multipart(0)
                     .context("Failed to receive message")?;
             callback(messages, &mut ())

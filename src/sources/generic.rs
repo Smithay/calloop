@@ -37,10 +37,46 @@
 //! these `Generic<_>` as fields of your event source, and delegate the
 //! [`EventSource`](crate::EventSource) implementation to them.
 
-use io_lifetimes::AsFd;
-use std::marker::PhantomData;
+use io_lifetimes::{AsFd, BorrowedFd};
+use std::{marker::PhantomData, ops, os::unix::io::AsRawFd};
 
 use crate::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
+
+/// Wrapper to use a type implementing `AsRawFd` but not `AsFd` with `Generic`
+#[derive(Debug)]
+pub struct FdWrapper<T: AsRawFd>(T);
+
+impl<T: AsRawFd> FdWrapper<T> {
+    /// Wrap `inner` with an `AsFd` implementation.
+    ///
+    /// # Safety
+    /// This is safe if the `AsRawFd` implementation of `inner` always returns
+    /// a valid fd. This should usually be true for types implementing
+    /// `AsRawFd`. But this isn't guaranteed with `FdWrapper<RawFd>`.
+    pub unsafe fn new(inner: T) -> Self {
+        Self(inner)
+    }
+}
+
+impl<T: AsRawFd> ops::Deref for FdWrapper<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T: AsRawFd> ops::DerefMut for FdWrapper<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<T: AsRawFd> AsFd for FdWrapper<T> {
+    fn as_fd(&self) -> BorrowedFd {
+        unsafe { BorrowedFd::borrow_raw(self.0.as_raw_fd()) }
+    }
+}
 
 /// A generic event source wrapping a FD-backed type
 #[derive(Debug)]

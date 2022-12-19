@@ -12,7 +12,7 @@ So at a minimum, our type needs to contain these:
 pub struct ZeroMQSource
 {
     // Calloop components.
-    socket_source: calloop::generic::Generic<std::os::unix::io::RawFd>,
+    socket: calloop::generic::Generic<calloop::generic::FdWrapper<zmq::Socket>>,
     mpsc_receiver: calloop::channel::Channel<?>,
     wake_ping_receiver: calloop::ping::PingSource,
 }
@@ -26,15 +26,12 @@ What else do we need? If the `PingSource` is there to wake up the loop manually,
 pub struct ZeroMQSource
 {
     // Calloop components.
-    socket_source: calloop::generic::Generic<std::os::unix::io::RawFd>,
+    socket: calloop::generic::Generic<calloop::generic::FdWrapper<zmq::Socket>>,
     mpsc_receiver: calloop::channel::Channel<?>,
     wake_ping_receiver: calloop::ping::PingSource,
 
     /// Sending end of the ping source.
     wake_ping_sender: calloop::ping::Ping,
-
-    /// The underlying ZeroMQ socket.
-    socket: zmq::Socket,
 }
 ```
 
