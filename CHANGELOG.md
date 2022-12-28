@@ -12,6 +12,8 @@
 - **Breaking:** The `TransientSource` is now an opaque type. It provides API methods for removing or
   replacing the wrapped source. This mitigates a potential leak of registration data if the
   TransientSource is replaced by direct assignment in a parent source.
+- **Breaking:** `Timer::current_deadline` returns `Option<Instant>`, so that it can return `None`
+  in the event of an overflow.
   
 ## 0.10.2 -- 2022-11-08
 
