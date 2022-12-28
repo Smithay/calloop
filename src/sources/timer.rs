@@ -62,17 +62,18 @@ impl Timer {
 
     /// Create a timer that will fire after a given duration from now
     pub fn from_duration(duration: Duration) -> Timer {
-        Self {
-            registration: None,
-            deadline: Instant::now().checked_add(duration),
-        }
+        Self::from_deadline_inner(Instant::now().checked_add(duration))
     }
 
     /// Create a timer that will fire at a given instant
     pub fn from_deadline(deadline: Instant) -> Timer {
+        Self::from_deadline_inner(Some(deadline))
+    }
+
+    fn from_deadline_inner(deadline: Option<Instant>) -> Timer {
         Timer {
             registration: None,
-            deadline: Some(deadline),
+            deadline,
         }
     }
 
@@ -94,12 +95,9 @@ impl Timer {
 
     /// Get the current deadline of this `Timer`
     ///
-    /// # Panics
-    ///
-    /// If a previous call to `from_deadline` or `set_deadline` caused this
-    /// timer to overflow, this functions panics.
-    pub fn current_deadline(&self) -> Instant {
-        self.deadline.expect("Timer overflowed")
+    /// Returns `None` if the timer has overflowed.
+    pub fn current_deadline(&self) -> Option<Instant> {
+        self.deadline
     }
 }
 
@@ -324,18 +322,17 @@ impl TimeoutFuture {
         handle: &LoopHandle<'_, Data>,
         deadline: Option<Instant>,
     ) -> TimeoutFuture {
-        let timer = Timer {
-            deadline,
-            registration: None,
-        };
+        let timer = Timer::from_deadline_inner(deadline);
         let waker = Rc::new(RefCell::new(None::<Waker>));
-        let waker2 = waker.clone();
         handle
-            .insert_source(timer, move |_, &mut (), _| {
-                if let Some(waker) = waker2.borrow_mut().clone() {
-                    waker.wake()
+            .insert_source(timer, {
+                let waker = waker.clone();
+                move |_, &mut (), _| {
+                    if let Some(waker) = waker.borrow_mut().clone() {
+                        waker.wake()
+                    }
+                    TimeoutAction::Drop
                 }
-                TimeoutAction::Drop
             })
             .unwrap();
 
@@ -352,14 +349,14 @@ impl std::future::Future for TimeoutFuture {
     ) -> std::task::Poll<Self::Output> {
         match self.deadline {
             None => return std::task::Poll::Pending,
-            
+
             Some(deadline) => {
                 if Instant::now() >= deadline {
                     return std::task::Poll::Ready(());
                 }
             }
         }
-        
+
         *self.waker.borrow_mut() = Some(cx.waker().clone());
         std::task::Poll::Pending
     }
