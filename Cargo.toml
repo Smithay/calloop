@@ -10,6 +10,7 @@ keywords = [ "events", "loop", "callback", "eventloop", "unix" ]
 autotests = false
 edition = "2018"
 readme = "README.md"
+rust-version = "1.56.0"
 
 [workspace]
 members = [ "doc" ]

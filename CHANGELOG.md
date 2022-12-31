@@ -13,6 +13,7 @@
 
 #### Breaking changes
 
+- Bump MSRV to 1.56
 - **Breaking:** The `TransientSource` is now an opaque type. It provides API methods for removing or
   replacing the wrapped source. This mitigates a potential leak of registration data if the
   TransientSource is replaced by direct assignment in a parent source.
