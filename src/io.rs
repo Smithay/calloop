@@ -19,8 +19,9 @@ use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use futures_io::{AsyncRead, AsyncWrite, IoSlice, IoSliceMut};
 
 use crate::{
-    loop_logic::LoopInner, sources::EventDispatcher, Interest, Mode, Poll, PostAction, Readiness,
-    Token, TokenFactory,
+    loop_logic::{LoopInner, MAX_SOURCES_MASK},
+    sources::EventDispatcher,
+    Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory,
 };
 
 /// Adapter for async IO manipulations
@@ -63,7 +64,7 @@ impl<'l, F: AsFd> Async<'l, F> {
             last_readiness: Readiness::EMPTY,
         }));
         let key = inner.sources.borrow_mut().insert(dispatcher.clone());
-        dispatcher.borrow_mut().token = Some(Token { key, sub_id: 0 });
+        dispatcher.borrow_mut().token = Some(Token { key });
         inner.register(&dispatcher)?;
 
         // Straightforward casting would require us to add the bound `Data: 'l` but we don't actually need it
@@ -198,11 +199,12 @@ impl<'l, Data> IoLoopInner for LoopInner<'l, Data> {
             .borrow()
             .token
             .expect("No token for IO dispatcher")
-            .key;
+            .key
+            & MAX_SOURCES_MASK;
         let _source = self
             .sources
             .borrow_mut()
-            .remove(key)
+            .try_remove(key)
             .expect("Attempting to remove a non-existent source?!");
     }
 }

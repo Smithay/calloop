@@ -44,6 +44,7 @@ pub enum Error {
 impl From<nix::errno::Errno> for Error {
     /// Converts a [`nix::Error`] into a wrapped version of the equivalent
     /// [`std::io::Error`].
+    #[cfg_attr(coverage, no_coverage)]
     fn from(err: nix::errno::Errno) -> Self {
         Into::<std::io::Error>::into(err).into()
     }
