@@ -1,10 +1,16 @@
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
 #[cfg(unix)]
-use std::os::unix::io::RawFd;
+use std::os::unix::io::AsRawFd;
 
 #[cfg(windows)]
-use std::os::windows::io::RawSocket;
+use std::os::windows::io::AsRawSocket;
+
+#[cfg(unix)]
+use io_lifetimes::AsFd;
+
+#[cfg(windows)]
+use io_lifetimes::AsSocket;
 
 use polling::{Event, PollMode, Poller};
 
@@ -252,14 +258,26 @@ impl Poll {
     /// polling system even though no event source will match it.
     pub fn register(
         &self,
-        #[cfg(unix)] fd: RawFd,
-        #[cfg(windows)] fd: RawSocket,
+        #[cfg(unix)] fd: impl AsFd, 
+        #[cfg(windows)] fd: impl AsSocket, 
         interest: Interest,
         mode: Mode,
         token: Token,
     ) -> crate::Result<()> {
+        let raw = {
+            #[cfg(unix)]
+            {
+                fd.as_fd().as_raw_fd()
+            }
+
+            #[cfg(windows)]
+            {
+                fd.as_socket().as_raw_socket()
+            }
+        };
+
         self.poller
-            .add_with_mode(fd, cvt_interest(interest, token), cvt_mode(mode))?;
+            .add_with_mode(raw, cvt_interest(interest, token), cvt_mode(mode))?;
 
         Ok(())
     }
@@ -272,14 +290,26 @@ impl Poll {
     /// See note on [`register()`](Self::register()) regarding leaking.
     pub fn reregister(
         &self,
-        #[cfg(unix)] fd: RawFd,
-        #[cfg(windows)] fd: RawSocket,
+        #[cfg(unix)] fd: impl AsFd,
+        #[cfg(windows)] fd: impl AsSocket, 
         interest: Interest,
         mode: Mode,
         token: Token,
     ) -> crate::Result<()> {
+        let raw = {
+            #[cfg(unix)]
+            {
+                fd.as_fd().as_raw_fd()
+            }
+
+            #[cfg(windows)]
+            {
+                fd.as_socket().as_raw_socket()
+            }
+        };
+
         self.poller
-            .modify_with_mode(fd, cvt_interest(interest, token), cvt_mode(mode))?;
+            .modify_with_mode(raw, cvt_interest(interest, token), cvt_mode(mode))?;
 
         Ok(())
     }
@@ -290,10 +320,21 @@ impl Poll {
     /// provided file descriptor is not currently registered.
     pub fn unregister(
         &self,
-        #[cfg(unix)] fd: RawFd,
-        #[cfg(windows)] fd: RawSocket,
+        #[cfg(unix)] fd: impl AsFd, 
+        #[cfg(windows)] fd: impl AsSocket, 
     ) -> crate::Result<()> {
-        self.poller.delete(fd)?;
+        let raw = {
+            #[cfg(unix)]
+            {
+                fd.as_fd().as_raw_fd()
+            }
+
+            #[cfg(windows)]
+            {
+                fd.as_socket().as_raw_socket()
+            }
+        };
+        self.poller.delete(raw)?;
 
         Ok(())
     }
