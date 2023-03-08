@@ -258,8 +258,8 @@ impl Poll {
     /// polling system even though no event source will match it.
     pub fn register(
         &self,
-        #[cfg(unix)] fd: impl AsFd, 
-        #[cfg(windows)] fd: impl AsSocket, 
+        #[cfg(unix)] fd: impl AsFd,
+        #[cfg(windows)] fd: impl AsSocket,
         interest: Interest,
         mode: Mode,
         token: Token,
@@ -291,7 +291,7 @@ impl Poll {
     pub fn reregister(
         &self,
         #[cfg(unix)] fd: impl AsFd,
-        #[cfg(windows)] fd: impl AsSocket, 
+        #[cfg(windows)] fd: impl AsSocket,
         interest: Interest,
         mode: Mode,
         token: Token,
@@ -320,8 +320,8 @@ impl Poll {
     /// provided file descriptor is not currently registered.
     pub fn unregister(
         &self,
-        #[cfg(unix)] fd: impl AsFd, 
-        #[cfg(windows)] fd: impl AsSocket, 
+        #[cfg(unix)] fd: impl AsFd,
+        #[cfg(windows)] fd: impl AsSocket,
     ) -> crate::Result<()> {
         let raw = {
             #[cfg(unix)]
