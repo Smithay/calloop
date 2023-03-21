@@ -1,10 +1,10 @@
-use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc, time::Duration};
 
 #[cfg(unix)]
-use std::os::unix::io::AsRawFd;
+use std::os::unix::io::{AsRawFd, RawFd as Raw};
 
 #[cfg(windows)]
-use std::os::windows::io::AsRawSocket;
+use std::os::windows::io::{AsRawSocket, RawSocket as Raw};
 
 #[cfg(unix)]
 use io_lifetimes::AsFd;
@@ -31,16 +31,16 @@ pub enum Mode {
     /// Level-triggering
     ///
     /// This FD will report events on every poll as long as the requested interests
-    /// are available. If the same FD is inserted in multiple event loops, all of
-    /// them are notified of readiness.
+    /// are available.
     Level,
 
     /// Edge-triggering
     ///
     /// This FD will report events only when it *gains* one of the requested interests.
-    /// it must thus be fully processed before it'll generate events again. If the same
-    /// FD is inserted on multiple event loops, it may be that not all of them are notified
-    /// of readiness, and not necessarily always the same(s) (at least one is notified).
+    /// it must thus be fully processed before it'll generate events again.
+    ///
+    /// This mode is not supported on certain platforms, and an error will be returned
+    /// if it is used.
     Edge,
 }
 
@@ -176,6 +176,13 @@ pub struct Poll {
     /// The buffer of events returned by the poller.
     events: RefCell<Vec<Event>>,
 
+    /// The sources registered as level triggered.
+    ///
+    /// Some platforms that `polling` supports do not support level-triggered events. As of the time
+    /// of writing, this only includes Solaris and illumos. To work around this, we emulate level
+    /// triggered events by keeping this map of file descriptors.
+    level_triggered: Option<RefCell<HashMap<usize, (Raw, polling::Event)>>>,
+
     pub(crate) timers: Rc<RefCell<TimerWheel>>,
 }
 
@@ -187,11 +194,19 @@ impl std::fmt::Debug for Poll {
 }
 
 impl Poll {
-    pub(crate) fn new(_high_precision: bool) -> crate::Result<Poll> {
+    pub(crate) fn new() -> crate::Result<Poll> {
+        let poller = Poller::new()?;
+        let level_triggered = if poller.supports_level() {
+            None
+        } else {
+            Some(RefCell::new(HashMap::new()))
+        };
+
         Ok(Poll {
-            poller: Arc::new(Poller::new()?),
+            poller: Arc::new(poller),
             events: RefCell::new(Vec::new()),
             timers: Rc::new(RefCell::new(TimerWheel::new())),
+            level_triggered,
         })
     }
 
@@ -213,17 +228,29 @@ impl Poll {
         self.poller.wait(&mut events, timeout)?;
 
         // Convert `polling` events to `calloop` events.
+        let level_triggered = self.level_triggered.as_ref().map(RefCell::borrow);
         let mut poll_events = events
             .drain(..)
-            .map(|ev| PollEvent {
-                readiness: Readiness {
-                    readable: ev.readable,
-                    writable: ev.writable,
-                    error: false,
-                },
-                token: Token { key: ev.key },
+            .map(|ev| {
+                // If we need to emulate level-triggered events...
+                if let Some(level_triggered) = level_triggered.as_ref() {
+                    // ...and this event is from a level-triggered source...
+                    if let Some((source, interest)) = level_triggered.get(&ev.key) {
+                        // ...then we need to re-register the source.
+                        self.poller.modify(source, *interest)?;
+                    }
+                }
+
+                Ok(PollEvent {
+                    readiness: Readiness {
+                        readable: ev.readable,
+                        writable: ev.writable,
+                        error: false,
+                    },
+                    token: Token { key: ev.key },
+                })
             })
-            .collect::<Vec<_>>();
+            .collect::<std::io::Result<Vec<_>>>()?;
 
         drop(events);
 
@@ -276,8 +303,16 @@ impl Poll {
             }
         };
 
+        let ev = cvt_interest(interest, token);
         self.poller
-            .add_with_mode(raw, cvt_interest(interest, token), cvt_mode(mode))?;
+            .add_with_mode(raw, ev, cvt_mode(mode, self.poller.supports_level()))?;
+
+        // If this is level triggered and we're emulating level triggered mode...
+        if let (Mode::Level, Some(level_triggered)) = (mode, self.level_triggered.as_ref()) {
+            // ...then we need to keep track of the source.
+            let mut level_triggered = level_triggered.borrow_mut();
+            level_triggered.insert(ev.key, (raw, ev));
+        }
 
         Ok(())
     }
@@ -308,8 +343,16 @@ impl Poll {
             }
         };
 
+        let ev = cvt_interest(interest, token);
         self.poller
-            .modify_with_mode(raw, cvt_interest(interest, token), cvt_mode(mode))?;
+            .modify_with_mode(raw, ev, cvt_mode(mode, self.poller.supports_level()))?;
+
+        // If this is level triggered and we're emulating level triggered mode...
+        if let (Mode::Level, Some(level_triggered)) = (mode, self.level_triggered.as_ref()) {
+            // ...then we need to keep track of the source.
+            let mut level_triggered = level_triggered.borrow_mut();
+            level_triggered.insert(ev.key, (raw, ev));
+        }
 
         Ok(())
     }
@@ -335,6 +378,11 @@ impl Poll {
             }
         };
         self.poller.delete(raw)?;
+
+        if let Some(level_triggered) = self.level_triggered.as_ref() {
+            let mut level_triggered = level_triggered.borrow_mut();
+            level_triggered.retain(|_, (source, _)| *source != raw);
+        }
 
         Ok(())
     }
@@ -365,7 +413,11 @@ fn cvt_interest(interest: Interest, tok: Token) -> Event {
     }
 }
 
-fn cvt_mode(mode: Mode) -> PollMode {
+fn cvt_mode(mode: Mode, supports_other_modes: bool) -> PollMode {
+    if !supports_other_modes {
+        return PollMode::Oneshot;
+    }
+
     match mode {
         Mode::Edge => PollMode::Edge,
         Mode::Level => PollMode::Level,

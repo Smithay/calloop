@@ -263,7 +263,7 @@ impl<'l, Data> EventLoop<'l, Data> {
     ///
     /// Fails if the initialization of the polling system failed.
     pub fn try_new() -> crate::Result<Self> {
-        Self::inner_new(false)
+        Self::inner_new()
     }
 
     /// Create a new event loop in high precision mode
@@ -274,11 +274,12 @@ impl<'l, Data> EventLoop<'l, Data> {
     ///
     /// Fails if the initialization of the polling system failed.
     pub fn try_new_high_precision() -> crate::Result<Self> {
-        Self::inner_new(true)
+        // The polling crate uses high precision no matter what.
+        Self::inner_new()
     }
 
-    fn inner_new(high_precision: bool) -> crate::Result<Self> {
-        let poll = Poll::new(high_precision)?;
+    fn inner_new() -> crate::Result<Self> {
+        let poll = Poll::new()?;
         let handle = LoopHandle {
             inner: Rc::new(LoopInner {
                 poll: RefCell::new(poll),
