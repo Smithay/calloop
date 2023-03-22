@@ -448,7 +448,7 @@ mod tests {
     // even if we cannot test if they are actually high precision
     #[test]
     fn high_precision_timer() {
-        let mut event_loop = EventLoop::try_new_high_precision().unwrap();
+        let mut event_loop = EventLoop::try_new().unwrap();
 
         let mut dispatched = false;
 

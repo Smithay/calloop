@@ -263,22 +263,6 @@ impl<'l, Data> EventLoop<'l, Data> {
     ///
     /// Fails if the initialization of the polling system failed.
     pub fn try_new() -> crate::Result<Self> {
-        Self::inner_new()
-    }
-
-    /// Create a new event loop in high precision mode
-    ///
-    /// On some platforms it requires to setup more resources to enable high-precision
-    /// (sub millisecond) capabilities, so you should use this constructor if you need
-    /// this kind of precision.
-    ///
-    /// Fails if the initialization of the polling system failed.
-    pub fn try_new_high_precision() -> crate::Result<Self> {
-        // The polling crate uses high precision no matter what.
-        Self::inner_new()
-    }
-
-    fn inner_new() -> crate::Result<Self> {
         let poll = Poll::new()?;
         let handle = LoopHandle {
             inner: Rc::new(LoopInner {

@@ -41,6 +41,15 @@ pub enum Mode {
     ///
     /// This mode is not supported on certain platforms, and an error will be returned
     /// if it is used.
+    ///
+    /// ## Supported Platforms
+    ///
+    /// As of the time of writing, the platforms that support edge triggered polling are
+    /// as follows:
+    ///
+    /// - Linux/Android
+    /// - macOS/iOS/tvOS/watchOS
+    /// - FreeBSD/OpenBSD/NetBSD/DragonflyBSD
     Edge,
 }
 
@@ -181,6 +190,10 @@ pub struct Poll {
     /// Some platforms that `polling` supports do not support level-triggered events. As of the time
     /// of writing, this only includes Solaris and illumos. To work around this, we emulate level
     /// triggered events by keeping this map of file descriptors.
+    ///
+    /// One can emulate level triggered events on top of oneshot events by just re-registering the
+    /// file descriptor every time it is polled. However, this is not ideal, as it requires a
+    /// system call every time. It's better to use the intergrated system, if available.
     level_triggered: Option<RefCell<HashMap<usize, (Raw, polling::Event)>>>,
 
     pub(crate) timers: Rc<RefCell<TimerWheel>>,
