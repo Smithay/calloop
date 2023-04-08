@@ -3,13 +3,12 @@
 //! The [`Timer`] is an event source that will fire its event after a certain amount of time
 //! specified at creation. Its timing is tracked directly by the event loop core logic, and it does
 //! not consume any system resource.
-//!
-//! The timer precision depends on whether the loop was initialized in high-precision mode. If not,
-//! you can expect precision of order of 1 millisecond, if you need sub-millisecond precision,
-//! make sure you initialize the [`EventLoop`](crate::EventLoop) using
-//! [`EventLoop::try_new_high_precision()`](crate::EventLoop::try_new_high_precision). Note also
-//! that if you need to rely on good precision timers in general, you may need to enable realtime
-//! features of your OS to ensure your thread is quickly woken up by the system scheduler.
+//! 
+//! As of calloop v0.11.0, the event loop always uses high-precision timers. However, the timer
+//! precision varies between operating systems; for instance, the scheduler granularity on Windows
+//! is about 16 milliseconds. If you need to rely on good precision timers in general, you may need
+//! to enable realtime features of your OS to ensure your thread is quickly woken up by the system
+//! scheduler.
 //!
 //! The provided event is an [`Instant`] representing the deadline for which this timer has fired
 //! (which can be earlier than the current time depending on the event loop congestion).
