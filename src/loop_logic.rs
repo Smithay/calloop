@@ -18,7 +18,7 @@ use crate::{EventDispatcher, InsertError, Poll, PostAction, TokenFactory};
 
 type IdleCallback<'i, Data> = Rc<RefCell<dyn IdleDispatcher<Data> + 'i>>;
 
-// The maximum number of sources that we are allowed to have.
+// The number of bits used to store the source ID.
 //
 // This plus `MAX_SUBSOURCES` must equal the number of bits in `usize`.
 #[cfg(target_pointer_width = "64")]
@@ -28,7 +28,7 @@ pub(crate) const MAX_SOURCES: u32 = 22;
 #[cfg(target_pointer_width = "16")]
 pub(crate) const MAX_SOURCES: u32 = 10;
 
-// The maximum number of sub-sources that we are allowed to have.
+// The number of bits used to store the sub-source ID.
 //
 // This plus `MAX_SOURCES` must equal the number of bits in `usize`.
 #[cfg(target_pointer_width = "64")]
