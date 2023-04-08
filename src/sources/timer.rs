@@ -3,7 +3,7 @@
 //! The [`Timer`] is an event source that will fire its event after a certain amount of time
 //! specified at creation. Its timing is tracked directly by the event loop core logic, and it does
 //! not consume any system resource.
-//! 
+//!
 //! As of calloop v0.11.0, the event loop always uses high-precision timers. However, the timer
 //! precision varies between operating systems; for instance, the scheduler granularity on Windows
 //! is about 16 milliseconds. If you need to rely on good precision timers in general, you may need
