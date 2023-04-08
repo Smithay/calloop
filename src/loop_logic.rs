@@ -115,6 +115,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
     /// Use this function if you need access to the event source after its insertion in the loop.
     ///
     /// See also `insert_source`.
+    #[cfg_attr(coverage, no_coverage)] // Contains a branch we can't hit w/o OOM
     pub fn register_dispatcher<S>(
         &self,
         dispatcher: Dispatcher<'l, S, Data>,
@@ -127,8 +128,6 @@ impl<'l, Data> LoopHandle<'l, Data> {
 
         // Make sure we won't overflow the token.
         if sources.vacant_key() >= MAX_SOURCES_TOTAL {
-            // We probably can't hit this branch unless we OOM.
-            #[cfg_attr(coverage, no_coverage)]
             return Err(crate::Error::IoError(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "Too many sources",

@@ -208,8 +208,12 @@ impl std::fmt::Debug for Poll {
 
 impl Poll {
     pub(crate) fn new() -> crate::Result<Poll> {
+        Self::new_inner(false)
+    }
+
+    fn new_inner(force_fallback_lt: bool) -> crate::Result<Poll> {
         let poller = Poller::new()?;
-        let level_triggered = if poller.supports_level() {
+        let level_triggered = if poller.supports_level() && !force_fallback_lt {
             None
         } else {
             Some(RefCell::new(HashMap::new()))
@@ -435,5 +439,55 @@ fn cvt_mode(mode: Mode, supports_other_modes: bool) -> PollMode {
         Mode::Edge => PollMode::Edge,
         Mode::Level => PollMode::Level,
         Mode::OneShot => PollMode::Oneshot,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{loop_logic::MAX_SOURCES_TOTAL, sources::ping::make_ping, EventSource};
+
+    #[should_panic]
+    #[test]
+    fn overflow_subid() {
+        let mut gen = TokenFactory {
+            key: 0,
+            sub_id: u32::MAX - 1,
+        };
+
+        let _ = gen.token();
+    }
+
+    #[test]
+    fn test_fallback_lt() {
+        let mut poll = Poll::new_inner(true).unwrap();
+        let mut gen = TokenFactory { key: 0, sub_id: 0 };
+        let (dst, mut src) = make_ping().unwrap();
+
+        src.register(&mut poll, &mut gen).unwrap();
+        let mut key = 0;
+
+        for _ in 0..2 {
+            // Send a ping.
+            dst.ping();
+
+            // The ping should arrive at this point.
+            let events = poll.poll(Some(Duration::from_secs(3))).unwrap();
+
+            assert_eq!(events.len(), 1);
+            assert_eq!(events[0].token, Token { key });
+
+            // Since we haven't read the ping, polling again should return the same result.
+            let events = poll.poll(Some(Duration::from_secs(3))).unwrap();
+            assert_eq!(events.len(), 1);
+            assert_eq!(events[0].token, Token { key });
+
+            // Reregister and poll again.
+            src.reregister(&mut poll, &mut gen).unwrap();
+            key += MAX_SOURCES_TOTAL;
+        }
+
+        // Remove the source.
+        src.unregister(&mut poll).unwrap();
     }
 }
