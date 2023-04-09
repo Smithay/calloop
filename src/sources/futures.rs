@@ -17,16 +17,14 @@
 //! **Note:** The futures must have their own means of being woken up, as this executor is,
 //! by itself, not I/O aware. See [`LoopHandle::adapt_io`](crate::LoopHandle#method.adapt_io)
 //! for that, or you can use some other mechanism if you prefer.
-use std::{future::Future, pin::Pin, sync::Arc};
 
-use futures_util::{
-    stream::{FuturesUnordered, Stream},
-    task::{waker_ref, ArcWake, Context, LocalFutureObj, Poll as FutPoll},
-};
+use async_task::{Builder, Runnable};
+use slab::Slab;
+use std::{cell::RefCell, collections::VecDeque, future::Future, rc::Rc, task::Waker};
 
 use crate::{
     sources::{
-        channel::{channel, Channel, ChannelError, Event, Sender},
+        channel::ChannelError,
         ping::{make_ping, Ping, PingError, PingSource},
         EventSource,
     },
@@ -36,16 +34,53 @@ use crate::{
 /// A future executor as an event source
 #[derive(Debug)]
 pub struct Executor<T> {
-    futures: FuturesUnordered<LocalFutureObj<'static, T>>,
-    new_futures: Channel<LocalFutureObj<'static, T>>,
-    ready_futures: PingSource,
-    waker: Arc<ExecWaker>,
+    /// Shared state between the executor and the scheduler.
+    state: Rc<State<T>>,
+
+    /// The ping source to register into the poller.
+    ping_source: PingSource,
 }
 
 /// A scheduler to send futures to an executor
 #[derive(Clone, Debug)]
 pub struct Scheduler<T> {
-    sender: Sender<LocalFutureObj<'static, T>>,
+    state: Rc<State<T>>,
+}
+
+/// The inner state of the executor.
+#[derive(Debug)]
+struct State<T> {
+    /// The incoming queue of futures to be executed.
+    incoming: RefCell<VecDeque<Runnable<usize>>>,
+
+    /// The list of currently active tasks.
+    ///
+    /// This is set to `None` when the executor is destroyed.
+    active: RefCell<Option<Slab<Active<T>>>>,
+
+    /// The ping to wake up the executor.
+    ping: Ping,
+}
+
+/// An active future or its result.
+#[derive(Debug)]
+enum Active<T> {
+    /// The future is currently being polled.
+    ///
+    /// Waking this waker will insert the runnable into `incoming`.
+    Future(Waker),
+
+    /// The future has finished polling, and its result is stored here.
+    Finished(T),
+}
+
+impl<T> Active<T> {
+    fn is_finished(&self) -> bool {
+        match self {
+            Active::Finished(_) => true,
+            _ => false,
+        }
+    }
 }
 
 impl<T> Scheduler<T> {
@@ -56,8 +91,99 @@ impl<T> Scheduler<T> {
     where
         Fut: Future<Output = T>,
     {
-        let obj = LocalFutureObj::new(Box::new(future));
-        self.sender.send(obj).map_err(|_| ExecutorDestroyed)
+        /// Store this future's result in the executor.
+        struct StoreOnDrop<'a, T> {
+            index: usize,
+            value: Option<T>,
+            state: &'a State<T>,
+        }
+
+        impl<T> Drop for StoreOnDrop<'_, T> {
+            fn drop(&mut self) {
+                let mut active = self.state.active.borrow_mut();
+                if let Some(active) = active.as_mut() {
+                    if let Some(value) = self.value.take() {
+                        active[self.index] = Active::Finished(value);
+                    } else {
+                        // The future was dropped before it finished.
+                        // Remove it from the active list.
+                        active.remove(self.index);
+                    }
+                }
+            }
+        }
+
+        let mut active_guard = self.state.active.borrow_mut();
+        let active = active_guard.as_mut().ok_or(ExecutorDestroyed)?;
+
+        // Wrap the future in another future that polls it and stores the result.
+        let index = active.vacant_key();
+        let future = {
+            let state = self.state.clone();
+            async move {
+                let mut guard = StoreOnDrop {
+                    index,
+                    value: None,
+                    state: &state,
+                };
+
+                // Get the value of the future.
+                let value = future.await;
+
+                // Store it in the executor.
+                guard.value = Some(value);
+            }
+        };
+
+        // A schedule function that inserts the runnable into the incoming queue.
+        let schedule = {
+            let state = self.state.clone();
+            move |runnable| {
+                let mut incoming = state.incoming.borrow_mut();
+                incoming.push_back(runnable);
+
+                // Wake up the executor.
+                state.ping.ping();
+            }
+        };
+
+        // Spawn the future.
+        let (runnable, task) = {
+            let builder = Builder::new().metadata(index).propagate_panic(true);
+
+            // SAFETY: todo
+            unsafe { builder.spawn_unchecked(move |_| future, schedule) }
+        };
+
+        // Insert the runnable into the set of active tasks.
+        active.insert(Active::Future(runnable.waker()));
+        drop(active_guard);
+
+        // Schedule the runnable and detach the task so it isn't cancellable.
+        runnable.schedule();
+        task.detach();
+
+        Ok(())
+    }
+}
+
+impl<T> Drop for Executor<T> {
+    fn drop(&mut self) {
+        let active = self.state.active.borrow_mut().take().unwrap();
+
+        // Wake all of the active tasks in order to destroy their runnables.
+        for (_, task) in active {
+            // Don't let a panicking waker blow everything up.
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                if let Active::Future(waker) = task {
+                    waker.wake();
+                }
+            }))
+            .ok();
+        }
+
+        // Drain the queue in order to drop all of the runnables.
+        self.state.incoming.borrow_mut().clear();
     }
 }
 
@@ -67,32 +193,24 @@ impl<T> Scheduler<T> {
 #[error("the executor was destroyed")]
 pub struct ExecutorDestroyed;
 
-#[derive(Debug)]
-struct ExecWaker {
-    ping: Ping,
-}
-
-impl ArcWake for ExecWaker {
-    fn wake_by_ref(arc_self: &Arc<ExecWaker>) {
-        arc_self.ping.ping();
-    }
-}
-
 /// Create a new executor, and its associated scheduler
 ///
 /// May fail due to OS errors preventing calloop to setup its internal pipes (if your
 /// process has reatched its file descriptor limit for example).
 pub fn executor<T>() -> crate::Result<(Executor<T>, Scheduler<T>)> {
-    let (ping, ready_futures) = make_ping()?;
-    let (sender, new_futures) = channel();
+    let (ping, ping_source) = make_ping()?;
+    let state = Rc::new(State {
+        incoming: RefCell::new(VecDeque::new()),
+        active: RefCell::new(Some(Slab::new())),
+        ping,
+    });
+
     Ok((
         Executor {
-            futures: FuturesUnordered::new(),
-            new_futures,
-            ready_futures,
-            waker: Arc::new(ExecWaker { ping }),
+            state: state.clone(),
+            ping_source,
         },
-        Scheduler { sender },
+        Scheduler { state },
     ))
 }
 
@@ -111,34 +229,53 @@ impl<T> EventSource for Executor<T> {
     where
         F: FnMut(T, &mut ()),
     {
-        // fetch all newly inserted futures and push them to the container
-        let futures = &mut self.futures;
-        self.new_futures
-            .process_events(readiness, token, |evt, _| {
-                if let Event::Msg(fut) = evt {
-                    futures.push(fut);
+        // Process all of the newly inserted futures.
+        let clear_readiness = {
+            let mut incoming = self.state.incoming.borrow_mut();
+            let mut clear_readiness = false;
+
+            // Only process a limited number of tasks at a time; better to move onto the next event soon.
+            for _ in 0..1024 {
+                if let Some(runnable) = incoming.pop_front() {
+                    let index = *runnable.metadata();
+                    runnable.run();
+
+                    // If the runnable finished with a result, call the callback.
+                    let mut active_guard = self.state.active.borrow_mut();
+                    let active = active_guard.as_mut().unwrap();
+
+                    if let Some(state) = active.get(index) {
+                        if state.is_finished() {
+                            // Take out the state and provide it.
+                            let result = match active.remove(index) {
+                                Active::Finished(result) => result,
+                                _ => unreachable!(),
+                            };
+
+                            callback(result, &mut ());
+                        }
+                    }
+                } else {
+                    clear_readiness = true;
+                    break;
                 }
-            })
-            .map_err(ExecutorError::NewFutureError)?;
+            }
 
-        // process ping events to make it non-ready again
-        self.ready_futures
-            .process_events(readiness, token, |(), _| {})
-            .map_err(ExecutorError::WakeError)?;
+            clear_readiness
+        };
 
-        // advance all available futures as much as possible
-        let waker = waker_ref(&self.waker);
-        let mut cx = Context::from_waker(&waker);
-
-        while let FutPoll::Ready(Some(ret)) = Pin::new(&mut self.futures).poll_next(&mut cx) {
-            callback(ret, &mut ());
+        // Clear the readiness of the ping event if we processed all of the incoming tasks.
+        if clear_readiness {
+            self.ping_source
+                .process_events(readiness, token, |(), &mut ()| {})
+                .map_err(ExecutorError::WakeError)?;
         }
+
         Ok(PostAction::Continue)
     }
 
     fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
-        self.new_futures.register(poll, token_factory)?;
-        self.ready_futures.register(poll, token_factory)?;
+        self.ping_source.register(poll, token_factory)?;
         Ok(())
     }
 
@@ -147,14 +284,12 @@ impl<T> EventSource for Executor<T> {
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<()> {
-        self.new_futures.reregister(poll, token_factory)?;
-        self.ready_futures.reregister(poll, token_factory)?;
+        self.ping_source.reregister(poll, token_factory)?;
         Ok(())
     }
 
     fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
-        self.new_futures.unregister(poll)?;
-        self.ready_futures.unregister(poll)?;
+        self.ping_source.unregister(poll)?;
         Ok(())
     }
 }
