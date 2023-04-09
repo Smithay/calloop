@@ -26,7 +26,7 @@ use std::{
     rc::Rc,
     sync::{
         atomic::{AtomicBool, Ordering},
-        mpsc, Arc,
+        mpsc, Arc, Mutex,
     },
     task::Waker,
 };
@@ -78,7 +78,7 @@ struct State<T> {
 #[derive(Debug)]
 struct Sender {
     /// The sender used to send runnables to the executor.
-    sender: mpsc::Sender<Runnable<usize>>,
+    sender: Mutex<mpsc::Sender<Runnable<usize>>>,
 
     /// The ping source used to wake up the executor.
     wake_up: Ping,
@@ -138,6 +138,8 @@ impl<T> Scheduler<T> {
             }
         }
 
+        fn assert_send_and_sync<T: Send + Sync>(_: &T) {}
+
         let mut active_guard = self.state.active.borrow_mut();
         let active = active_guard.as_mut().ok_or(ExecutorDestroyed)?;
 
@@ -165,6 +167,8 @@ impl<T> Scheduler<T> {
             let sender = self.state.sender.clone();
             move |runnable| sender.send(runnable)
         };
+
+        assert_send_and_sync(&schedule);
 
         // Spawn the future.
         let (runnable, task) = {
@@ -219,7 +223,12 @@ impl Sender {
     /// Send a runnable to the executor.
     fn send(&self, runnable: Runnable<usize>) {
         // Send on the channel.
-        if let Err(e) = self.sender.send(runnable) {
+        if let Err(e) = self
+            .sender
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .send(runnable)
+        {
             // Make sure the runnable is never dropped.
             std::mem::forget(e);
 
@@ -276,7 +285,7 @@ pub fn executor<T>() -> crate::Result<(Executor<T>, Scheduler<T>)> {
         incoming,
         active: RefCell::new(Some(Slab::new())),
         sender: Arc::new(Sender {
-            sender,
+            sender: Mutex::new(sender),
             wake_up,
             notified: AtomicBool::new(false),
         }),
