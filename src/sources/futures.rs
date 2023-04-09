@@ -20,13 +20,21 @@
 
 use async_task::{Builder, Runnable};
 use slab::Slab;
-use std::{cell::RefCell, future::Future, rc::Rc, task::Waker};
+use std::{
+    cell::RefCell,
+    future::Future,
+    rc::Rc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc, Arc,
+    },
+    task::Waker,
+};
 
 use crate::{
-    channel::Event,
     sources::{
-        channel::{channel, Channel, ChannelError, Sender},
-        ping::PingError,
+        channel::ChannelError,
+        ping::{make_ping, Ping, PingError, PingSource},
         EventSource,
     },
     Poll, PostAction, Readiness, Token, TokenFactory,
@@ -38,8 +46,8 @@ pub struct Executor<T> {
     /// Shared state between the executor and the scheduler.
     state: Rc<State<T>>,
 
-    /// The incoming queue of futures to be executed.
-    incoming: Channel<Runnable<usize>>,
+    /// Notifies us when the executor is woken up.
+    ping: PingSource,
 }
 
 /// A scheduler to send futures to an executor
@@ -47,18 +55,36 @@ pub struct Executor<T> {
 pub struct Scheduler<T> {
     /// Shared state between the executor and the scheduler.
     state: Rc<State<T>>,
-
-    /// The sender used to send runnables to the executor.
-    sender: Sender<Runnable<usize>>,
 }
 
 /// The inner state of the executor.
 #[derive(Debug)]
 struct State<T> {
+    /// The incoming queue of runnables to be executed.
+    incoming: mpsc::Receiver<Runnable<usize>>,
+
+    /// The sender corresponding to `incoming`.
+    sender: Arc<Sender>,
+
     /// The list of currently active tasks.
     ///
     /// This is set to `None` when the executor is destroyed.
     active: RefCell<Option<Slab<Active<T>>>>,
+}
+
+/// Send a future to an executor.
+///
+/// This needs to be thread-safe, as it is called from a `Waker` that may be on a different thread.
+#[derive(Debug)]
+struct Sender {
+    /// The sender used to send runnables to the executor.
+    sender: mpsc::Sender<Runnable<usize>>,
+
+    /// The ping source used to wake up the executor.
+    wake_up: Ping,
+
+    /// Whether the executor has already been woken.
+    notified: AtomicBool,
 }
 
 /// An active future or its result.
@@ -136,19 +162,13 @@ impl<T> Scheduler<T> {
 
         // A schedule function that inserts the runnable into the incoming queue.
         let schedule = {
-            let sender = self.sender.clone();
-            move |runnable| {
-                if sender.send(runnable).is_err() {
-                    // This shouldn't be able to happen since all of the tasks are destroyed before the
-                    // executor is. This indicates a critical soundness bug.
-                    std::process::abort();
-                }
-            }
+            let sender = self.state.sender.clone();
+            move |runnable| sender.send(runnable)
         };
 
         // Spawn the future.
         let (runnable, task) = {
-            let builder = Builder::new().metadata(index).propagate_panic(true);
+            let builder = Builder::new().metadata(index);
 
             // SAFETY: spawn_unchecked has four safety requirements:
             //
@@ -158,9 +178,12 @@ impl<T> Scheduler<T> {
             //   Scheduler and Executor are !Send and !Sync. The waker may be sent to another thread,
             //   which means that the scheduler function (and the Runnable it handles) can exist on
             //   another thread. However, the scheduler function immediately sends it back to the origin
-            //   thread. The channel is always kept open in this case, since all tasks are destroyed
-            //   once the Executor is dropped. This means that the runnable will always be sent back
-            //   to the origin thread.
+            //   thread.
+            //
+            //   The issue then becomes "is the Runnable dropped unsoundly when the channel is closed?"
+            //   This problem is circumvented by immediately waking all runnables (pushes them into the
+            //   queue) and then draining the queue. This means that, before the channel is closed, all
+            //   runnables will be destroyed, preventing any unsoundness.
             //
             // - "If future is not 'static, borrowed variables must outlive its Runnable."
             //
@@ -192,6 +215,29 @@ impl<T> Scheduler<T> {
     }
 }
 
+impl Sender {
+    /// Send a runnable to the executor.
+    fn send(&self, runnable: Runnable<usize>) {
+        // Send on the channel.
+        if let Err(e) = self.sender.send(runnable) {
+            // Make sure the runnable is never dropped.
+            std::mem::forget(e);
+
+            // This shouldn't be able to happen since all of the tasks are destroyed before the
+            // executor is. This indicates a critical soundness bug.
+            std::process::abort();
+        }
+
+        // If the executor is already awake, don't bother waking it up again.
+        if self.notified.swap(true, Ordering::SeqCst) {
+            return;
+        }
+
+        // Wake the executor.
+        self.wake_up.ping();
+    }
+}
+
 impl<T> Drop for Executor<T> {
     fn drop(&mut self) {
         let active = self.state.active.borrow_mut().take().unwrap();
@@ -208,7 +254,7 @@ impl<T> Drop for Executor<T> {
         }
 
         // Drain the queue in order to drop all of the runnables.
-        while self.incoming.try_recv().is_ok() {}
+        while self.state.incoming.try_recv().is_ok() {}
     }
 }
 
@@ -223,17 +269,25 @@ pub struct ExecutorDestroyed;
 /// May fail due to OS errors preventing calloop to setup its internal pipes (if your
 /// process has reatched its file descriptor limit for example).
 pub fn executor<T>() -> crate::Result<(Executor<T>, Scheduler<T>)> {
-    let (sender, channel) = channel();
+    let (sender, incoming) = mpsc::channel();
+    let (wake_up, ping) = make_ping()?;
+
     let state = Rc::new(State {
+        incoming,
         active: RefCell::new(Some(Slab::new())),
+        sender: Arc::new(Sender {
+            sender,
+            wake_up,
+            notified: AtomicBool::new(false),
+        }),
     });
 
     Ok((
         Executor {
             state: state.clone(),
-            incoming: channel,
+            ping,
         },
-        Scheduler { state, sender },
+        Scheduler { state },
     ))
 }
 
@@ -253,13 +307,25 @@ impl<T> EventSource for Executor<T> {
         F: FnMut(T, &mut ()),
     {
         let state = &self.state;
-        self.incoming
-            .process_events(readiness, token, |event, &mut ()| {
-                let runnable = match event {
-                    Event::Msg(runnable) => runnable,
-                    _ => return,
+
+        // Set to the unnotified state.
+        state.sender.notified.store(false, Ordering::SeqCst);
+
+        let clear_readiness = {
+            let mut clear_readiness = false;
+
+            // Process runnables, but not too many at a time; better to move onto the next event quickly!
+            for _ in 0..1024 {
+                let runnable = match state.incoming.try_recv() {
+                    Ok(runnable) => runnable,
+                    Err(_) => {
+                        // Make sure to clear the readiness if there are no more runnables.
+                        clear_readiness = true;
+                        break;
+                    }
                 };
 
+                // Run the runnable.
                 let index = *runnable.metadata();
                 runnable.run();
 
@@ -269,7 +335,7 @@ impl<T> EventSource for Executor<T> {
 
                 if let Some(state) = active.get(index) {
                     if state.is_finished() {
-                        // Take out the state and provide it.
+                        // Take out the state and provide it to the caller.
                         let result = match active.remove(index) {
                             Active::Finished(result) => result,
                             _ => unreachable!(),
@@ -278,12 +344,23 @@ impl<T> EventSource for Executor<T> {
                         callback(result, &mut ());
                     }
                 }
-            })
-            .map_err(ExecutorError::NewFutureError)
+            }
+
+            clear_readiness
+        };
+
+        // Clear the readiness of the ping source if there are no more runnables.
+        if clear_readiness {
+            self.ping
+                .process_events(readiness, token, |(), &mut ()| {})
+                .map_err(ExecutorError::WakeError)?;
+        }
+
+        Ok(PostAction::Continue)
     }
 
     fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
-        self.incoming.register(poll, token_factory)?;
+        self.ping.register(poll, token_factory)?;
         Ok(())
     }
 
@@ -292,12 +369,12 @@ impl<T> EventSource for Executor<T> {
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<()> {
-        self.incoming.reregister(poll, token_factory)?;
+        self.ping.reregister(poll, token_factory)?;
         Ok(())
     }
 
     fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
-        self.incoming.unregister(poll)?;
+        self.ping.unregister(poll)?;
         Ok(())
     }
 }
