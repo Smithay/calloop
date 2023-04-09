@@ -6,8 +6,8 @@ use calloop::{
 };
 
 fn main() {
-    let mut event_loop =
-        EventLoop::try_new_high_precision().expect("Failed to initialize the event loop!");
+    // As of calloop v0.11 there is no difference between low and high precision event loops.
+    let mut event_loop = EventLoop::try_new().expect("Failed to initialize the event loop!");
 
     let before = Instant::now();
 

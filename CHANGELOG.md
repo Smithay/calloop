@@ -6,6 +6,7 @@
 
 - Fixed a crash due to double borrow when handling pre/post run hooks
 - Fixes a panic that can occur when large `Duration`s are passed to `Timer::from_duration`.
+- Replace the `sys` module with the `polling` crate.
 
 #### Additions
 

@@ -10,16 +10,37 @@ use std::time::{Duration, Instant};
 use std::future::Future;
 
 use io_lifetimes::AsFd;
-use slotmap::SlotMap;
+use slab::Slab;
 
 use crate::sources::{Dispatcher, EventSource, Idle, IdleDispatcher};
+use crate::sys::Notifier;
 use crate::{EventDispatcher, InsertError, Poll, PostAction, TokenFactory};
 
 type IdleCallback<'i, Data> = Rc<RefCell<dyn IdleDispatcher<Data> + 'i>>;
 
-slotmap::new_key_type! {
-    pub(crate) struct CalloopKey;
-}
+// The number of bits used to store the source ID.
+//
+// This plus `MAX_SUBSOURCES` must equal the number of bits in `usize`.
+#[cfg(target_pointer_width = "64")]
+pub(crate) const MAX_SOURCES: u32 = 44;
+#[cfg(target_pointer_width = "32")]
+pub(crate) const MAX_SOURCES: u32 = 22;
+#[cfg(target_pointer_width = "16")]
+pub(crate) const MAX_SOURCES: u32 = 10;
+
+// The number of bits used to store the sub-source ID.
+//
+// This plus `MAX_SOURCES` must equal the number of bits in `usize`.
+#[cfg(target_pointer_width = "64")]
+pub(crate) const MAX_SUBSOURCES: u32 = 20;
+#[cfg(target_pointer_width = "32")]
+pub(crate) const MAX_SUBSOURCES: u32 = 10;
+#[cfg(target_pointer_width = "16")]
+pub(crate) const MAX_SUBSOURCES: u32 = 6;
+
+pub(crate) const MAX_SOURCES_TOTAL: usize = 1 << MAX_SOURCES;
+pub(crate) const MAX_SUBSOURCES_TOTAL: usize = 1 << MAX_SUBSOURCES;
+pub(crate) const MAX_SOURCES_MASK: usize = MAX_SOURCES_TOTAL - 1;
 
 /// A token representing a registration in the [`EventLoop`].
 ///
@@ -29,12 +50,12 @@ slotmap::new_key_type! {
 /// [remove](LoopHandle#method.remove) or [kill](LoopHandle#method.kill) it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RegistrationToken {
-    key: CalloopKey,
+    key: usize,
 }
 
 pub(crate) struct LoopInner<'l, Data> {
     pub(crate) poll: RefCell<Poll>,
-    pub(crate) sources: RefCell<SlotMap<CalloopKey, Rc<dyn EventDispatcher<Data> + 'l>>>,
+    pub(crate) sources: RefCell<Slab<Rc<dyn EventDispatcher<Data> + 'l>>>,
     idles: RefCell<Vec<IdleCallback<'l, Data>>>,
     pending_action: Cell<PostAction>,
 }
@@ -94,6 +115,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
     /// Use this function if you need access to the event source after its insertion in the loop.
     ///
     /// See also `insert_source`.
+    #[cfg_attr(coverage, no_coverage)] // Contains a branch we can't hit w/o OOM
     pub fn register_dispatcher<S>(
         &self,
         dispatcher: Dispatcher<'l, S, Data>,
@@ -104,6 +126,14 @@ impl<'l, Data> LoopHandle<'l, Data> {
         let mut sources = self.inner.sources.borrow_mut();
         let mut poll = self.inner.poll.borrow_mut();
 
+        // Make sure we won't overflow the token.
+        if sources.vacant_key() >= MAX_SOURCES_TOTAL {
+            return Err(crate::Error::IoError(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Too many sources",
+            )));
+        }
+
         let key = sources.insert(dispatcher.clone_as_event_dispatcher());
         let ret = sources
             .get(key)
@@ -111,7 +141,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
             .register(&mut poll, &mut TokenFactory::new(key));
 
         if let Err(error) = ret {
-            sources.remove(key).expect("Source was just inserted?!");
+            sources.try_remove(key).expect("Source was just inserted?!");
             return Err(error);
         }
 
@@ -180,7 +210,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
 
     /// Removes this source from the event loop.
     pub fn remove(&self, token: RegistrationToken) {
-        if let Some(source) = self.inner.sources.borrow_mut().remove(token.key) {
+        if let Some(source) = self.inner.sources.borrow_mut().try_remove(token.key) {
             if let Err(e) = source.unregister(&mut self.inner.poll.borrow_mut()) {
                 log::warn!(
                     "[calloop] Failed to unregister source from the polling system: {:?}",
@@ -208,7 +238,6 @@ impl<'l, Data> LoopHandle<'l, Data> {
 pub struct EventLoop<'l, Data> {
     handle: LoopHandle<'l, Data>,
     signals: Arc<Signals>,
-    ping: crate::sources::ping::Ping,
 }
 
 impl<'l, Data> std::fmt::Debug for EventLoop<'l, Data> {
@@ -233,32 +262,16 @@ impl<'l, Data> EventLoop<'l, Data> {
     ///
     /// Fails if the initialization of the polling system failed.
     pub fn try_new() -> crate::Result<Self> {
-        Self::inner_new(false)
-    }
-
-    /// Create a new event loop in high precision mode
-    ///
-    /// On some platforms it requires to setup more resources to enable high-precision
-    /// (sub millisecond) capabilities, so you should use this constructor if you need
-    /// this kind of precision.
-    ///
-    /// Fails if the initialization of the polling system failed.
-    pub fn try_new_high_precision() -> crate::Result<Self> {
-        Self::inner_new(true)
-    }
-
-    fn inner_new(high_precision: bool) -> crate::Result<Self> {
-        let poll = Poll::new(high_precision)?;
+        let poll = Poll::new()?;
         let handle = LoopHandle {
             inner: Rc::new(LoopInner {
                 poll: RefCell::new(poll),
-                sources: RefCell::new(SlotMap::with_key()),
+                sources: RefCell::new(Slab::new()),
                 idles: RefCell::new(Vec::new()),
                 pending_action: Cell::new(PostAction::Continue),
             }),
         };
-        let (ping, ping_source) = crate::sources::ping::make_ping()?;
-        handle.insert_source(ping_source, |_, _, _| {})?;
+
         Ok(EventLoop {
             handle,
             signals: Arc::new(Signals {
@@ -266,7 +279,6 @@ impl<'l, Data> EventLoop<'l, Data> {
                 #[cfg(feature = "block_on")]
                 future_ready: AtomicBool::new(false),
             }),
-            ping,
         })
     }
 
@@ -282,7 +294,7 @@ impl<'l, Data> EventLoop<'l, Data> {
     ) -> crate::Result<()> {
         let now = Instant::now();
         let events = {
-            let mut poll = self.handle.inner.poll.borrow_mut();
+            let poll = self.handle.inner.poll.borrow();
             loop {
                 let result = poll.poll(timeout);
 
@@ -305,12 +317,15 @@ impl<'l, Data> EventLoop<'l, Data> {
         };
 
         for event in events {
+            // Get the registration token associated with the event.
+            let registroken_token = event.token.key & MAX_SOURCES_MASK;
+
             let opt_disp = self
                 .handle
                 .inner
                 .sources
                 .borrow()
-                .get(event.token.key)
+                .get(registroken_token)
                 .cloned();
 
             if let Some(disp) = opt_disp {
@@ -352,7 +367,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                     .inner
                     .sources
                     .borrow()
-                    .contains_key(event.token.key)
+                    .contains(registroken_token)
                 {
                     // the source has been removed from within its callback, unregister it
                     let mut poll = self.handle.inner.poll.borrow_mut();
@@ -387,8 +402,8 @@ impl<'l, Data> EventLoop<'l, Data> {
             .inner
             .sources
             .borrow()
-            .values()
-            .cloned()
+            .iter()
+            .map(|(_, source)| source.clone())
             .collect::<Vec<_>>();
 
         for source in sources {
@@ -404,8 +419,8 @@ impl<'l, Data> EventLoop<'l, Data> {
             .inner
             .sources
             .borrow()
-            .values()
-            .cloned()
+            .iter()
+            .map(|(_, source)| source.clone())
             .collect::<Vec<_>>();
 
         for source in sources {
@@ -442,7 +457,7 @@ impl<'l, Data> EventLoop<'l, Data> {
     pub fn get_signal(&self) -> LoopSignal {
         LoopSignal {
             signal: self.signals.clone(),
-            ping: self.ping.clone(),
+            notifier: self.handle.inner.poll.borrow().notifier(),
         }
     }
 
@@ -493,25 +508,19 @@ impl<'l, Data> EventLoop<'l, Data> {
         use std::task::{Context, Poll, Wake, Waker};
 
         /// A waker that will wake up the event loop when it is ready to make progress.
-        struct EventLoopWaker {
-            /// A signal that can be used to wake up the event loop.
-            ping: crate::sources::ping::Ping,
-
-            /// The signals to set.
-            signals: Arc<Signals>,
-        }
+        struct EventLoopWaker(LoopSignal);
 
         impl Wake for EventLoopWaker {
             fn wake(self: Arc<Self>) {
                 // Set the waker.
-                self.signals.future_ready.store(true, Ordering::Release);
-                self.ping.ping();
+                self.0.signal.future_ready.store(true, Ordering::Release);
+                self.0.notifier.notify().ok();
             }
 
             fn wake_by_ref(self: &Arc<Self>) {
                 // Set the waker.
-                self.signals.future_ready.store(true, Ordering::Release);
-                self.ping.ping();
+                self.0.signal.future_ready.store(true, Ordering::Release);
+                self.0.notifier.notify().ok();
             }
         }
 
@@ -520,10 +529,7 @@ impl<'l, Data> EventLoop<'l, Data> {
 
         // Create a waker that will wake up the event loop when it is ready to make progress.
         let waker = {
-            let handle = EventLoopWaker {
-                ping: self.ping.clone(),
-                signals: self.signals.clone(),
-            };
+            let handle = EventLoopWaker(self.get_signal());
 
             Waker::from(Arc::new(handle))
         };
@@ -563,7 +569,7 @@ impl<'l, Data> EventLoop<'l, Data> {
 #[derive(Clone)]
 pub struct LoopSignal {
     signal: Arc<Signals>,
-    ping: crate::sources::ping::Ping,
+    notifier: Notifier,
 }
 
 impl std::fmt::Debug for LoopSignal {
@@ -579,7 +585,7 @@ impl LoopSignal {
     /// Once this method is called, the next time the event loop has finished
     /// waiting for events, it will return rather than starting to wait again.
     ///
-    /// This is only usefull if you are using the `EventLoop::run()` method.
+    /// This is only useful if you are using the `EventLoop::run()` method.
     pub fn stop(&self) {
         self.signal.stop.store(true, Ordering::Release);
     }
@@ -591,7 +597,7 @@ impl LoopSignal {
     /// ensures the event loop will terminate quickly if you specified a long
     /// timeout (or no timeout at all) to the `dispatch` or `run` method.
     pub fn wakeup(&self) {
-        self.ping.ping();
+        self.notifier.notify().ok();
     }
 }
 
@@ -741,9 +747,6 @@ mod tests {
             .dispatch(Duration::ZERO, &mut dispatched)
             .unwrap();
         assert!(!dispatched);
-
-        // disabling it again is an error
-        event_loop.handle().disable(&ping_token).unwrap_err();
 
         // reenable it, the previous ping now gets dispatched
         event_loop.handle().enable(&ping_token).unwrap();
