@@ -69,7 +69,7 @@ struct State<T> {
     /// The list of currently active tasks.
     ///
     /// This is set to `None` when the executor is destroyed.
-    active: RefCell<Option<Slab<Active<T>>>>,
+    active_tasks: RefCell<Option<Slab<Active<T>>>>,
 }
 
 /// Send a future to an executor.
@@ -78,6 +78,8 @@ struct State<T> {
 #[derive(Debug)]
 struct Sender {
     /// The sender used to send runnables to the executor.
+    ///
+    /// `mpsc::Sender` is `!Sync`, wrapping it in a `Mutex` makes it `Sync`.
     sender: Mutex<mpsc::Sender<Runnable<usize>>>,
 
     /// The ping source used to wake up the executor.
@@ -125,14 +127,14 @@ impl<T> Scheduler<T> {
 
         impl<T> Drop for StoreOnDrop<'_, T> {
             fn drop(&mut self) {
-                let mut active = self.state.active.borrow_mut();
-                if let Some(active) = active.as_mut() {
+                let mut active_tasks = self.state.active_tasks.borrow_mut();
+                if let Some(active_tasks) = active_tasks.as_mut() {
                     if let Some(value) = self.value.take() {
-                        active[self.index] = Active::Finished(value);
+                        active_tasks[self.index] = Active::Finished(value);
                     } else {
                         // The future was dropped before it finished.
                         // Remove it from the active list.
-                        active.remove(self.index);
+                        active_tasks.remove(self.index);
                     }
                 }
             }
@@ -140,11 +142,11 @@ impl<T> Scheduler<T> {
 
         fn assert_send_and_sync<T: Send + Sync>(_: &T) {}
 
-        let mut active_guard = self.state.active.borrow_mut();
-        let active = active_guard.as_mut().ok_or(ExecutorDestroyed)?;
+        let mut active_guard = self.state.active_tasks.borrow_mut();
+        let active_tasks = active_guard.as_mut().ok_or(ExecutorDestroyed)?;
 
         // Wrap the future in another future that polls it and stores the result.
-        let index = active.vacant_key();
+        let index = active_tasks.vacant_key();
         let future = {
             let state = self.state.clone();
             async move {
@@ -208,7 +210,7 @@ impl<T> Scheduler<T> {
         };
 
         // Insert the runnable into the set of active tasks.
-        active.insert(Active::Future(runnable.waker()));
+        active_tasks.insert(Active::Future(runnable.waker()));
         drop(active_guard);
 
         // Schedule the runnable and detach the task so it isn't cancellable.
@@ -223,17 +225,23 @@ impl Sender {
     /// Send a runnable to the executor.
     fn send(&self, runnable: Runnable<usize>) {
         // Send on the channel.
+        //
+        // All we do with the lock is call `send`, so there's no chance of any state being corrupted on
+        // panic. Therefore it's safe to ignore the mutex poison.
         if let Err(e) = self
             .sender
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .send(runnable)
         {
-            // Make sure the runnable is never dropped.
-            std::mem::forget(e);
+            // The runnable must be dropped on its origin thread, since the original future might be
+            // !Send. This channel immediately sends it back to the Executor, which is pinned to the
+            // origin thread. The executor's Drop implementation will force all of the runnables to be
+            // dropped, therefore the channel should always be available. If we can't send the runnable,
+            // it indicates that the above behavior is broken and that unsoundness has occurred. The
+            // only option at this stage is to abort the process.
 
-            // This shouldn't be able to happen since all of the tasks are destroyed before the
-            // executor is. This indicates a critical soundness bug.
+            std::mem::forget(e);
             std::process::abort();
         }
 
@@ -249,17 +257,14 @@ impl Sender {
 
 impl<T> Drop for Executor<T> {
     fn drop(&mut self) {
-        let active = self.state.active.borrow_mut().take().unwrap();
+        let active_tasks = self.state.active_tasks.borrow_mut().take().unwrap();
 
         // Wake all of the active tasks in order to destroy their runnables.
-        for (_, task) in active {
-            // Don't let a panicking waker blow everything up.
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                if let Active::Future(waker) = task {
-                    waker.wake();
-                }
-            }))
-            .ok();
+        for (_, task) in active_tasks {
+            if let Active::Future(waker) = task {
+                // Don't let a panicking waker blow everything up.
+                std::panic::catch_unwind(|| waker.wake()).ok();
+            }
         }
 
         // Drain the queue in order to drop all of the runnables.
@@ -283,7 +288,7 @@ pub fn executor<T>() -> crate::Result<(Executor<T>, Scheduler<T>)> {
 
     let state = Rc::new(State {
         incoming,
-        active: RefCell::new(Some(Slab::new())),
+        active_tasks: RefCell::new(Some(Slab::new())),
         sender: Arc::new(Sender {
             sender: Mutex::new(sender),
             wake_up,
@@ -339,13 +344,13 @@ impl<T> EventSource for Executor<T> {
                 runnable.run();
 
                 // If the runnable finished with a result, call the callback.
-                let mut active_guard = state.active.borrow_mut();
-                let active = active_guard.as_mut().unwrap();
+                let mut active_guard = state.active_tasks.borrow_mut();
+                let active_tasks = active_guard.as_mut().unwrap();
 
-                if let Some(state) = active.get(index) {
+                if let Some(state) = active_tasks.get(index) {
                     if state.is_finished() {
                         // Take out the state and provide it to the caller.
-                        let result = match active.remove(index) {
+                        let result = match active_tasks.remove(index) {
                             Active::Finished(result) => result,
                             _ => unreachable!(),
                         };
