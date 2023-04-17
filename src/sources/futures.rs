@@ -117,6 +117,7 @@ impl<T> Scheduler<T> {
     pub fn schedule<Fut: 'static>(&self, future: Fut) -> Result<(), ExecutorDestroyed>
     where
         Fut: Future<Output = T>,
+        T: 'static,
     {
         /// Store this future's result in the executor.
         struct StoreOnDrop<'a, T> {
@@ -173,41 +174,9 @@ impl<T> Scheduler<T> {
         assert_send_and_sync(&schedule);
 
         // Spawn the future.
-        let (runnable, task) = {
-            let builder = Builder::new().metadata(index);
-
-            // SAFETY: spawn_unchecked has four safety requirements:
-            //
-            // - "If future is not Send, its Runnable must be used and dropped on the original thread."
-            //
-            //   The runnable is created on the origin thread and sent to the origin thread, since both
-            //   Scheduler and Executor are !Send and !Sync. The waker may be sent to another thread,
-            //   which means that the scheduler function (and the Runnable it handles) can exist on
-            //   another thread. However, the scheduler function immediately sends it back to the origin
-            //   thread.
-            //
-            //   The issue then becomes "is the Runnable dropped unsoundly when the channel is closed?"
-            //   This problem is circumvented by immediately waking all runnables (pushes them into the
-            //   queue) and then draining the queue. This means that, before the channel is closed, all
-            //   runnables will be destroyed, preventing any unsoundness.
-            //
-            // - "If future is not 'static, borrowed variables must outlive its Runnable."
-            //
-            //   `F` is `'static`, so we don't have to worry about this one.
-            //
-            // - "If schedule is not Send and Sync, the task’s Waker must be used and dropped on the
-            //    original thread."
-            //
-            //   The schedule function uses a thread-safe MPSC channel to send the runnable back to the
-            //   origin thread. This means that the waker can be sent to another thread, which satisfies
-            //   this requirement.
-            //
-            // - "If schedule is not 'static, borrowed variables must outlive the task’s Waker."
-            //
-            //   `schedule` and the types it handles are `'static`, so we don't have to worry about
-            //   this one.
-            unsafe { builder.spawn_unchecked(move |_| future, schedule) }
-        };
+        let (runnable, task) = Builder::new()
+            .metadata(index)
+            .spawn_local(move |_| future, schedule);
 
         // Insert the runnable into the set of active tasks.
         active_tasks.insert(Active::Future(runnable.waker()));
