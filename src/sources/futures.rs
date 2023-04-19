@@ -208,10 +208,10 @@ impl Sender {
             // origin thread. The executor's Drop implementation will force all of the runnables to be
             // dropped, therefore the channel should always be available. If we can't send the runnable,
             // it indicates that the above behavior is broken and that unsoundness has occurred. The
-            // only option at this stage is to abort the process.
+            // only option at this stage is to forget the runnable and leak the future.
 
             std::mem::forget(e);
-            std::process::abort();
+            unreachable!("Attempted to send runnable to a stopped executor");
         }
 
         // If the executor is already awake, don't bother waking it up again.
