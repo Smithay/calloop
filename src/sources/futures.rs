@@ -232,6 +232,14 @@ impl<T> Drop for Executor<T> {
         for (_, task) in active_tasks {
             if let Active::Future(waker) = task {
                 // Don't let a panicking waker blow everything up.
+                //
+                // There is a chance that a future will panic and, during the unwinding process,
+                // drop this executor. However, since the future panicked, there is a possibility
+                // that the internal state of the waker will be invalid in such a way that the waker
+                // panics as well. Since this would be a panic during a panic, Rust will upgrade it
+                // into an abort.
+                //
+                // In the interest of not aborting without a good reason, we just drop the panic here.
                 std::panic::catch_unwind(|| waker.wake()).ok();
             }
         }
