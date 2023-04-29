@@ -2,14 +2,10 @@
 //! syscall. Sending a ping involves writing to one end of a pipe, and the other
 //! end becoming readable is what wakes up the event loop.
 
-use std::{
-    os::unix::io::{AsRawFd, FromRawFd, RawFd},
-    sync::Arc,
-};
+use std::sync::Arc;
 
-use io_lifetimes::OwnedFd;
-use nix::fcntl::OFlag;
-use nix::unistd::{read, write};
+use io_lifetimes::{AsFd, BorrowedFd, OwnedFd};
+use rustix::io::{read, write, Errno};
 
 use super::PingError;
 use crate::{
@@ -18,41 +14,30 @@ use crate::{
 
 #[cfg(target_os = "macos")]
 #[inline]
-fn make_ends() -> std::io::Result<(RawFd, RawFd)> {
-    // macOS does not have pipe2, but we can emulate the behavior of pipe2 by
-    // setting the flags after calling pipe.
-    use nix::{
-        fcntl::{fcntl, FcntlArg},
-        unistd::pipe,
-    };
+fn make_ends() -> std::io::Result<(OwnedFd, OwnedFd)> {
+    use rustix::fs::{fcntl_getfl, fcntl_setfl, OFlags};
+    use rustix::io::pipe;
 
     let (read, write) = pipe()?;
 
-    let read_flags = OFlag::from_bits_truncate(fcntl(read, FcntlArg::F_GETFD)?)
-        | OFlag::O_CLOEXEC
-        | OFlag::O_NONBLOCK;
-    let write_flags = OFlag::from_bits_truncate(fcntl(write, FcntlArg::F_GETFD)?)
-        | OFlag::O_CLOEXEC
-        | OFlag::O_NONBLOCK;
+    let set_flags = |fd| fcntl_setfl(fd, fcntl_getfl(fd)? | OFlags::CLOEXEC | OFlags::NONBLOCK);
 
-    fcntl(read, FcntlArg::F_SETFL(read_flags))?;
-    fcntl(write, FcntlArg::F_SETFL(write_flags))?;
+    set_flags(&read)?;
+    set_flags(&write)?;
 
     Ok((read, write))
 }
 
 #[cfg(not(target_os = "macos"))]
 #[inline]
-fn make_ends() -> std::io::Result<(RawFd, RawFd)> {
-    Ok(nix::unistd::pipe2(OFlag::O_CLOEXEC | OFlag::O_NONBLOCK)?)
+fn make_ends() -> std::io::Result<(OwnedFd, OwnedFd)> {
+    use rustix::io::{pipe_with, PipeFlags};
+    Ok(pipe_with(PipeFlags::CLOEXEC | PipeFlags::NONBLOCK)?)
 }
 
 #[inline]
 pub fn make_ping() -> std::io::Result<(Ping, PingSource)> {
     let (read, write) = make_ends()?;
-
-    let read = unsafe { OwnedFd::from_raw_fd(read) };
-    let write = unsafe { OwnedFd::from_raw_fd(write) };
 
     let source = PingSource {
         pipe: Generic::new(read, Interest::READ, Mode::Level),
@@ -66,7 +51,7 @@ pub fn make_ping() -> std::io::Result<(Ping, PingSource)> {
 // Helper functions for the event source IO.
 
 #[inline]
-fn send_ping(fd: RawFd) -> std::io::Result<()> {
+fn send_ping(fd: BorrowedFd<'_>) -> std::io::Result<()> {
     write(fd, &[0u8])?;
     Ok(())
 }
@@ -100,7 +85,7 @@ impl EventSource for PingSource {
                 let mut action = PostAction::Continue;
 
                 loop {
-                    match read(fd.as_raw_fd(), &mut buf) {
+                    match read(&fd, &mut buf) {
                         Ok(0) => {
                             // The other end of the pipe was closed, mark ourselves
                             // for removal.
@@ -112,7 +97,7 @@ impl EventSource for PingSource {
                         Ok(_) => read_something = true,
 
                         // Nothing more to read.
-                        Err(nix::errno::Errno::EAGAIN) => break,
+                        Err(Errno::AGAIN) => break,
 
                         // Propagate error.
                         Err(e) => return Err(e.into()),
@@ -154,7 +139,7 @@ pub struct Ping {
 impl Ping {
     /// Send a ping to the `PingSource`
     pub fn ping(&self) {
-        if let Err(e) = send_ping(self.pipe.as_raw_fd()) {
+        if let Err(e) = send_ping(self.pipe.as_fd()) {
             log::warn!("[calloop] Failed to write a ping: {:?}", e);
         }
     }

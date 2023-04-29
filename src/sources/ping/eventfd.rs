@@ -18,14 +18,10 @@
 //! can then check the LSB and if it's set, we know it was a close event. This
 //! only works if a close event never fires more than once.
 
-use std::{
-    os::unix::io::{AsRawFd, FromRawFd},
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use io_lifetimes::{AsFd, BorrowedFd, OwnedFd};
-use nix::sys::eventfd::{eventfd, EfdFlags};
-use nix::unistd::{read, write};
+use rustix::io::{eventfd, read, write, Errno, EventfdFlags};
 
 use super::PingError;
 use crate::{
@@ -40,14 +36,14 @@ const INCREMENT_CLOSE: u64 = 0x1;
 
 #[inline]
 pub fn make_ping() -> std::io::Result<(Ping, PingSource)> {
-    let read = eventfd(0, EfdFlags::EFD_CLOEXEC | EfdFlags::EFD_NONBLOCK)?;
+    let read = eventfd(0, EventfdFlags::CLOEXEC | EventfdFlags::NONBLOCK)?;
 
     // We only have one fd for the eventfd. If the sending end closes it when
     // all copies are dropped, the receiving end will be closed as well. We need
     // to make sure the fd is not closed until all holders of it have dropped
     // it.
 
-    let fd = Arc::new(unsafe { OwnedFd::from_raw_fd(read) });
+    let fd = Arc::new(read);
 
     let ping = Ping {
         event: Arc::new(FlagOnDrop(Arc::clone(&fd))),
@@ -65,13 +61,13 @@ pub fn make_ping() -> std::io::Result<(Ping, PingSource)> {
 #[inline]
 fn send_ping(fd: BorrowedFd<'_>, count: u64) -> std::io::Result<()> {
     assert!(count > 0);
-    match write(fd.as_raw_fd(), &count.to_ne_bytes()) {
+    match write(fd, &count.to_ne_bytes()) {
         // The write succeeded, the ping will wake up the loop.
         Ok(_) => Ok(()),
 
         // The counter hit its cap, which means previous calls to write() will
         // wake up the loop.
-        Err(nix::errno::Errno::EAGAIN) => Ok(()),
+        Err(Errno::AGAIN) => Ok(()),
 
         // Anything else is a real error.
         Err(e) => Err(e.into()),
@@ -84,7 +80,7 @@ fn drain_ping(fd: BorrowedFd<'_>) -> std::io::Result<u64> {
     const NBYTES: usize = 8;
     let mut buf = [0u8; NBYTES];
 
-    match read(fd.as_raw_fd(), &mut buf) {
+    match read(fd, &mut buf) {
         // Reading from an eventfd should only ever produce 8 bytes. No looping
         // is required.
         Ok(NBYTES) => Ok(u64::from_ne_bytes(buf)),
