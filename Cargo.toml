@@ -1,6 +1,6 @@
 [package]
 name = "calloop"
-version = "0.10.5"
+version = "0.10.6"
 authors = ["Elinor Berger <elinor@safaradeg.net>"]
 documentation = "https://docs.rs/calloop/"
 repository = "https://github.com/Smithay/calloop"
@@ -18,6 +18,7 @@ members = [ "doc" ]
 codecov = { repository = "Smithay/calloop" }
 
 [dependencies]
+bitflags = "1.2"
 log = "0.4"
 nix = { version = "0.25", default-features = false, features = ["event", "fs", "signal", "socket", "time"] }
 futures-util = { version = "0.3.5", optional = true, default-features = false, features = ["std"]}
