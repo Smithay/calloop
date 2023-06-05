@@ -70,14 +70,14 @@ pub struct LoopHandle<'l, Data> {
 }
 
 impl<'l, Data> std::fmt::Debug for LoopHandle<'l, Data> {
-    #[cfg_attr(coverage, no_coverage)]
+    #[cfg_attr(feature = "nightly_coverage", no_coverage)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("LoopHandle { ... }")
     }
 }
 
 impl<'l, Data> Clone for LoopHandle<'l, Data> {
-    #[cfg_attr(coverage, no_coverage)]
+    #[cfg_attr(feature = "nightly_coverage", no_coverage)]
     fn clone(&self) -> Self {
         LoopHandle {
             inner: self.inner.clone(),
@@ -115,7 +115,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
     /// Use this function if you need access to the event source after its insertion in the loop.
     ///
     /// See also `insert_source`.
-    #[cfg_attr(coverage, no_coverage)] // Contains a branch we can't hit w/o OOM
+    #[cfg_attr(feature = "nightly_coverage", no_coverage)] // Contains a branch we can't hit w/o OOM
     pub fn register_dispatcher<S>(
         &self,
         dispatcher: Dispatcher<'l, S, Data>,
@@ -241,7 +241,7 @@ pub struct EventLoop<'l, Data> {
 }
 
 impl<'l, Data> std::fmt::Debug for EventLoop<'l, Data> {
-    #[cfg_attr(coverage, no_coverage)]
+    #[cfg_attr(feature = "nightly_coverage", no_coverage)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("EventLoop { ... }")
     }
@@ -573,7 +573,7 @@ pub struct LoopSignal {
 }
 
 impl std::fmt::Debug for LoopSignal {
-    #[cfg_attr(coverage, no_coverage)]
+    #[cfg_attr(feature = "nightly_coverage", no_coverage)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("LoopSignal { ... }")
     }

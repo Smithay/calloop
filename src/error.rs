@@ -44,7 +44,7 @@ pub enum Error {
 impl From<nix::errno::Errno> for Error {
     /// Converts a [`nix::Error`] into a wrapped version of the equivalent
     /// [`std::io::Error`].
-    #[cfg_attr(coverage, no_coverage)]
+    #[cfg_attr(feature = "nightly_coverage", no_coverage)]
     fn from(err: nix::errno::Errno) -> Self {
         Into::<std::io::Error>::into(err).into()
     }
@@ -76,7 +76,7 @@ pub struct InsertError<T> {
 }
 
 impl<T> Debug for InsertError<T> {
-    #[cfg_attr(coverage, no_coverage)]
+    #[cfg_attr(feature = "nightly_coverage", no_coverage)]
     fn fmt(&self, formatter: &mut Formatter) -> core::result::Result<(), fmt::Error> {
         write!(formatter, "{:?}", self.error)
     }
@@ -85,7 +85,7 @@ impl<T> Debug for InsertError<T> {
 impl<T> From<InsertError<T>> for crate::Error {
     /// Converts the [`InsertError`] into Calloop's error type, throwing away
     /// the contained source.
-    #[cfg_attr(coverage, no_coverage)]
+    #[cfg_attr(feature = "nightly_coverage", no_coverage)]
     fn from(e: InsertError<T>) -> crate::Error {
         e.error
     }
