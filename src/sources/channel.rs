@@ -36,7 +36,7 @@ pub struct Sender<T> {
 }
 
 impl<T> Clone for Sender<T> {
-    #[cfg_attr(coverage, no_coverage)]
+    #[cfg_attr(feature = "nightly_coverage", no_coverage)]
     fn clone(&self) -> Sender<T> {
         Sender {
             sender: self.sender.clone(),
@@ -72,7 +72,7 @@ pub struct SyncSender<T> {
 }
 
 impl<T> Clone for SyncSender<T> {
-    #[cfg_attr(coverage, no_coverage)]
+    #[cfg_attr(feature = "nightly_coverage", no_coverage)]
     fn clone(&self) -> SyncSender<T> {
         SyncSender {
             sender: self.sender.clone(),

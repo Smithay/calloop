@@ -75,7 +75,7 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Clippy
-        run: cargo clippy --workspace --all-features --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --features "block_on executor" -- -D warnings
 
   ci-linux:
     name: CI
@@ -128,7 +128,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --all-features
+          args: --features "block_on executor"
 
       - name: Run book tests
         uses: actions-rs/cargo@v1
@@ -254,7 +254,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: doc
-          args: --no-deps --all-features
+          args: --no-deps --features "block_on executor"
 
       - run: rsync -r target/doc/ doc/src/api
 

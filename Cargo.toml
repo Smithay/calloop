@@ -36,9 +36,10 @@ futures = "0.3.5"
 [features]
 block_on = ["pin-utils"]
 executor = ["async-task"]
+nightly_coverage = []
 
 [package.metadata.docs.rs]
-all-features = true
+features = ["block_on", "executor"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [[test]]

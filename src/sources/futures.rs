@@ -103,10 +103,7 @@ enum Active<T> {
 
 impl<T> Active<T> {
     fn is_finished(&self) -> bool {
-        match self {
-            Active::Finished(_) => true,
-            _ => false,
-        }
+        matches!(self, Active::Finished(_))
     }
 }
 
