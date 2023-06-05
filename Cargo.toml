@@ -19,7 +19,7 @@ members = [ "doc" ]
 codecov = { repository = "Smithay/calloop" }
 
 [dependencies]
-bitflags = "1.2"
+bitflags = "2.3"
 io-lifetimes = "1.0.3"
 log = "0.4"
 nix = { version = "0.26", default-features = false, features = ["event", "fs", "signal", "socket", "time"] }
