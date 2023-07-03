@@ -20,7 +20,7 @@ codecov = { repository = "Smithay/calloop" }
 
 [dependencies]
 bitflags = "1.2"
-io-lifetimes = "1.0.3"
+io-lifetimes = "2.0.2"
 log = "0.4"
 nix = { version = "0.26", default-features = false, features = ["event", "fs", "signal", "socket", "time"] }
 async-task = { version = "4.4.0", optional = true }
