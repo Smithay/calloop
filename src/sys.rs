@@ -1,10 +1,10 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc, time::Duration};
 
 #[cfg(unix)]
-use std::os::unix::io::{AsRawFd, RawFd as Raw};
+use std::os::unix::io::{AsRawFd, BorrowedFd as Borrowed, RawFd as Raw};
 
 #[cfg(windows)]
-use std::os::windows::io::{AsRawSocket, RawSocket as Raw};
+use std::os::windows::io::{AsRawSocket, BorrowedSocket as Borrowed, RawSocket as Raw};
 
 #[cfg(unix)]
 use io_lifetimes::AsFd;
@@ -254,7 +254,9 @@ impl Poll {
                     // ...and this event is from a level-triggered source...
                     if let Some((source, interest)) = level_triggered.get(&ev.key) {
                         // ...then we need to re-register the source.
-                        self.poller.modify(source, *interest)?;
+                        // SAFETY: The source is valid.
+                        self.poller
+                            .modify(unsafe { Borrowed::borrow_raw(*source) }, *interest)?;
                     }
                 }
 
@@ -295,12 +297,16 @@ impl Poll {
     /// bad file descriptor or if the provided file descriptor is already
     /// registered.
     ///
+    /// # Safety
+    ///
+    /// The registered source must not be dropped before it is unregistered.
+    ///
     /// # Leaking tokens
     ///
     /// If your event source is dropped without being unregistered, the token
     /// passed in here will remain on the heap and continue to be used by the
     /// polling system even though no event source will match it.
-    pub fn register(
+    pub unsafe fn register(
         &self,
         #[cfg(unix)] fd: impl AsFd,
         #[cfg(windows)] fd: impl AsSocket,
@@ -321,8 +327,12 @@ impl Poll {
         };
 
         let ev = cvt_interest(interest, token);
-        self.poller
-            .add_with_mode(raw, ev, cvt_mode(mode, self.poller.supports_level()))?;
+
+        // SAFETY: See invariant on function.
+        unsafe {
+            self.poller
+                .add_with_mode(raw, ev, cvt_mode(mode, self.poller.supports_level()))?;
+        }
 
         // If this is level triggered and we're emulating level triggered mode...
         if let (Mode::Level, Some(level_triggered)) = (mode, self.level_triggered.as_ref()) {
@@ -348,21 +358,21 @@ impl Poll {
         mode: Mode,
         token: Token,
     ) -> crate::Result<()> {
-        let raw = {
+        let (borrowed, raw) = {
             #[cfg(unix)]
             {
-                fd.as_fd().as_raw_fd()
+                (fd.as_fd(), fd.as_fd().as_raw_fd())
             }
 
             #[cfg(windows)]
             {
-                fd.as_socket().as_raw_socket()
+                (fd.as_socket(), fd.as_socket().as_raw_socket())
             }
         };
 
         let ev = cvt_interest(interest, token);
         self.poller
-            .modify_with_mode(raw, ev, cvt_mode(mode, self.poller.supports_level()))?;
+            .modify_with_mode(borrowed, ev, cvt_mode(mode, self.poller.supports_level()))?;
 
         // If this is level triggered and we're emulating level triggered mode...
         if let (Mode::Level, Some(level_triggered)) = (mode, self.level_triggered.as_ref()) {
@@ -383,18 +393,18 @@ impl Poll {
         #[cfg(unix)] fd: impl AsFd,
         #[cfg(windows)] fd: impl AsSocket,
     ) -> crate::Result<()> {
-        let raw = {
+        let (borrowed, raw) = {
             #[cfg(unix)]
             {
-                fd.as_fd().as_raw_fd()
+                (fd.as_fd(), fd.as_fd().as_raw_fd())
             }
 
             #[cfg(windows)]
             {
-                fd.as_socket().as_raw_socket()
+                (fd.as_socket(), fd.as_socket().as_raw_socket())
             }
         };
-        self.poller.delete(raw)?;
+        self.poller.delete(borrowed)?;
 
         if let Some(level_triggered) = self.level_triggered.as_ref() {
             let mut level_triggered = level_triggered.borrow_mut();
@@ -407,6 +417,11 @@ impl Poll {
     /// Get a thread-safe handle which can be used to wake up the `Poll`.
     pub(crate) fn notifier(&self) -> Notifier {
         Notifier(self.poller.clone())
+    }
+
+    /// Get a reference to the poller.
+    pub(crate) fn poller(&self) -> &Arc<Poller> {
+        &self.poller
     }
 }
 

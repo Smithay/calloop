@@ -63,7 +63,11 @@ impl<'l, F: AsFd> Async<'l, F> {
         }));
         let key = inner.sources.borrow_mut().insert(dispatcher.clone());
         dispatcher.borrow_mut().token = Some(Token { key });
-        inner.register(&dispatcher)?;
+
+        // SAFETY: We are sure to deregister on drop.
+        unsafe {
+            inner.register(&dispatcher)?;
+        }
 
         // Straightforward casting would require us to add the bound `Data: 'l` but we don't actually need it
         // as this module never accesses the dispatch data, so we use transmute to erase it
@@ -166,13 +170,13 @@ impl<'l, F: AsFd> Drop for Async<'l, F> {
 impl<'l, F: AsFd> Unpin for Async<'l, F> {}
 
 trait IoLoopInner {
-    fn register(&self, dispatcher: &RefCell<IoDispatcher>) -> crate::Result<()>;
+    unsafe fn register(&self, dispatcher: &RefCell<IoDispatcher>) -> crate::Result<()>;
     fn reregister(&self, dispatcher: &RefCell<IoDispatcher>) -> crate::Result<()>;
     fn kill(&self, dispatcher: &RefCell<IoDispatcher>);
 }
 
 impl<'l, Data> IoLoopInner for LoopInner<'l, Data> {
-    fn register(&self, dispatcher: &RefCell<IoDispatcher>) -> crate::Result<()> {
+    unsafe fn register(&self, dispatcher: &RefCell<IoDispatcher>) -> crate::Result<()> {
         let disp = dispatcher.borrow();
         self.poll.borrow_mut().register(
             unsafe { BorrowedFd::borrow_raw(disp.fd) },

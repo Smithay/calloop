@@ -38,7 +38,8 @@
 //! [`EventSource`](crate::EventSource) implementation to them.
 
 use io_lifetimes::{AsFd, BorrowedFd};
-use std::{marker::PhantomData, ops, os::unix::io::AsRawFd};
+use polling::Poller;
+use std::{borrow, marker::PhantomData, ops, os::unix::io::AsRawFd, sync::Arc};
 
 use crate::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
 
@@ -78,15 +79,57 @@ impl<T: AsRawFd> AsFd for FdWrapper<T> {
     }
 }
 
+/// A wrapper around a type that doesn't expose it mutably safely.
+#[derive(Debug)]
+pub struct NoIoDrop<T>(T);
+
+impl<T> NoIoDrop<T> {
+    /// Get a mutable reference.
+    ///
+    /// # Safety
+    ///
+    /// The inner type's I/O source must not be dropped.
+    pub unsafe fn get_mut(&mut self) -> &mut T {
+        &mut self.0
+    }
+}
+
+impl<T> AsRef<T> for NoIoDrop<T> {
+    fn as_ref(&self) -> &T {
+        &self.0
+    }
+}
+
+impl<T> borrow::Borrow<T> for NoIoDrop<T> {
+    fn borrow(&self) -> &T {
+        &self.0
+    }
+}
+
+impl<T> ops::Deref for NoIoDrop<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 /// A generic event source wrapping a FD-backed type
 #[derive(Debug)]
 pub struct Generic<F: AsFd, E = std::io::Error> {
-    /// The wrapped FD-backed type
-    pub file: F,
+    /// The wrapped FD-backed type.
+    ///
+    /// This must be deregistered before it is dropped.
+    file: Option<NoIoDrop<F>>,
     /// The programmed interest
     pub interest: Interest,
     /// The programmed mode
     pub mode: Mode,
+
+    /// Back-reference to the poller.
+    ///
+    /// This is needed to drop the original file.
+    poller: Option<Arc<Poller>>,
 
     // This token is used by the event loop logic to look up this source when an
     // event occurs.
@@ -101,30 +144,64 @@ impl<F: AsFd> Generic<F, std::io::Error> {
     /// [`std::io::Error`] as its error type.
     pub fn new(file: F, interest: Interest, mode: Mode) -> Generic<F, std::io::Error> {
         Generic {
-            file,
+            file: Some(NoIoDrop(file)),
             interest,
             mode,
             token: None,
-            _error_type: PhantomData,
+            poller: None,
+            _error_type: PhantomData::default(),
         }
     }
 
     /// Wrap a FD-backed type into a `Generic` event source using an arbitrary error type.
     pub fn new_with_error<E>(file: F, interest: Interest, mode: Mode) -> Generic<F, E> {
         Generic {
-            file,
+            file: Some(NoIoDrop(file)),
             interest,
             mode,
             token: None,
-            _error_type: PhantomData,
+            poller: None,
+            _error_type: PhantomData::default(),
         }
     }
 }
 
 impl<F: AsFd, E> Generic<F, E> {
     /// Unwrap the `Generic` source to retrieve the underlying type
-    pub fn unwrap(self) -> F {
-        self.file
+    pub fn unwrap(mut self) -> F {
+        let NoIoDrop(file) = self.file.take().unwrap();
+
+        // Remove it from the poller.
+        if let Some(poller) = self.poller.take() {
+            poller.delete(file.as_fd()).ok();
+        }
+
+        file
+    }
+
+    /// Get a reference to the underlying type.
+    pub fn get_ref(&self) -> &F {
+        &self.file.as_ref().unwrap().0
+    }
+
+    /// Get a mutable reference to the underlying type.
+    ///
+    /// # Safety
+    ///
+    /// This is unsafe because it allows you to modify the underlying type, which
+    /// allows you to drop the underlying event source. Dropping the underlying source
+    /// leads to a dangling reference.
+    pub unsafe fn get_mut(&mut self) -> &mut F {
+        self.file.as_mut().unwrap().get_mut()
+    }
+}
+
+impl<F: AsFd, E> Drop for Generic<F, E> {
+    fn drop(&mut self) {
+        // Remove it from the poller.
+        if let (Some(file), Some(poller)) = (self.file.take(), self.poller.take()) {
+            poller.delete(file.as_fd()).ok();
+        }
     }
 }
 
@@ -134,7 +211,7 @@ where
     E: Into<Box<dyn std::error::Error + Send + Sync>>,
 {
     type Event = Readiness;
-    type Metadata = F;
+    type Metadata = NoIoDrop<F>;
     type Ret = Result<PostAction, E>;
     type Error = E;
 
@@ -152,13 +229,24 @@ where
             return Ok(PostAction::Continue);
         }
 
-        callback(readiness, &mut self.file)
+        callback(readiness, self.file.as_mut().unwrap())
     }
 
     fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
         let token = token_factory.token();
 
-        poll.register(&self.file, self.interest, self.mode, token)?;
+        // Make sure we can use the poller to deregister if need be.
+        self.poller = Some(poll.poller().clone());
+
+        // SAFETY: We've now ensured that we have a poller to deregister with.
+        unsafe {
+            poll.register(
+                &self.file.as_ref().unwrap().0,
+                self.interest,
+                self.mode,
+                token,
+            )?;
+        }
 
         self.token = Some(token);
         Ok(())
@@ -171,14 +259,20 @@ where
     ) -> crate::Result<()> {
         let token = token_factory.token();
 
-        poll.reregister(&self.file, self.interest, self.mode, token)?;
+        poll.reregister(
+            &self.file.as_ref().unwrap().0,
+            self.interest,
+            self.mode,
+            token,
+        )?;
 
         self.token = Some(token);
         Ok(())
     }
 
     fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
-        poll.unregister(&self.file)?;
+        poll.unregister(&self.file.as_ref().unwrap().0)?;
+        self.poller = None;
         self.token = None;
         Ok(())
     }
