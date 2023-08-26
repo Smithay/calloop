@@ -105,7 +105,7 @@ impl<F: AsFd> Generic<F, std::io::Error> {
             interest,
             mode,
             token: None,
-            _error_type: PhantomData::default(),
+            _error_type: PhantomData,
         }
     }
 
@@ -116,7 +116,7 @@ impl<F: AsFd> Generic<F, std::io::Error> {
             interest,
             mode,
             token: None,
-            _error_type: PhantomData::default(),
+            _error_type: PhantomData,
         }
     }
 }
