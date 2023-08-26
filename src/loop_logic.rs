@@ -593,8 +593,6 @@ impl<'l, Data> EventLoop<'l, Data> {
         self.signals.stop.store(false, Ordering::Release);
         self.signals.future_ready.store(true, Ordering::Release);
 
-        self.invoke_pre_run(data)?;
-
         while !self.signals.stop.load(Ordering::Acquire) {
             // If the future is ready to be polled, poll it.
             if self.signals.future_ready.swap(false, Ordering::AcqRel) {
@@ -611,7 +609,6 @@ impl<'l, Data> EventLoop<'l, Data> {
             cb(data);
         }
 
-        self.invoke_post_run(data)?;
         Ok(output)
     }
 }
