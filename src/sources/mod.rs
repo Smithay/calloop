@@ -160,9 +160,7 @@ pub trait EventSource {
     /// Whether this source needs to be sent the [`EventSource::before_will_sleep`]
     /// and [`EventSource::before_handle_events`] notifications. These are opt-in because
     /// they require more expensive checks, and almost all sources will not need these notifications
-    fn needs_extra_lifecycle_events() -> bool {
-        false
-    }
+    const NEEDS_EXTRA_LIFECYCLE_EVENTS: bool = false;
     /// Notification that a single `poll` is about to begin.
     /// If this returns Ok(Some), polling will shortcircuit, and
     /// your event handler will be called with the returned Token and Readiness
@@ -219,9 +217,7 @@ impl<T: EventSource> EventSource for Box<T> {
         T::unregister(&mut **self, poll)
     }
 
-    fn needs_extra_lifecycle_events() -> bool {
-        T::needs_extra_lifecycle_events()
-    }
+    const NEEDS_EXTRA_LIFECYCLE_EVENTS: bool = T::NEEDS_EXTRA_LIFECYCLE_EVENTS;
 
     fn before_will_sleep(&mut self) -> crate::Result<Option<(Readiness, Token)>> {
         T::before_will_sleep(&mut **self)
@@ -269,9 +265,7 @@ impl<T: EventSource> EventSource for &mut T {
         T::unregister(&mut **self, poll)
     }
 
-    fn needs_extra_lifecycle_events() -> bool {
-        T::needs_extra_lifecycle_events()
-    }
+    const NEEDS_EXTRA_LIFECYCLE_EVENTS: bool = T::NEEDS_EXTRA_LIFECYCLE_EVENTS;
 
     fn before_will_sleep(&mut self) -> crate::Result<Option<(Readiness, Token)>> {
         T::before_will_sleep(&mut **self)
@@ -496,7 +490,7 @@ where
         Dispatcher(Rc::new(RefCell::new(DispatcherInner {
             source,
             callback,
-            needs_additional_lifetime_events: S::needs_extra_lifecycle_events(),
+            needs_additional_lifetime_events: S::NEEDS_EXTRA_LIFECYCLE_EVENTS,
         })))
     }
 
