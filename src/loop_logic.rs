@@ -13,8 +13,10 @@ use io_lifetimes::AsFd;
 use slab::Slab;
 
 use crate::sources::{Dispatcher, EventSource, Idle, IdleDispatcher};
-use crate::sys::Notifier;
-use crate::{EventDispatcher, InsertError, Poll, PostAction, TokenFactory};
+use crate::sys::{Notifier, PollEvent};
+use crate::{
+    AdditionalLifetimeEventsSet, EventDispatcher, InsertError, Poll, PostAction, TokenFactory,
+};
 
 type IdleCallback<'i, Data> = Rc<RefCell<dyn IdleDispatcher<Data> + 'i>>;
 
@@ -56,6 +58,7 @@ pub struct RegistrationToken {
 pub(crate) struct LoopInner<'l, Data> {
     pub(crate) poll: RefCell<Poll>,
     pub(crate) sources: RefCell<Slab<Rc<dyn EventDispatcher<Data> + 'l>>>,
+    pub(crate) sources_with_additional_lifetime_events: AdditionalLifetimeEventsSet,
     idles: RefCell<Vec<IdleCallback<'l, Data>>>,
     pending_action: Cell<PostAction>,
 }
@@ -135,10 +138,13 @@ impl<'l, Data> LoopHandle<'l, Data> {
         }
 
         let key = sources.insert(dispatcher.clone_as_event_dispatcher());
-        let ret = sources
-            .get(key)
-            .unwrap()
-            .register(&mut poll, &mut TokenFactory::new(key));
+        let ret = sources.get(key).unwrap().register(
+            &mut poll,
+            self.inner
+                .sources_with_additional_lifetime_events
+                .create_register_for_token(RegistrationToken { key }),
+            &mut TokenFactory::new(key),
+        );
 
         if let Err(error) = ret {
             sources.try_remove(key).expect("Source was just inserted?!");
@@ -172,6 +178,9 @@ impl<'l, Data> LoopHandle<'l, Data> {
         if let Some(source) = self.inner.sources.borrow().get(token.key) {
             source.register(
                 &mut self.inner.poll.borrow_mut(),
+                self.inner
+                    .sources_with_additional_lifetime_events
+                    .create_register_for_token(*token),
                 &mut TokenFactory::new(token.key),
             )?;
         }
@@ -186,6 +195,9 @@ impl<'l, Data> LoopHandle<'l, Data> {
         if let Some(source) = self.inner.sources.borrow().get(token.key) {
             if !source.reregister(
                 &mut self.inner.poll.borrow_mut(),
+                self.inner
+                    .sources_with_additional_lifetime_events
+                    .create_register_for_token(*token),
                 &mut TokenFactory::new(token.key),
             )? {
                 // we are in a callback, store for later processing
@@ -200,7 +212,12 @@ impl<'l, Data> LoopHandle<'l, Data> {
     /// The source remains in the event loop, but it'll no longer generate events
     pub fn disable(&self, token: &RegistrationToken) -> crate::Result<()> {
         if let Some(source) = self.inner.sources.borrow().get(token.key) {
-            if !source.unregister(&mut self.inner.poll.borrow_mut())? {
+            if !source.unregister(
+                &mut self.inner.poll.borrow_mut(),
+                self.inner
+                    .sources_with_additional_lifetime_events
+                    .create_register_for_token(*token),
+            )? {
                 // we are in a callback, store for later processing
                 self.inner.pending_action.set(PostAction::Disable);
             }
@@ -211,7 +228,12 @@ impl<'l, Data> LoopHandle<'l, Data> {
     /// Removes this source from the event loop.
     pub fn remove(&self, token: RegistrationToken) {
         if let Some(source) = self.inner.sources.borrow_mut().try_remove(token.key) {
-            if let Err(e) = source.unregister(&mut self.inner.poll.borrow_mut()) {
+            if let Err(e) = source.unregister(
+                &mut self.inner.poll.borrow_mut(),
+                self.inner
+                    .sources_with_additional_lifetime_events
+                    .create_register_for_token(token),
+            ) {
                 log::warn!(
                     "[calloop] Failed to unregister source from the polling system: {:?}",
                     e
@@ -238,6 +260,8 @@ impl<'l, Data> LoopHandle<'l, Data> {
 pub struct EventLoop<'l, Data> {
     handle: LoopHandle<'l, Data>,
     signals: Arc<Signals>,
+    // A caching vector for synthetic poll events
+    synthetic_events: Vec<PollEvent>,
 }
 
 impl<'l, Data> std::fmt::Debug for EventLoop<'l, Data> {
@@ -269,6 +293,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                 sources: RefCell::new(Slab::new()),
                 idles: RefCell::new(Vec::new()),
                 pending_action: Cell::new(PostAction::Continue),
+                sources_with_additional_lifetime_events: Default::default(),
             }),
         };
 
@@ -279,6 +304,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                 #[cfg(feature = "block_on")]
                 future_ready: AtomicBool::new(false),
             }),
+            synthetic_events: vec![],
         })
     }
 
@@ -293,6 +319,26 @@ impl<'l, Data> EventLoop<'l, Data> {
         data: &mut Data,
     ) -> crate::Result<()> {
         let now = Instant::now();
+        {
+            let mut extra_lifecycle_sources = self
+                .handle
+                .inner
+                .sources_with_additional_lifetime_events
+                .values
+                .borrow_mut();
+            for (source, has_event) in &mut *extra_lifecycle_sources {
+                *has_event = false;
+                if let Some(disp) = self.handle.inner.sources.borrow().get(source.key) {
+                    if let Some((readiness, token)) = disp.before_will_sleep()? {
+                        // Wake up instantly after polling
+                        timeout = Some(Duration::ZERO);
+                        self.synthetic_events.push(PollEvent { readiness, token });
+                    }
+                } else {
+                    unreachable!()
+                }
+            }
+        }
         let events = {
             let poll = self.handle.inner.poll.borrow();
             loop {
@@ -315,6 +361,28 @@ impl<'l, Data> EventLoop<'l, Data> {
                 };
             }
         };
+        {
+            let mut extra_lifecycle_sources = self
+                .handle
+                .inner
+                .sources_with_additional_lifetime_events
+                .values
+                .borrow_mut();
+            if !extra_lifecycle_sources.is_empty() {
+                for (source, has_event) in &mut *extra_lifecycle_sources {
+                    for event in &events {
+                        *has_event |= (event.token.key & MAX_SOURCES_MASK) == source.key;
+                    }
+                }
+            }
+            for (source, has_event) in &*extra_lifecycle_sources {
+                if let Some(disp) = self.handle.inner.sources.borrow().get(source.key) {
+                    disp.before_handle_events(*has_event);
+                } else {
+                    unreachable!()
+                }
+            }
+        }
 
         for event in events {
             // Get the registration token associated with the event.
@@ -345,11 +413,25 @@ impl<'l, Data> EventLoop<'l, Data> {
                     PostAction::Reregister => {
                         disp.reregister(
                             &mut self.handle.inner.poll.borrow_mut(),
+                            self.handle
+                                .inner
+                                .sources_with_additional_lifetime_events
+                                .create_register_for_token(RegistrationToken {
+                                    key: registroken_token,
+                                }),
                             &mut TokenFactory::new(event.token.key),
                         )?;
                     }
                     PostAction::Disable => {
-                        disp.unregister(&mut self.handle.inner.poll.borrow_mut())?;
+                        disp.unregister(
+                            &mut self.handle.inner.poll.borrow_mut(),
+                            self.handle
+                                .inner
+                                .sources_with_additional_lifetime_events
+                                .create_register_for_token(RegistrationToken {
+                                    key: registroken_token,
+                                }),
+                        )?;
                     }
                     PostAction::Remove => {
                         // delete the source from the list, it'll be cleaned up with the if just below
@@ -371,7 +453,15 @@ impl<'l, Data> EventLoop<'l, Data> {
                 {
                     // the source has been removed from within its callback, unregister it
                     let mut poll = self.handle.inner.poll.borrow_mut();
-                    if let Err(e) = disp.unregister(&mut poll) {
+                    if let Err(e) = disp.unregister(
+                        &mut poll,
+                        self.handle
+                            .inner
+                            .sources_with_additional_lifetime_events
+                            .create_register_for_token(RegistrationToken {
+                                key: registroken_token,
+                            }),
+                    ) {
                         log::warn!(
                             "[calloop] Failed to unregister source from the polling system: {:?}",
                             e

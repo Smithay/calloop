@@ -18,6 +18,7 @@ use rustix::fs::{fcntl_getfl, fcntl_setfl, OFlags};
 #[cfg(feature = "futures-io")]
 use futures_io::{AsyncRead, AsyncWrite, IoSlice, IoSliceMut};
 
+use crate::AdditionalLifetimeEventsRegister;
 use crate::{
     loop_logic::{LoopInner, MAX_SOURCES_MASK},
     sources::EventDispatcher,
@@ -237,17 +238,31 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
         Ok(PostAction::Continue)
     }
 
-    fn register(&self, _: &mut Poll, _: &mut TokenFactory) -> crate::Result<()> {
+    fn register(
+        &self,
+        _: &mut Poll,
+        _: AdditionalLifetimeEventsRegister<'_>,
+        _: &mut TokenFactory,
+    ) -> crate::Result<()> {
         // registration is handled by IoLoopInner
         unreachable!()
     }
 
-    fn reregister(&self, _: &mut Poll, _: &mut TokenFactory) -> crate::Result<bool> {
+    fn reregister(
+        &self,
+        _: &mut Poll,
+        _: AdditionalLifetimeEventsRegister<'_>,
+        _: &mut TokenFactory,
+    ) -> crate::Result<bool> {
         // registration is handled by IoLoopInner
         unreachable!()
     }
 
-    fn unregister(&self, poll: &mut Poll) -> crate::Result<bool> {
+    fn unregister(
+        &self,
+        poll: &mut Poll,
+        _: AdditionalLifetimeEventsRegister<'_>,
+    ) -> crate::Result<bool> {
         let disp = self.borrow();
         if disp.is_registered {
             poll.unregister(unsafe { BorrowedFd::borrow_raw(disp.fd) })?;
@@ -261,6 +276,11 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
     fn post_run(&self, _data: &mut Data) -> crate::Result<()> {
         Ok(())
     }
+
+    fn before_will_sleep(&self) -> crate::Result<Option<(Readiness, Token)>> {
+        Ok(None)
+    }
+    fn before_handle_events(&self, _: bool) {}
 }
 
 /*

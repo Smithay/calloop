@@ -126,7 +126,7 @@ pub(crate) struct PollEvent {
 #[derive(Debug)]
 pub struct TokenFactory {
     /// The key of the source this factory is associated with.
-    key: usize,
+    pub(crate) key: usize,
 
     /// The next sub-id to use.
     sub_id: u32,

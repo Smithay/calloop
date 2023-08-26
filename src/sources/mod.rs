@@ -4,7 +4,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::{sys::TokenFactory, Poll, Readiness, Token};
+use crate::{sys::TokenFactory, Poll, Readiness, RegistrationToken, Token};
 
 pub mod channel;
 #[cfg(feature = "executor")]
@@ -176,6 +176,28 @@ pub trait EventSource {
     {
         Ok(())
     }
+
+    /// Whether this source needs to be sent the [`EventSource::before_will_sleep`]
+    /// and [`EventSource::before_handle_events`] notifications.
+    fn needs_extra_lifecycle_events() -> bool {
+        false
+    }
+    /// Notification that a single `poll` is about to begin.
+    ///
+    /// Use this to perform operations which must be done before polling,
+    /// but which may conflict with other event handlers. For example,
+    /// if polling requires a lock to be taken.
+    fn before_will_sleep(&mut self) -> crate::Result<Option<(Readiness, Token)>> {
+        Ok(None)
+    }
+    /// Notification that polling is completed, and the resulting events are
+    /// going to be executed.
+    ///
+    /// Use this to perform a cleanup before event handlers with arbitrary
+    /// code may run. This could be used to drop a lock obtained in
+    /// [`EventSource::before_will_sleep`]
+    #[allow(unused_variables)]
+    fn before_handle_events(&self, was_awoken: bool) {}
 }
 
 /// Blanket implementation for boxed event sources. [`EventSource`] is not an
@@ -284,6 +306,7 @@ impl<T: EventSource> EventSource for &mut T {
 pub(crate) struct DispatcherInner<S, F> {
     source: S,
     callback: F,
+    needs_additional_lifetime_events: bool,
 }
 
 impl<Data, S, F> EventDispatcher<Data> for RefCell<DispatcherInner<S, F>>
@@ -301,28 +324,54 @@ where
         let DispatcherInner {
             ref mut source,
             ref mut callback,
+            ..
         } = *disp;
         source
             .process_events(readiness, token, |event, meta| callback(event, meta, data))
             .map_err(|e| crate::Error::OtherError(e.into()))
     }
 
-    fn register(&self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
-        self.borrow_mut().source.register(poll, token_factory)
+    fn register(
+        &self,
+        poll: &mut Poll,
+        mut additional_lifetime_register: AdditionalLifetimeEventsRegister<'_>,
+        token_factory: &mut TokenFactory,
+    ) -> crate::Result<()> {
+        let mut this = self.borrow_mut();
+
+        if this.needs_additional_lifetime_events {
+            additional_lifetime_register.register();
+        }
+        this.source.register(poll, token_factory)
     }
 
-    fn reregister(&self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<bool> {
+    fn reregister(
+        &self,
+        poll: &mut Poll,
+        mut additional_lifetime_register: AdditionalLifetimeEventsRegister<'_>,
+        token_factory: &mut TokenFactory,
+    ) -> crate::Result<bool> {
         if let Ok(mut me) = self.try_borrow_mut() {
             me.source.reregister(poll, token_factory)?;
+            if me.needs_additional_lifetime_events {
+                additional_lifetime_register.register();
+            }
             Ok(true)
         } else {
             Ok(false)
         }
     }
 
-    fn unregister(&self, poll: &mut Poll) -> crate::Result<bool> {
+    fn unregister(
+        &self,
+        poll: &mut Poll,
+        mut additional_lifetime_register: AdditionalLifetimeEventsRegister<'_>,
+    ) -> crate::Result<bool> {
         if let Ok(mut me) = self.try_borrow_mut() {
             me.source.unregister(poll)?;
+            if me.needs_additional_lifetime_events {
+                additional_lifetime_register.unregister();
+            }
             Ok(true)
         } else {
             Ok(false)
@@ -334,6 +383,7 @@ where
         let DispatcherInner {
             ref mut source,
             ref mut callback,
+            ..
         } = *disp;
         source.pre_run(|event, meta| callback(event, meta, data))
     }
@@ -343,8 +393,21 @@ where
         let DispatcherInner {
             ref mut source,
             ref mut callback,
+            ..
         } = *disp;
         source.post_run(|event, meta| callback(event, meta, data))
+    }
+
+    fn before_will_sleep(&self) -> crate::Result<Option<(Readiness, Token)>> {
+        let mut disp = self.borrow_mut();
+        let DispatcherInner { ref mut source, .. } = *disp;
+        source.before_will_sleep()
+    }
+
+    fn before_handle_events(&self, was_awoken: bool) {
+        let mut disp = self.borrow_mut();
+        let DispatcherInner { ref mut source, .. } = *disp;
+        source.before_handle_events(was_awoken);
     }
 }
 
@@ -356,15 +419,61 @@ pub(crate) trait EventDispatcher<Data> {
         data: &mut Data,
     ) -> crate::Result<PostAction>;
 
-    fn register(&self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()>;
+    fn register(
+        &self,
+        poll: &mut Poll,
+        additional_lifetime_register: AdditionalLifetimeEventsRegister<'_>,
+        token_factory: &mut TokenFactory,
+    ) -> crate::Result<()>;
 
-    fn reregister(&self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<bool>;
+    fn reregister(
+        &self,
+        poll: &mut Poll,
+        additional_lifetime_register: AdditionalLifetimeEventsRegister<'_>,
+        token_factory: &mut TokenFactory,
+    ) -> crate::Result<bool>;
 
-    fn unregister(&self, poll: &mut Poll) -> crate::Result<bool>;
+    fn unregister(
+        &self,
+        poll: &mut Poll,
+        additional_lifetime_register: AdditionalLifetimeEventsRegister<'_>,
+    ) -> crate::Result<bool>;
 
     fn pre_run(&self, data: &mut Data) -> crate::Result<()>;
 
     fn post_run(&self, data: &mut Data) -> crate::Result<()>;
+
+    fn before_will_sleep(&self) -> crate::Result<Option<(Readiness, Token)>>;
+    fn before_handle_events(&self, was_awoken: bool);
+}
+
+#[derive(Default)]
+pub(crate) struct AdditionalLifetimeEventsSet {
+    pub(crate) values: RefCell<Vec<(RegistrationToken, bool)>>,
+}
+
+impl AdditionalLifetimeEventsSet {
+    pub(crate) fn create_register_for_token<'a>(
+        &'a self,
+        token: RegistrationToken,
+    ) -> AdditionalLifetimeEventsRegister {
+        AdditionalLifetimeEventsRegister { set: self, token }
+    }
+}
+
+pub(crate) struct AdditionalLifetimeEventsRegister<'a> {
+    set: &'a AdditionalLifetimeEventsSet,
+    token: RegistrationToken,
+}
+
+impl<'a> AdditionalLifetimeEventsRegister<'a> {
+    fn register(&mut self) {
+        self.set.values.borrow_mut().push((self.token, false))
+    }
+
+    fn unregister(&mut self) {
+        self.set.values.borrow_mut().retain(|it| it.0 != self.token)
+    }
 }
 
 // An internal trait to erase the `F` type parameter of `DispatcherInner`
@@ -429,7 +538,11 @@ where
     where
         F: FnMut(S::Event, &mut S::Metadata, &mut Data) -> S::Ret + 'a,
     {
-        Dispatcher(Rc::new(RefCell::new(DispatcherInner { source, callback })))
+        Dispatcher(Rc::new(RefCell::new(DispatcherInner {
+            source,
+            callback,
+            needs_additional_lifetime_events: S::needs_extra_lifecycle_events(),
+        })))
     }
 
     /// Returns an immutable reference to the event source.
