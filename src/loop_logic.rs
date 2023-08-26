@@ -326,11 +326,12 @@ impl<'l, Data> EventLoop<'l, Data> {
                 .sources_with_additional_lifetime_events
                 .values
                 .borrow_mut();
+            let sources = &self.handle.inner.sources.borrow();
             for (source, has_event) in &mut *extra_lifecycle_sources {
                 *has_event = false;
-                if let Some(disp) = self.handle.inner.sources.borrow().get(source.key) {
+                if let Some(disp) = sources.get(source.key) {
                     if let Some((readiness, token)) = disp.before_will_sleep()? {
-                        // Wake up instantly after polling
+                        // Wake up instantly after polling if we recieved an event
                         timeout = Some(Duration::ZERO);
                         self.synthetic_events.push(PollEvent { readiness, token });
                     }
