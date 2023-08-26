@@ -124,6 +124,13 @@ jobs:
           path: target
           key: ${{ runner.os }}-test-${{ steps.rustcversion.outputs.version }}-${{ hashFiles('**/Cargo.toml') }}
 
+      - name: Downgrade log
+        uses: actions-rs/cargo@v1
+        if: ${{ matrix.rust == '1.56.0' }}
+        with:
+          command: update
+          args: --package log --precise 0.4.16
+
       - name: Run tests
         uses: actions-rs/cargo@v1
         with:
