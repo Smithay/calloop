@@ -274,11 +274,11 @@ impl<T: EventSource> EventSource for &mut T {
     }
 
     fn before_will_sleep(&mut self) -> crate::Result<Option<(Readiness, Token)>> {
-        T::before_will_sleep(&mut *self)
+        T::before_will_sleep(&mut **self)
     }
 
     fn before_handle_events(&mut self, was_awoken: bool) {
-        T::before_handle_events(&mut *self, was_awoken)
+        T::before_handle_events(&mut **self, was_awoken)
     }
 }
 
@@ -408,8 +408,8 @@ pub(crate) struct AdditionalLifetimeEventsSet {
 }
 
 impl AdditionalLifetimeEventsSet {
-    pub(crate) fn create_register_for_token<'a>(
-        &'a self,
+    pub(crate) fn create_register_for_token(
+        &self,
         token: RegistrationToken,
     ) -> AdditionalLifetimeEventsRegister {
         AdditionalLifetimeEventsRegister { set: self, token }
