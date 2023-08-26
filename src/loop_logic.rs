@@ -486,40 +486,6 @@ impl<'l, Data> EventLoop<'l, Data> {
         }
     }
 
-    fn invoke_pre_run(&self, data: &mut Data) -> crate::Result<()> {
-        let sources = self
-            .handle
-            .inner
-            .sources
-            .borrow()
-            .iter()
-            .map(|(_, source)| source.clone())
-            .collect::<Vec<_>>();
-
-        for source in sources {
-            source.pre_run(data)?;
-        }
-
-        Ok(())
-    }
-
-    fn invoke_post_run(&self, data: &mut Data) -> crate::Result<()> {
-        let sources = self
-            .handle
-            .inner
-            .sources
-            .borrow()
-            .iter()
-            .map(|(_, source)| source.clone())
-            .collect::<Vec<_>>();
-
-        for source in sources {
-            source.post_run(data)?;
-        }
-
-        Ok(())
-    }
-
     /// Dispatch pending events to their callbacks
     ///
     /// If some sources have events available, their callbacks will be immediatly called.
@@ -533,10 +499,8 @@ impl<'l, Data> EventLoop<'l, Data> {
         timeout: D,
         data: &mut Data,
     ) -> crate::Result<()> {
-        self.invoke_pre_run(data)?;
         self.dispatch_events(timeout.into(), data)?;
         self.dispatch_idles(data);
-        self.invoke_post_run(data)?;
 
         Ok(())
     }
@@ -571,13 +535,10 @@ impl<'l, Data> EventLoop<'l, Data> {
     {
         let timeout = timeout.into();
         self.signals.stop.store(false, Ordering::Release);
-        self.invoke_pre_run(data)?;
         while !self.signals.stop.load(Ordering::Acquire) {
-            self.dispatch_events(timeout, data)?;
-            self.dispatch_idles(data);
+            self.dispatch(timeout, data)?;
             cb(data);
         }
-        self.invoke_post_run(data)?;
         Ok(())
     }
 

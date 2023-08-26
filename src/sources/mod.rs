@@ -157,32 +157,15 @@ pub trait EventSource {
     /// [`Poll::unregister`](crate::Poll#method.unregister) method.
     fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()>;
 
-    /// Notification that a polling session is going to start
-    ///
-    /// You can generate events from this method as you would from `process_events`.
-    fn pre_run<F>(&mut self, _callback: F) -> crate::Result<()>
-    where
-        F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
-    {
-        Ok(())
-    }
-
-    /// Notification that the current polling session ended
-    ///
-    /// You can generate events from this method as you would from `process_events`.
-    fn post_run<F>(&mut self, _callback: F) -> crate::Result<()>
-    where
-        F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
-    {
-        Ok(())
-    }
-
     /// Whether this source needs to be sent the [`EventSource::before_will_sleep`]
-    /// and [`EventSource::before_handle_events`] notifications.
+    /// and [`EventSource::before_handle_events`] notifications. These are opt-in because
+    /// they require more expensive checks, and almost all sources will not need these notifications
     fn needs_extra_lifecycle_events() -> bool {
         false
     }
     /// Notification that a single `poll` is about to begin.
+    /// If this returns Ok(Some), polling will shortcircuit, and
+    /// your event handler will be called with the returned Token and Readiness
     ///
     /// Use this to perform operations which must be done before polling,
     /// but which may conflict with other event handlers. For example,
@@ -197,7 +180,7 @@ pub trait EventSource {
     /// code may run. This could be used to drop a lock obtained in
     /// [`EventSource::before_will_sleep`]
     #[allow(unused_variables)]
-    fn before_handle_events(&self, was_awoken: bool) {}
+    fn before_handle_events(&mut self, was_awoken: bool) {}
 }
 
 /// Blanket implementation for boxed event sources. [`EventSource`] is not an
@@ -236,18 +219,16 @@ impl<T: EventSource> EventSource for Box<T> {
         T::unregister(&mut **self, poll)
     }
 
-    fn pre_run<F>(&mut self, callback: F) -> crate::Result<()>
-    where
-        F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
-    {
-        T::pre_run(&mut **self, callback)
+    fn needs_extra_lifecycle_events() -> bool {
+        T::needs_extra_lifecycle_events()
     }
 
-    fn post_run<F>(&mut self, callback: F) -> crate::Result<()>
-    where
-        F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
-    {
-        T::post_run(&mut **self, callback)
+    fn before_will_sleep(&mut self) -> crate::Result<Option<(Readiness, Token)>> {
+        T::before_will_sleep(&mut **self)
+    }
+
+    fn before_handle_events(&mut self, was_awoken: bool) {
+        T::before_handle_events(&mut **self, was_awoken)
     }
 }
 
@@ -288,18 +269,16 @@ impl<T: EventSource> EventSource for &mut T {
         T::unregister(&mut **self, poll)
     }
 
-    fn pre_run<F>(&mut self, callback: F) -> crate::Result<()>
-    where
-        F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
-    {
-        T::pre_run(&mut **self, callback)
+    fn needs_extra_lifecycle_events() -> bool {
+        T::needs_extra_lifecycle_events()
     }
 
-    fn post_run<F>(&mut self, callback: F) -> crate::Result<()>
-    where
-        F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
-    {
-        T::post_run(&mut **self, callback)
+    fn before_will_sleep(&mut self) -> crate::Result<Option<(Readiness, Token)>> {
+        T::before_will_sleep(&mut *self)
+    }
+
+    fn before_handle_events(&mut self, was_awoken: bool) {
+        T::before_handle_events(&mut *self, was_awoken)
     }
 }
 
@@ -378,26 +357,6 @@ where
         }
     }
 
-    fn pre_run(&self, data: &mut Data) -> crate::Result<()> {
-        let mut disp = self.borrow_mut();
-        let DispatcherInner {
-            ref mut source,
-            ref mut callback,
-            ..
-        } = *disp;
-        source.pre_run(|event, meta| callback(event, meta, data))
-    }
-
-    fn post_run(&self, data: &mut Data) -> crate::Result<()> {
-        let mut disp = self.borrow_mut();
-        let DispatcherInner {
-            ref mut source,
-            ref mut callback,
-            ..
-        } = *disp;
-        source.post_run(|event, meta| callback(event, meta, data))
-    }
-
     fn before_will_sleep(&self) -> crate::Result<Option<(Readiness, Token)>> {
         let mut disp = self.borrow_mut();
         let DispatcherInner { ref mut source, .. } = *disp;
@@ -438,10 +397,6 @@ pub(crate) trait EventDispatcher<Data> {
         poll: &mut Poll,
         additional_lifetime_register: AdditionalLifetimeEventsRegister<'_>,
     ) -> crate::Result<bool>;
-
-    fn pre_run(&self, data: &mut Data) -> crate::Result<()>;
-
-    fn post_run(&self, data: &mut Data) -> crate::Result<()>;
 
     fn before_will_sleep(&self) -> crate::Result<Option<(Readiness, Token)>>;
     fn before_handle_events(&self, was_awoken: bool);
