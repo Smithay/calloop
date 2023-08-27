@@ -901,7 +901,7 @@ mod tests {
         assert!(!dispatched);
 
         // write something, the socket becomes readable
-        write(sock2, &[1, 2, 3]).unwrap();
+        write(&sock2, &[1, 2, 3]).unwrap();
         dispatched = false;
         event_loop
             .dispatch(Duration::ZERO, &mut dispatched)
