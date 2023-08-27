@@ -41,15 +41,6 @@ pub enum Error {
     OtherError(#[from] Box<dyn std::error::Error + Sync + Send>),
 }
 
-impl From<nix::errno::Errno> for Error {
-    /// Converts a [`nix::Error`] into a wrapped version of the equivalent
-    /// [`std::io::Error`].
-    #[cfg_attr(feature = "nightly_coverage", no_coverage)]
-    fn from(err: nix::errno::Errno) -> Self {
-        Into::<std::io::Error>::into(err).into()
-    }
-}
-
 impl From<Error> for std::io::Error {
     /// Converts Calloop's error type into a [`std::io::Error`].
     fn from(err: Error) -> Self {

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+#### Breaking changes
+
+- Make signals an optional feature under the `signals` features.
+- Replace the `nix` crate with standard library I/O errors and the `rustix` 
+crate.
+
 ## 0.11.0 -- 2023-06-05
 
 #### Bugfixes

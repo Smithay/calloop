@@ -137,6 +137,12 @@ jobs:
           command: test
           args: --features "block_on executor"
 
+      - name: Run tests with signals
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --features "block_on executor signals"
+
       - name: Run book tests
         uses: actions-rs/cargo@v1
         if: ${{ matrix.rust == 'stable' || matrix.rust == 'beta' }}
