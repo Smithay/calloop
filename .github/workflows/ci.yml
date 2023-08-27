@@ -126,7 +126,7 @@ jobs:
 
       - name: Downgrade log
         uses: actions-rs/cargo@v1
-        if: ${{ matrix.rust == '1.56.0' }}
+        if: ${{ matrix.rust == '1.63.0' }}
         with:
           command: update
           args: --package log --precise 0.4.16

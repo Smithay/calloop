@@ -31,7 +31,7 @@ fn make_ends() -> std::io::Result<(OwnedFd, OwnedFd)> {
 #[cfg(not(target_os = "macos"))]
 #[inline]
 fn make_ends() -> std::io::Result<(OwnedFd, OwnedFd)> {
-    use rustix::io::{pipe_with, PipeFlags};
+    use rustix::pipe::{pipe_with, PipeFlags};
     Ok(pipe_with(PipeFlags::CLOEXEC | PipeFlags::NONBLOCK)?)
 }
 

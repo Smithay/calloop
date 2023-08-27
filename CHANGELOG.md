@@ -4,6 +4,7 @@
 
 #### Breaking changes
 
+- Bump MSRV to 1.63
 - Make signals an optional feature under the `signals` features.
 - Replace the `nix` crate with standard library I/O errors and the `rustix` 
 crate.
