@@ -16,7 +16,7 @@ use crate::{
 #[inline]
 fn make_ends() -> std::io::Result<(OwnedFd, OwnedFd)> {
     use rustix::fs::{fcntl_getfl, fcntl_setfl, OFlags};
-    use rustix::io::pipe;
+    use rustix::pipe::pipe;
 
     let (read, write) = pipe()?;
 
