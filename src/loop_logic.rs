@@ -856,19 +856,17 @@ mod tests {
 
     #[test]
     fn change_interests() {
-        use nix::sys::socket::{recv, socketpair, AddressFamily, MsgFlags, SockFlag, SockType};
-        use nix::unistd::write;
-        use std::os::unix::io::{AsRawFd, FromRawFd};
+        use rustix::io::write;
+        use rustix::net::{recv, socketpair, AddressFamily, RecvFlags, SocketFlags, SocketType};
         let mut event_loop = EventLoop::<bool>::try_new().unwrap();
 
         let (sock1, sock2) = socketpair(
-            AddressFamily::Unix,
-            SockType::Stream,
-            None,
-            SockFlag::empty(), // recv with DONTWAIT will suffice for platforms without SockFlag::SOCK_NONBLOCKING such as macOS
+            AddressFamily::UNIX,
+            SocketType::STREAM,
+            SocketFlags::CLOEXEC,
+            None, // recv with DONTWAIT will suffice for platforms without SockFlag::SOCK_NONBLOCKING such as macOS
         )
         .unwrap();
-        let sock1 = unsafe { io_lifetimes::OwnedFd::from_raw_fd(sock1) };
 
         let source = Generic::new(sock1, Interest::READ, Mode::Level);
         let dispatcher = Dispatcher::new(source, |_, fd, dispatched| {
@@ -876,7 +874,7 @@ mod tests {
             // read all contents available to drain the socket
             let mut buf = [0u8; 32];
             loop {
-                match recv(fd.as_raw_fd(), &mut buf, MsgFlags::MSG_DONTWAIT) {
+                match recv(&*fd, &mut buf, RecvFlags::DONTWAIT) {
                     Ok(0) => break, // closed pipe, we are now inert
                     Ok(_) => {}
                     Err(e) => {

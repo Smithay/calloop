@@ -12,7 +12,7 @@ pub mod channel;
 pub mod futures;
 pub mod generic;
 pub mod ping;
-#[cfg(all(target_os = "linux", feature = "singals"))]
+#[cfg(all(target_os = "linux", feature = "signals"))]
 #[cfg_attr(docsrs, doc(cfg(target_os = "linux")))]
 pub mod signals;
 pub mod timer;

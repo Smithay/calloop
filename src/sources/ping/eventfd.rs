@@ -21,7 +21,8 @@
 use std::sync::Arc;
 
 use io_lifetimes::{AsFd, BorrowedFd, OwnedFd};
-use rustix::io::{eventfd, read, write, Errno, EventfdFlags};
+use rustix::event::{eventfd, EventfdFlags};
+use rustix::io::{read, write, Errno};
 
 use super::PingError;
 use crate::{
