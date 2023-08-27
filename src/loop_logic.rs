@@ -385,7 +385,7 @@ impl<'l, Data> EventLoop<'l, Data> {
             }
         }
 
-        for event in events {
+        for event in self.synthetic_events.drain(..).chain(events) {
             // Get the registration token associated with the event.
             let registroken_token = event.token.key & MAX_SOURCES_MASK;
 
