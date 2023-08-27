@@ -695,14 +695,10 @@ mod tests {
 
     #[test]
     fn insert_source_no_interest() {
-        use nix::unistd::{close, pipe};
-        use std::os::unix::io::FromRawFd;
+        use rustix::pipe::pipe;
 
         // Create a pipe to get an arbitrary fd.
-        let (read, write) = pipe().unwrap();
-        let read = unsafe { io_lifetimes::OwnedFd::from_raw_fd(read) };
-        // We don't need the write end.
-        close(write).unwrap();
+        let (read, _write) = pipe().unwrap();
 
         let source = crate::sources::generic::Generic::new(read, Interest::EMPTY, Mode::Level);
         let dispatcher = Dispatcher::new(source, |_, _, _| Ok(PostAction::Continue));
@@ -863,7 +859,7 @@ mod tests {
         let (sock1, sock2) = socketpair(
             AddressFamily::UNIX,
             SocketType::STREAM,
-            SocketFlags::CLOEXEC,
+            SocketFlags::empty(),
             None, // recv with DONTWAIT will suffice for platforms without SockFlag::SOCK_NONBLOCKING such as macOS
         )
         .unwrap();
