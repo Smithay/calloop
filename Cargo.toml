@@ -22,7 +22,7 @@ codecov = { repository = "Smithay/calloop" }
 bitflags = "1.2"
 io-lifetimes = "1.0.3"
 log = "0.4"
-nix = { version = "0.26", default-features = false, features = ["event", "fs", "signal", "socket", "time"] }
+nix = { version = "0.26", default-features = false, features = ["signal"] }
 async-task = { version = "4.4.0", optional = true }
 futures-io = { version = "0.3.5", optional = true }
 thiserror = "1.0"
