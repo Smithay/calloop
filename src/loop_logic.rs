@@ -652,11 +652,14 @@ impl LoopSignal {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    use std::{cell::Cell, rc::Rc, time::Duration};
 
     use crate::{
-        generic::Generic, ping::*, Dispatcher, Interest, Mode, Poll, PostAction, Readiness,
-        RegistrationToken, Token, TokenFactory,
+        channel::{channel, Channel},
+        generic::Generic,
+        ping::*,
+        Dispatcher, EventSource, Interest, Mode, Poll, PostAction, Readiness, RegistrationToken,
+        Token, TokenFactory,
     };
 
     use super::EventLoop;
@@ -727,6 +730,202 @@ mod tests {
 
         // the test should return
         event_loop.run(None, &mut (), |_| {}).unwrap();
+    }
+
+    #[test]
+    fn additional_events() {
+        let mut event_loop: EventLoop<'_, Lock> = EventLoop::try_new().unwrap();
+        let mut lock = Lock {
+            lock: Rc::new(Cell::new(false)),
+        };
+        let (sender, channel) = channel();
+        event_loop
+            .handle()
+            .insert_source(
+                LockingSource {
+                    channel,
+                    lock: lock.clone(),
+                },
+                |_, _, lock| {
+                    lock.lock();
+                    lock.unlock();
+                },
+            )
+            .unwrap();
+        sender.send(()).unwrap();
+
+        event_loop.dispatch(None, &mut lock).unwrap();
+        #[derive(Clone)]
+        struct Lock {
+            lock: Rc<Cell<bool>>,
+        }
+        impl Lock {
+            fn lock(&self) {
+                if self.lock.get() {
+                    panic!();
+                }
+                self.lock.set(true)
+            }
+            fn unlock(&self) {
+                if !self.lock.get() {
+                    panic!();
+                }
+                self.lock.set(false);
+            }
+        }
+        struct LockingSource {
+            channel: Channel<()>,
+            lock: Lock,
+        }
+        impl EventSource for LockingSource {
+            type Event = <Channel<()> as EventSource>::Event;
+
+            type Metadata = <Channel<()> as EventSource>::Metadata;
+
+            type Ret = <Channel<()> as EventSource>::Ret;
+
+            type Error = <Channel<()> as EventSource>::Error;
+
+            fn process_events<F>(
+                &mut self,
+                readiness: Readiness,
+                token: Token,
+                callback: F,
+            ) -> Result<PostAction, Self::Error>
+            where
+                F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+            {
+                self.channel.process_events(readiness, token, callback)
+            }
+
+            fn register(
+                &mut self,
+                poll: &mut Poll,
+                token_factory: &mut TokenFactory,
+            ) -> crate::Result<()> {
+                self.channel.register(poll, token_factory)
+            }
+
+            fn reregister(
+                &mut self,
+                poll: &mut Poll,
+                token_factory: &mut TokenFactory,
+            ) -> crate::Result<()> {
+                self.channel.reregister(poll, token_factory)
+            }
+
+            fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
+                self.channel.unregister(poll)
+            }
+
+            const NEEDS_EXTRA_LIFECYCLE_EVENTS: bool = true;
+
+            fn before_will_sleep(&mut self) -> crate::Result<Option<(Readiness, Token)>> {
+                self.lock.lock();
+                Ok(None)
+            }
+
+            fn before_handle_events(&mut self, _: bool) {
+                self.lock.unlock();
+            }
+        }
+    }
+
+    #[test]
+    fn additional_events_synthetic() {
+        let mut event_loop: EventLoop<'_, Lock> = EventLoop::try_new().unwrap();
+        let mut lock = Lock {
+            lock: Rc::new(Cell::new(false)),
+        };
+        event_loop
+            .handle()
+            .insert_source(
+                InstantWakeupLockingSource {
+                    lock: lock.clone(),
+                    token: None,
+                },
+                |_, _, lock| {
+                    lock.lock();
+                    lock.unlock();
+                },
+            )
+            .unwrap();
+
+        // Loop should finish, as
+        event_loop.dispatch(None, &mut lock).unwrap();
+        #[derive(Clone)]
+        struct Lock {
+            lock: Rc<Cell<bool>>,
+        }
+        impl Lock {
+            fn lock(&self) {
+                if self.lock.get() {
+                    panic!();
+                }
+                self.lock.set(true)
+            }
+            fn unlock(&self) {
+                if !self.lock.get() {
+                    panic!();
+                }
+                self.lock.set(false);
+            }
+        }
+        struct InstantWakeupLockingSource {
+            lock: Lock,
+            token: Option<Token>,
+        }
+        impl EventSource for InstantWakeupLockingSource {
+            type Event = ();
+
+            type Metadata = ();
+
+            type Ret = ();
+
+            type Error = <Channel<()> as EventSource>::Error;
+
+            fn process_events<F>(
+                &mut self,
+                _: Readiness,
+                token: Token,
+                mut callback: F,
+            ) -> Result<PostAction, Self::Error>
+            where
+                F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+            {
+                assert_eq!(token, self.token.unwrap());
+                callback((), &mut ());
+                Ok(PostAction::Continue)
+            }
+
+            fn register(
+                &mut self,
+                _: &mut Poll,
+                token_factory: &mut TokenFactory,
+            ) -> crate::Result<()> {
+                self.token = Some(token_factory.token());
+                Ok(())
+            }
+
+            fn reregister(&mut self, _: &mut Poll, _: &mut TokenFactory) -> crate::Result<()> {
+                unreachable!()
+            }
+
+            fn unregister(&mut self, _: &mut Poll) -> crate::Result<()> {
+                unreachable!()
+            }
+
+            const NEEDS_EXTRA_LIFECYCLE_EVENTS: bool = true;
+
+            fn before_will_sleep(&mut self) -> crate::Result<Option<(Readiness, Token)>> {
+                self.lock.lock();
+                Ok(Some((Readiness::EMPTY, self.token.unwrap())))
+            }
+
+            fn before_handle_events(&mut self, _: bool) {
+                self.lock.unlock();
+            }
+        }
     }
 
     #[test]
