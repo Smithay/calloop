@@ -330,7 +330,7 @@ impl<'l, Data> EventLoop<'l, Data> {
             for (source, has_event) in &mut *extra_lifecycle_sources {
                 *has_event = false;
                 if let Some(disp) = sources.get(source.key) {
-                    if let Some((readiness, token)) = disp.before_will_sleep()? {
+                    if let Some((readiness, token)) = disp.before_sleep()? {
                         // Wake up instantly after polling if we recieved an event
                         timeout = Some(Duration::ZERO);
                         self.synthetic_events.push(PollEvent { readiness, token });
@@ -820,7 +820,7 @@ mod tests {
 
             const NEEDS_EXTRA_LIFECYCLE_EVENTS: bool = true;
 
-            fn before_will_sleep(&mut self) -> crate::Result<Option<(Readiness, Token)>> {
+            fn before_sleep(&mut self) -> crate::Result<Option<(Readiness, Token)>> {
                 self.lock.lock();
                 Ok(None)
             }
@@ -917,7 +917,7 @@ mod tests {
 
             const NEEDS_EXTRA_LIFECYCLE_EVENTS: bool = true;
 
-            fn before_will_sleep(&mut self) -> crate::Result<Option<(Readiness, Token)>> {
+            fn before_sleep(&mut self) -> crate::Result<Option<(Readiness, Token)>> {
                 self.lock.lock();
                 Ok(Some((Readiness::EMPTY, self.token.unwrap())))
             }

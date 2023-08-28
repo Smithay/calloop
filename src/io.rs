@@ -270,7 +270,7 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
         Ok(true)
     }
 
-    fn before_will_sleep(&self) -> crate::Result<Option<(Readiness, Token)>> {
+    fn before_sleep(&self) -> crate::Result<Option<(Readiness, Token)>> {
         Ok(None)
     }
     fn before_handle_events(&self, _: bool) {}

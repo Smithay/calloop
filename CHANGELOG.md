@@ -8,7 +8,7 @@
 - Make signals an optional feature under the `signals` features.
 - Replace the `nix` crate with standard library I/O errors and the `rustix` 
 crate.s
-- `pre_run` and `post_run` on `EventSource` have been replaced with `before_will_sleep` and `before_handle_events`, respectively.
+- `pre_run` and `post_run` on `EventSource` have been replaced with `before_sleep` and `before_handle_events`, respectively.
   These are now opt-in through the `NEEDS_EXTRA_LIFECYCLE_EVENTS` associated constant, and occur at slightly different times to
   the methods they are replacing. This allows greater compatibility with Wayland based event sources.
 
