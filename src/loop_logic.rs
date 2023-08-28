@@ -736,10 +736,10 @@ mod tests {
     fn additional_events() {
         let mut event_loop: EventLoop<'_, Lock> = EventLoop::try_new().unwrap();
         let mut lock = Lock {
-            lock: Rc::new(Cell::new(false)),
+            lock: Rc::new((Cell::new(false), Cell::new(0))),
         };
         let (sender, channel) = channel();
-        event_loop
+        let token = event_loop
             .handle()
             .insert_source(
                 LockingSource {
@@ -755,22 +755,43 @@ mod tests {
         sender.send(()).unwrap();
 
         event_loop.dispatch(None, &mut lock).unwrap();
+        // We should have been locked twice so far
+        assert_eq!(lock.lock.1.get(), 2);
+        event_loop.handle().disable(&token).unwrap();
+        event_loop
+            .dispatch(Some(Duration::ZERO), &mut lock)
+            .unwrap();
+        assert_eq!(lock.lock.1.get(), 2);
+
+        event_loop.handle().enable(&token).unwrap();
+        event_loop
+            .dispatch(Some(Duration::ZERO), &mut lock)
+            .unwrap();
+        assert_eq!(lock.lock.1.get(), 3);
+        event_loop.handle().remove(token);
+        event_loop
+            .dispatch(Some(Duration::ZERO), &mut lock)
+            .unwrap();
+        assert_eq!(lock.lock.1.get(), 3);
+
         #[derive(Clone)]
         struct Lock {
-            lock: Rc<Cell<bool>>,
+            lock: Rc<(Cell<bool>, Cell<u32>)>,
         }
         impl Lock {
             fn lock(&self) {
-                if self.lock.get() {
+                if self.lock.0.get() {
                     panic!();
                 }
-                self.lock.set(true)
+                // Increase the count
+                self.lock.1.set(self.lock.1.get() + 1);
+                self.lock.0.set(true)
             }
             fn unlock(&self) {
-                if !self.lock.get() {
+                if !self.lock.0.get() {
                     panic!();
                 }
-                self.lock.set(false);
+                self.lock.0.set(false);
             }
         }
         struct LockingSource {
@@ -828,6 +849,65 @@ mod tests {
             fn before_handle_events(&mut self, _: bool) {
                 self.lock.unlock();
             }
+        }
+    }
+    #[test]
+    fn default_additional_events() {
+        let (sender, channel) = channel();
+        let mut test_source = NoopWithDefaultHandlers { channel };
+        let mut event_loop = EventLoop::try_new().unwrap();
+        event_loop
+            .handle()
+            .insert_source(Box::new(&mut test_source), |_, _, _| {})
+            .unwrap();
+        sender.send(()).unwrap();
+
+        event_loop.dispatch(None, &mut ()).unwrap();
+        struct NoopWithDefaultHandlers {
+            channel: Channel<()>,
+        }
+        impl EventSource for NoopWithDefaultHandlers {
+            type Event = <Channel<()> as EventSource>::Event;
+
+            type Metadata = <Channel<()> as EventSource>::Metadata;
+
+            type Ret = <Channel<()> as EventSource>::Ret;
+
+            type Error = <Channel<()> as EventSource>::Error;
+
+            fn process_events<F>(
+                &mut self,
+                readiness: Readiness,
+                token: Token,
+                callback: F,
+            ) -> Result<PostAction, Self::Error>
+            where
+                F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+            {
+                self.channel.process_events(readiness, token, callback)
+            }
+
+            fn register(
+                &mut self,
+                poll: &mut Poll,
+                token_factory: &mut TokenFactory,
+            ) -> crate::Result<()> {
+                self.channel.register(poll, token_factory)
+            }
+
+            fn reregister(
+                &mut self,
+                poll: &mut Poll,
+                token_factory: &mut TokenFactory,
+            ) -> crate::Result<()> {
+                self.channel.reregister(poll, token_factory)
+            }
+
+            fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
+                self.channel.unregister(poll)
+            }
+
+            const NEEDS_EXTRA_LIFECYCLE_EVENTS: bool = true;
         }
     }
 
