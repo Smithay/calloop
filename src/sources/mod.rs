@@ -286,7 +286,7 @@ impl<T: EventSource> EventSource for &mut T {
 pub(crate) struct DispatcherInner<S, F> {
     source: S,
     callback: F,
-    needs_additional_lifetime_events: bool,
+    needs_additional_lifecycle_events: bool,
 }
 
 impl<Data, S, F> EventDispatcher<Data> for RefCell<DispatcherInner<S, F>>
@@ -314,13 +314,13 @@ where
     fn register(
         &self,
         poll: &mut Poll,
-        mut additional_lifetime_register: AdditionalLifetimeEventsRegister<'_>,
+        mut additional_lifecycle_register: AdditionalLifetimeEventsRegister<'_>,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<()> {
         let mut this = self.borrow_mut();
 
-        if this.needs_additional_lifetime_events {
-            additional_lifetime_register.register();
+        if this.needs_additional_lifecycle_events {
+            additional_lifecycle_register.register();
         }
         this.source.register(poll, token_factory)
     }
@@ -328,13 +328,13 @@ where
     fn reregister(
         &self,
         poll: &mut Poll,
-        mut additional_lifetime_register: AdditionalLifetimeEventsRegister<'_>,
+        mut additional_lifecycle_register: AdditionalLifetimeEventsRegister<'_>,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<bool> {
         if let Ok(mut me) = self.try_borrow_mut() {
             me.source.reregister(poll, token_factory)?;
-            if me.needs_additional_lifetime_events {
-                additional_lifetime_register.register();
+            if me.needs_additional_lifecycle_events {
+                additional_lifecycle_register.register();
             }
             Ok(true)
         } else {
@@ -345,12 +345,12 @@ where
     fn unregister(
         &self,
         poll: &mut Poll,
-        mut additional_lifetime_register: AdditionalLifetimeEventsRegister<'_>,
+        mut additional_lifecycle_register: AdditionalLifetimeEventsRegister<'_>,
     ) -> crate::Result<bool> {
         if let Ok(mut me) = self.try_borrow_mut() {
             me.source.unregister(poll)?;
-            if me.needs_additional_lifetime_events {
-                additional_lifetime_register.unregister();
+            if me.needs_additional_lifecycle_events {
+                additional_lifecycle_register.unregister();
             }
             Ok(true)
         } else {
@@ -382,21 +382,21 @@ pub(crate) trait EventDispatcher<Data> {
     fn register(
         &self,
         poll: &mut Poll,
-        additional_lifetime_register: AdditionalLifetimeEventsRegister<'_>,
+        additional_lifecycle_register: AdditionalLifetimeEventsRegister<'_>,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<()>;
 
     fn reregister(
         &self,
         poll: &mut Poll,
-        additional_lifetime_register: AdditionalLifetimeEventsRegister<'_>,
+        additional_lifecycle_register: AdditionalLifetimeEventsRegister<'_>,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<bool>;
 
     fn unregister(
         &self,
         poll: &mut Poll,
-        additional_lifetime_register: AdditionalLifetimeEventsRegister<'_>,
+        additional_lifecycle_register: AdditionalLifetimeEventsRegister<'_>,
     ) -> crate::Result<bool>;
 
     fn before_sleep(&self) -> crate::Result<Option<(Readiness, Token)>>;
@@ -404,7 +404,11 @@ pub(crate) trait EventDispatcher<Data> {
 }
 
 #[derive(Default)]
+/// The list of events
 pub(crate) struct AdditionalLifetimeEventsSet {
+    /// The list of events. The boolean indicates whether the source had an event
+    /// - this is stored in this list because we need to know this value for each
+    /// item at once - that is, to avoid allocating in the hot loop
     pub(crate) values: RefCell<Vec<(RegistrationToken, bool)>>,
 }
 
@@ -417,6 +421,9 @@ impl AdditionalLifetimeEventsSet {
     }
 }
 
+/// To ensure that registering the events which need additional lifecycle events
+/// happens correctly, we do this within the implementations of `EventDispatcher`
+/// `AdditionalLifetimeEventsRegister` is a helper type to centralise this logic
 pub(crate) struct AdditionalLifetimeEventsRegister<'a> {
     set: &'a AdditionalLifetimeEventsSet,
     token: RegistrationToken,
@@ -497,7 +504,7 @@ where
         Dispatcher(Rc::new(RefCell::new(DispatcherInner {
             source,
             callback,
-            needs_additional_lifetime_events: S::NEEDS_EXTRA_LIFECYCLE_EVENTS,
+            needs_additional_lifecycle_events: S::NEEDS_EXTRA_LIFECYCLE_EVENTS,
         })))
     }
 

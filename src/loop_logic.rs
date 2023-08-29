@@ -58,7 +58,7 @@ pub struct RegistrationToken {
 pub(crate) struct LoopInner<'l, Data> {
     pub(crate) poll: RefCell<Poll>,
     pub(crate) sources: RefCell<Slab<Rc<dyn EventDispatcher<Data> + 'l>>>,
-    pub(crate) sources_with_additional_lifetime_events: AdditionalLifetimeEventsSet,
+    pub(crate) sources_with_additional_lifecycle_events: AdditionalLifetimeEventsSet,
     idles: RefCell<Vec<IdleCallback<'l, Data>>>,
     pending_action: Cell<PostAction>,
 }
@@ -141,7 +141,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
         let ret = sources.get(key).unwrap().register(
             &mut poll,
             self.inner
-                .sources_with_additional_lifetime_events
+                .sources_with_additional_lifecycle_events
                 .create_register_for_token(RegistrationToken { key }),
             &mut TokenFactory::new(key),
         );
@@ -179,7 +179,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
             source.register(
                 &mut self.inner.poll.borrow_mut(),
                 self.inner
-                    .sources_with_additional_lifetime_events
+                    .sources_with_additional_lifecycle_events
                     .create_register_for_token(*token),
                 &mut TokenFactory::new(token.key),
             )?;
@@ -196,7 +196,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
             if !source.reregister(
                 &mut self.inner.poll.borrow_mut(),
                 self.inner
-                    .sources_with_additional_lifetime_events
+                    .sources_with_additional_lifecycle_events
                     .create_register_for_token(*token),
                 &mut TokenFactory::new(token.key),
             )? {
@@ -215,7 +215,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
             if !source.unregister(
                 &mut self.inner.poll.borrow_mut(),
                 self.inner
-                    .sources_with_additional_lifetime_events
+                    .sources_with_additional_lifecycle_events
                     .create_register_for_token(*token),
             )? {
                 // we are in a callback, store for later processing
@@ -231,7 +231,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
             if let Err(e) = source.unregister(
                 &mut self.inner.poll.borrow_mut(),
                 self.inner
-                    .sources_with_additional_lifetime_events
+                    .sources_with_additional_lifecycle_events
                     .create_register_for_token(token),
             ) {
                 log::warn!(
@@ -293,7 +293,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                 sources: RefCell::new(Slab::new()),
                 idles: RefCell::new(Vec::new()),
                 pending_action: Cell::new(PostAction::Continue),
-                sources_with_additional_lifetime_events: Default::default(),
+                sources_with_additional_lifecycle_events: Default::default(),
             }),
         };
 
@@ -323,7 +323,7 @@ impl<'l, Data> EventLoop<'l, Data> {
             let mut extra_lifecycle_sources = self
                 .handle
                 .inner
-                .sources_with_additional_lifetime_events
+                .sources_with_additional_lifecycle_events
                 .values
                 .borrow_mut();
             let sources = &self.handle.inner.sources.borrow();
@@ -366,7 +366,7 @@ impl<'l, Data> EventLoop<'l, Data> {
             let mut extra_lifecycle_sources = self
                 .handle
                 .inner
-                .sources_with_additional_lifetime_events
+                .sources_with_additional_lifecycle_events
                 .values
                 .borrow_mut();
             if !extra_lifecycle_sources.is_empty() {
@@ -416,7 +416,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                             &mut self.handle.inner.poll.borrow_mut(),
                             self.handle
                                 .inner
-                                .sources_with_additional_lifetime_events
+                                .sources_with_additional_lifecycle_events
                                 .create_register_for_token(RegistrationToken {
                                     key: registroken_token,
                                 }),
@@ -428,7 +428,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                             &mut self.handle.inner.poll.borrow_mut(),
                             self.handle
                                 .inner
-                                .sources_with_additional_lifetime_events
+                                .sources_with_additional_lifecycle_events
                                 .create_register_for_token(RegistrationToken {
                                     key: registroken_token,
                                 }),
@@ -458,7 +458,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                         &mut poll,
                         self.handle
                             .inner
-                            .sources_with_additional_lifetime_events
+                            .sources_with_additional_lifecycle_events
                             .create_register_for_token(RegistrationToken {
                                 key: registroken_token,
                             }),
