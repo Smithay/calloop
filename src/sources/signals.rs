@@ -11,6 +11,7 @@
 //! they'll inherit their parent signal mask.
 
 use std::convert::TryFrom;
+use std::io::Error as IoError;
 use std::os::raw::c_int;
 
 use nix::sys::signal::SigSet;
@@ -55,9 +56,10 @@ impl Signals {
         }
 
         // Mask the signals for this thread
-        mask.thread_block()?;
+        mask.thread_block().map_err(IoError::from)?;
         // Create the SignalFd
-        let sfd = SignalFd::with_flags(&mask, SfdFlags::SFD_NONBLOCK | SfdFlags::SFD_CLOEXEC)?;
+        let sfd = SignalFd::with_flags(&mask, SfdFlags::SFD_NONBLOCK | SfdFlags::SFD_CLOEXEC)
+            .map_err(IoError::from)?;
 
         Ok(Signals {
             sfd: Generic::new(unsafe { FdWrapper::new(sfd) }, Interest::READ, Mode::Level),
@@ -73,8 +75,8 @@ impl Signals {
         for &s in signals {
             self.mask.add(s);
         }
-        self.mask.thread_block()?;
-        self.sfd.file.set_mask(&self.mask)?;
+        self.mask.thread_block().map_err(IoError::from)?;
+        self.sfd.file.set_mask(&self.mask).map_err(IoError::from)?;
         Ok(())
     }
 
@@ -88,8 +90,8 @@ impl Signals {
             self.mask.remove(s);
             removed.add(s);
         }
-        removed.thread_unblock()?;
-        self.sfd.file.set_mask(&self.mask)?;
+        removed.thread_unblock().map_err(IoError::from)?;
+        self.sfd.file.set_mask(&self.mask).map_err(IoError::from)?;
         Ok(())
     }
 
@@ -103,9 +105,9 @@ impl Signals {
             new_mask.add(s);
         }
 
-        self.mask.thread_unblock()?;
-        new_mask.thread_block()?;
-        self.sfd.file.set_mask(&new_mask)?;
+        self.mask.thread_unblock().map_err(IoError::from)?;
+        new_mask.thread_block().map_err(IoError::from)?;
+        self.sfd.file.set_mask(&new_mask).map_err(IoError::from)?;
         self.mask = new_mask;
 
         Ok(())

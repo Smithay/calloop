@@ -10,7 +10,7 @@ keywords = [ "events", "loop", "callback", "eventloop", "unix" ]
 autotests = false
 edition = "2018"
 readme = "README.md"
-rust-version = "1.56.0"
+rust-version = "1.63.0"
 
 [workspace]
 members = [ "doc" ]
@@ -19,24 +19,27 @@ members = [ "doc" ]
 codecov = { repository = "Smithay/calloop" }
 
 [dependencies]
+async-task = { version = "4.4.0", optional = true }
 bitflags = "1.2"
+futures-io = { version = "0.3.5", optional = true }
 io-lifetimes = "1.0.3"
 log = "0.4"
-nix = { version = "0.26", default-features = false, features = ["event", "fs", "signal", "socket", "time"] }
-async-task = { version = "4.4.0", optional = true }
-futures-io = { version = "0.3.5", optional = true }
-thiserror = "1.0"
+nix = { version = "0.26", default-features = false, features = ["signal"], optional = true }
 pin-utils = { version = "0.1.0", optional = true }
-slab = "0.4.8"
 polling = "2.6.0"
+rustix = { version = "0.38", default-features = false, features = ["event", "fs", "pipe", "std"] }
+slab = "0.4.8"
+thiserror = "1.0"
 
 [dev-dependencies]
 futures = "0.3.5"
+rustix = { version = "0.38", default-features = false, features = ["net"] }
 
 [features]
 block_on = ["pin-utils"]
 executor = ["async-task"]
 nightly_coverage = []
+signals = ["nix"]
 
 [package.metadata.docs.rs]
 features = ["block_on", "executor"]

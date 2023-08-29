@@ -1,7 +1,7 @@
 // These tests cannot run as a regular test because cargo would spawn a thread to run it,
 // failing the signal masking. So we make our own, non-threaded harnessing
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "signals"))]
 fn main() {
     for test in self::test::TESTS {
         test();
@@ -10,10 +10,10 @@ fn main() {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(all(target_os = "linux", feature = "signals")))]
 fn main() {}
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "signals"))]
 mod test {
     extern crate calloop;
     extern crate nix;

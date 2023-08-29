@@ -13,7 +13,7 @@ use std::rc::Rc;
 use std::task::{Context, Poll as TaskPoll, Waker};
 
 use io_lifetimes::{AsFd, BorrowedFd};
-use nix::fcntl::{fcntl, FcntlArg, OFlag};
+use rustix::fs::{fcntl_getfl, fcntl_setfl, OFlags};
 
 #[cfg(feature = "futures-io")]
 use futures_io::{AsyncRead, AsyncWrite, IoSlice, IoSliceMut};
@@ -37,7 +37,7 @@ pub struct Async<'l, F: AsFd> {
     fd: Option<F>,
     dispatcher: Rc<RefCell<IoDispatcher>>,
     inner: Rc<dyn IoLoopInner + 'l>,
-    old_flags: OFlag,
+    old_flags: OFlags,
 }
 
 impl<'l, F: AsFd + std::fmt::Debug> std::fmt::Debug for Async<'l, F> {
@@ -49,11 +49,9 @@ impl<'l, F: AsFd + std::fmt::Debug> std::fmt::Debug for Async<'l, F> {
 
 impl<'l, F: AsFd> Async<'l, F> {
     pub(crate) fn new<Data>(inner: Rc<LoopInner<'l, Data>>, fd: F) -> crate::Result<Async<'l, F>> {
-        let rawfd = fd.as_fd().as_raw_fd();
         // set non-blocking
-        let old_flags = fcntl(rawfd, FcntlArg::F_GETFL)?;
-        let old_flags = unsafe { OFlag::from_bits_unchecked(old_flags) };
-        fcntl(rawfd, FcntlArg::F_SETFL(old_flags | OFlag::O_NONBLOCK))?;
+        let old_flags = fcntl_getfl(&fd).map_err(std::io::Error::from)?;
+        fcntl_setfl(&fd, old_flags | OFlags::NONBLOCK).map_err(std::io::Error::from)?;
         // register in the loop
         let dispatcher = Rc::new(RefCell::new(IoDispatcher {
             fd: fd.as_fd().as_raw_fd(),
@@ -158,9 +156,9 @@ impl<'l, F: AsFd> Drop for Async<'l, F> {
     fn drop(&mut self) {
         self.inner.kill(&self.dispatcher);
         // restore flags
-        let _ = fcntl(
-            self.dispatcher.borrow().fd,
-            FcntlArg::F_SETFL(self.old_flags),
+        let _ = fcntl_setfl(
+            unsafe { BorrowedFd::borrow_raw(self.dispatcher.borrow().fd) },
+            self.old_flags,
         );
     }
 }
