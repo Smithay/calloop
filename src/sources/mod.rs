@@ -414,7 +414,7 @@ pub(crate) struct AdditionalLifetimeEventsSet {
     pub(crate) values: RefCell<Vec<(RegistrationToken, bool)>>,
 }
 
-impl<'a> AdditionalLifetimeEventsSet {
+impl AdditionalLifetimeEventsSet {
     fn register(&self, token: RegistrationToken) {
         self.values.borrow_mut().push((token, false))
     }
