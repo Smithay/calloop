@@ -18,12 +18,12 @@ use rustix::fs::{fcntl_getfl, fcntl_setfl, OFlags};
 #[cfg(feature = "futures-io")]
 use futures_io::{AsyncRead, AsyncWrite, IoSlice, IoSliceMut};
 
-use crate::AdditionalLifetimeEventsRegister;
 use crate::{
     loop_logic::{LoopInner, MAX_SOURCES_MASK},
     sources::EventDispatcher,
     Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory,
 };
+use crate::{AdditionalLifetimeEventsSet, RegistrationToken};
 
 /// Adapter for async IO manipulations
 ///
@@ -241,7 +241,7 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
     fn register(
         &self,
         _: &mut Poll,
-        _: AdditionalLifetimeEventsRegister<'_>,
+        _: &AdditionalLifetimeEventsSet,
         _: &mut TokenFactory,
     ) -> crate::Result<()> {
         // registration is handled by IoLoopInner
@@ -251,7 +251,7 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
     fn reregister(
         &self,
         _: &mut Poll,
-        _: AdditionalLifetimeEventsRegister<'_>,
+        _: &AdditionalLifetimeEventsSet,
         _: &mut TokenFactory,
     ) -> crate::Result<bool> {
         // registration is handled by IoLoopInner
@@ -261,7 +261,8 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
     fn unregister(
         &self,
         poll: &mut Poll,
-        _: AdditionalLifetimeEventsRegister<'_>,
+        _: &AdditionalLifetimeEventsSet,
+        _: RegistrationToken,
     ) -> crate::Result<bool> {
         let disp = self.borrow();
         if disp.is_registered {

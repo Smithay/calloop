@@ -314,13 +314,13 @@ where
     fn register(
         &self,
         poll: &mut Poll,
-        mut additional_lifecycle_register: AdditionalLifetimeEventsRegister<'_>,
+        additional_lifecycle_register: &AdditionalLifetimeEventsSet,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<()> {
         let mut this = self.borrow_mut();
 
         if this.needs_additional_lifecycle_events {
-            additional_lifecycle_register.register();
+            additional_lifecycle_register.register(token_factory.registration_token());
         }
         this.source.register(poll, token_factory)
     }
@@ -328,13 +328,13 @@ where
     fn reregister(
         &self,
         poll: &mut Poll,
-        mut additional_lifecycle_register: AdditionalLifetimeEventsRegister<'_>,
+        additional_lifecycle_register: &AdditionalLifetimeEventsSet,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<bool> {
         if let Ok(mut me) = self.try_borrow_mut() {
             me.source.reregister(poll, token_factory)?;
             if me.needs_additional_lifecycle_events {
-                additional_lifecycle_register.register();
+                additional_lifecycle_register.register(token_factory.registration_token());
             }
             Ok(true)
         } else {
@@ -345,12 +345,13 @@ where
     fn unregister(
         &self,
         poll: &mut Poll,
-        mut additional_lifecycle_register: AdditionalLifetimeEventsRegister<'_>,
+        additional_lifecycle_register: &AdditionalLifetimeEventsSet,
+        registration_token: RegistrationToken,
     ) -> crate::Result<bool> {
         if let Ok(mut me) = self.try_borrow_mut() {
             me.source.unregister(poll)?;
             if me.needs_additional_lifecycle_events {
-                additional_lifecycle_register.unregister();
+                additional_lifecycle_register.unregister(registration_token);
             }
             Ok(true)
         } else {
@@ -382,21 +383,22 @@ pub(crate) trait EventDispatcher<Data> {
     fn register(
         &self,
         poll: &mut Poll,
-        additional_lifecycle_register: AdditionalLifetimeEventsRegister<'_>,
+        additional_lifecycle_register: &AdditionalLifetimeEventsSet,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<()>;
 
     fn reregister(
         &self,
         poll: &mut Poll,
-        additional_lifecycle_register: AdditionalLifetimeEventsRegister<'_>,
+        additional_lifecycle_register: &AdditionalLifetimeEventsSet,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<bool>;
 
     fn unregister(
         &self,
         poll: &mut Poll,
-        additional_lifecycle_register: AdditionalLifetimeEventsRegister<'_>,
+        additional_lifecycle_register: &AdditionalLifetimeEventsSet,
+        registration_token: RegistrationToken,
     ) -> crate::Result<bool>;
 
     fn before_sleep(&self) -> crate::Result<Option<(Readiness, Token)>>;
@@ -412,30 +414,15 @@ pub(crate) struct AdditionalLifetimeEventsSet {
     pub(crate) values: RefCell<Vec<(RegistrationToken, bool)>>,
 }
 
-impl AdditionalLifetimeEventsSet {
-    pub(crate) fn create_register_for_token(
-        &self,
-        token: RegistrationToken,
-    ) -> AdditionalLifetimeEventsRegister {
-        AdditionalLifetimeEventsRegister { set: self, token }
-    }
-}
-
-/// To ensure that registering the events which need additional lifecycle events
-/// happens correctly, we do this within the implementations of `EventDispatcher`
-/// `AdditionalLifetimeEventsRegister` is a helper type to centralise this logic
-pub(crate) struct AdditionalLifetimeEventsRegister<'a> {
-    set: &'a AdditionalLifetimeEventsSet,
-    token: RegistrationToken,
-}
-
-impl<'a> AdditionalLifetimeEventsRegister<'a> {
-    fn register(&mut self) {
-        self.set.values.borrow_mut().push((self.token, false))
+impl<'a> AdditionalLifetimeEventsSet {
+    fn register(&self, token: RegistrationToken) {
+        self.values.borrow_mut().push((token, false))
     }
 
-    fn unregister(&mut self) {
-        self.set.values.borrow_mut().retain(|it| it.0 != self.token)
+    fn unregister(&self, token: RegistrationToken) {
+        self.values
+            .borrow_mut()
+            .retain(|it: &(RegistrationToken, bool)| it.0 != token)
     }
 }
 

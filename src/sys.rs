@@ -16,6 +16,7 @@ use polling::{Event, PollMode, Poller};
 
 use crate::loop_logic::{MAX_SOURCES, MAX_SUBSOURCES_TOTAL};
 use crate::sources::timer::TimerWheel;
+use crate::RegistrationToken;
 
 /// Possible modes for registering a file descriptor
 #[derive(Copy, Clone, Debug)]
@@ -126,7 +127,7 @@ pub(crate) struct PollEvent {
 #[derive(Debug)]
 pub struct TokenFactory {
     /// The key of the source this factory is associated with.
-    pub(crate) key: usize,
+    key: usize,
 
     /// The next sub-id to use.
     sub_id: u32,
@@ -135,6 +136,11 @@ pub struct TokenFactory {
 impl TokenFactory {
     pub(crate) fn new(key: usize) -> TokenFactory {
         TokenFactory { key, sub_id: 0 }
+    }
+
+    /// Get the "raw" registration token of this TokenFactory
+    pub(crate) fn registration_token(&self) -> RegistrationToken {
+        RegistrationToken::new(self.key)
     }
 
     /// Produce a new unique token
