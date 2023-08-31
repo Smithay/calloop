@@ -15,7 +15,7 @@ use slab::Slab;
 use crate::sources::{Dispatcher, EventSource, Idle, IdleDispatcher};
 use crate::sys::{Notifier, PollEvent};
 use crate::{
-    AdditionalLifetimeEventsSet, EventDispatcher, InsertError, Poll, PostAction, TokenFactory,
+    AdditionalLifecycleEventsSet, EventDispatcher, InsertError, Poll, PostAction, TokenFactory,
 };
 
 type IdleCallback<'i, Data> = Rc<RefCell<dyn IdleDispatcher<Data> + 'i>>;
@@ -67,7 +67,7 @@ impl RegistrationToken {
 pub(crate) struct LoopInner<'l, Data> {
     pub(crate) poll: RefCell<Poll>,
     pub(crate) sources: RefCell<Slab<Rc<dyn EventDispatcher<Data> + 'l>>>,
-    pub(crate) sources_with_additional_lifecycle_events: AdditionalLifetimeEventsSet,
+    pub(crate) sources_with_additional_lifecycle_events: RefCell<AdditionalLifecycleEventsSet>,
     idles: RefCell<Vec<IdleCallback<'l, Data>>>,
     pending_action: Cell<PostAction>,
 }
@@ -149,7 +149,10 @@ impl<'l, Data> LoopHandle<'l, Data> {
         let key = sources.insert(dispatcher.clone_as_event_dispatcher());
         let ret = sources.get(key).unwrap().register(
             &mut poll,
-            &self.inner.sources_with_additional_lifecycle_events,
+            &mut self
+                .inner
+                .sources_with_additional_lifecycle_events
+                .borrow_mut(),
             &mut TokenFactory::new(key),
         );
 
@@ -185,7 +188,10 @@ impl<'l, Data> LoopHandle<'l, Data> {
         if let Some(source) = self.inner.sources.borrow().get(token.key) {
             source.register(
                 &mut self.inner.poll.borrow_mut(),
-                &self.inner.sources_with_additional_lifecycle_events,
+                &mut self
+                    .inner
+                    .sources_with_additional_lifecycle_events
+                    .borrow_mut(),
                 &mut TokenFactory::new(token.key),
             )?;
         }
@@ -200,7 +206,10 @@ impl<'l, Data> LoopHandle<'l, Data> {
         if let Some(source) = self.inner.sources.borrow().get(token.key) {
             if !source.reregister(
                 &mut self.inner.poll.borrow_mut(),
-                &self.inner.sources_with_additional_lifecycle_events,
+                &mut self
+                    .inner
+                    .sources_with_additional_lifecycle_events
+                    .borrow_mut(),
                 &mut TokenFactory::new(token.key),
             )? {
                 // we are in a callback, store for later processing
@@ -217,7 +226,10 @@ impl<'l, Data> LoopHandle<'l, Data> {
         if let Some(source) = self.inner.sources.borrow().get(token.key) {
             if !source.unregister(
                 &mut self.inner.poll.borrow_mut(),
-                &self.inner.sources_with_additional_lifecycle_events,
+                &mut self
+                    .inner
+                    .sources_with_additional_lifecycle_events
+                    .borrow_mut(),
                 *token,
             )? {
                 // we are in a callback, store for later processing
@@ -232,7 +244,10 @@ impl<'l, Data> LoopHandle<'l, Data> {
         if let Some(source) = self.inner.sources.borrow_mut().try_remove(token.key) {
             if let Err(e) = source.unregister(
                 &mut self.inner.poll.borrow_mut(),
-                &self.inner.sources_with_additional_lifecycle_events,
+                &mut self
+                    .inner
+                    .sources_with_additional_lifecycle_events
+                    .borrow_mut(),
                 token,
             ) {
                 log::warn!(
@@ -325,10 +340,9 @@ impl<'l, Data> EventLoop<'l, Data> {
                 .handle
                 .inner
                 .sources_with_additional_lifecycle_events
-                .values
                 .borrow_mut();
             let sources = &self.handle.inner.sources.borrow();
-            for (source, has_event) in &mut *extra_lifecycle_sources {
+            for (source, has_event) in &mut *extra_lifecycle_sources.values {
                 *has_event = false;
                 if let Some(disp) = sources.get(source.key) {
                     if let Some((readiness, token)) = disp.before_sleep()? {
@@ -368,16 +382,15 @@ impl<'l, Data> EventLoop<'l, Data> {
                 .handle
                 .inner
                 .sources_with_additional_lifecycle_events
-                .values
                 .borrow_mut();
-            if !extra_lifecycle_sources.is_empty() {
-                for (source, has_event) in &mut *extra_lifecycle_sources {
+            if !extra_lifecycle_sources.values.is_empty() {
+                for (source, has_event) in &mut *extra_lifecycle_sources.values {
                     for event in &events {
                         *has_event |= (event.token.key & MAX_SOURCES_MASK) == source.key;
                     }
                 }
             }
-            for (source, has_event) in &*extra_lifecycle_sources {
+            for (source, has_event) in &*extra_lifecycle_sources.values {
                 if let Some(disp) = self.handle.inner.sources.borrow().get(source.key) {
                     disp.before_handle_events(*has_event);
                 } else {
@@ -415,14 +428,22 @@ impl<'l, Data> EventLoop<'l, Data> {
                     PostAction::Reregister => {
                         disp.reregister(
                             &mut self.handle.inner.poll.borrow_mut(),
-                            &self.handle.inner.sources_with_additional_lifecycle_events,
+                            &mut self
+                                .handle
+                                .inner
+                                .sources_with_additional_lifecycle_events
+                                .borrow_mut(),
                             &mut TokenFactory::new(event.token.key),
                         )?;
                     }
                     PostAction::Disable => {
                         disp.unregister(
                             &mut self.handle.inner.poll.borrow_mut(),
-                            &self.handle.inner.sources_with_additional_lifecycle_events,
+                            &mut self
+                                .handle
+                                .inner
+                                .sources_with_additional_lifecycle_events
+                                .borrow_mut(),
                             RegistrationToken::new(registroken_token),
                         )?;
                     }
@@ -448,7 +469,11 @@ impl<'l, Data> EventLoop<'l, Data> {
                     let mut poll = self.handle.inner.poll.borrow_mut();
                     if let Err(e) = disp.unregister(
                         &mut poll,
-                        &self.handle.inner.sources_with_additional_lifecycle_events,
+                        &mut self
+                            .handle
+                            .inner
+                            .sources_with_additional_lifecycle_events
+                            .borrow_mut(),
                         RegistrationToken::new(registroken_token),
                     ) {
                         log::warn!(

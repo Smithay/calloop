@@ -314,7 +314,7 @@ where
     fn register(
         &self,
         poll: &mut Poll,
-        additional_lifecycle_register: &AdditionalLifetimeEventsSet,
+        additional_lifecycle_register: &mut AdditionalLifecycleEventsSet,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<()> {
         let mut this = self.borrow_mut();
@@ -328,7 +328,7 @@ where
     fn reregister(
         &self,
         poll: &mut Poll,
-        additional_lifecycle_register: &AdditionalLifetimeEventsSet,
+        additional_lifecycle_register: &mut AdditionalLifecycleEventsSet,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<bool> {
         if let Ok(mut me) = self.try_borrow_mut() {
@@ -345,7 +345,7 @@ where
     fn unregister(
         &self,
         poll: &mut Poll,
-        additional_lifecycle_register: &AdditionalLifetimeEventsSet,
+        additional_lifecycle_register: &mut AdditionalLifecycleEventsSet,
         registration_token: RegistrationToken,
     ) -> crate::Result<bool> {
         if let Ok(mut me) = self.try_borrow_mut() {
@@ -383,21 +383,21 @@ pub(crate) trait EventDispatcher<Data> {
     fn register(
         &self,
         poll: &mut Poll,
-        additional_lifecycle_register: &AdditionalLifetimeEventsSet,
+        additional_lifecycle_register: &mut AdditionalLifecycleEventsSet,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<()>;
 
     fn reregister(
         &self,
         poll: &mut Poll,
-        additional_lifecycle_register: &AdditionalLifetimeEventsSet,
+        additional_lifecycle_register: &mut AdditionalLifecycleEventsSet,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<bool>;
 
     fn unregister(
         &self,
         poll: &mut Poll,
-        additional_lifecycle_register: &AdditionalLifetimeEventsSet,
+        additional_lifecycle_register: &mut AdditionalLifecycleEventsSet,
         registration_token: RegistrationToken,
     ) -> crate::Result<bool>;
 
@@ -407,21 +407,20 @@ pub(crate) trait EventDispatcher<Data> {
 
 #[derive(Default)]
 /// The list of events
-pub(crate) struct AdditionalLifetimeEventsSet {
+pub(crate) struct AdditionalLifecycleEventsSet {
     /// The list of events. The boolean indicates whether the source had an event
     /// - this is stored in this list because we need to know this value for each
     /// item at once - that is, to avoid allocating in the hot loop
-    pub(crate) values: RefCell<Vec<(RegistrationToken, bool)>>,
+    pub(crate) values: Vec<(RegistrationToken, bool)>,
 }
 
-impl AdditionalLifetimeEventsSet {
-    fn register(&self, token: RegistrationToken) {
-        self.values.borrow_mut().push((token, false))
+impl AdditionalLifecycleEventsSet {
+    fn register(&mut self, token: RegistrationToken) {
+        self.values.push((token, false))
     }
 
-    fn unregister(&self, token: RegistrationToken) {
+    fn unregister(&mut self, token: RegistrationToken) {
         self.values
-            .borrow_mut()
             .retain(|it: &(RegistrationToken, bool)| it.0 != token)
     }
 }

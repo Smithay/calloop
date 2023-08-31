@@ -23,7 +23,7 @@ use crate::{
     sources::EventDispatcher,
     Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory,
 };
-use crate::{AdditionalLifetimeEventsSet, RegistrationToken};
+use crate::{AdditionalLifecycleEventsSet, RegistrationToken};
 
 /// Adapter for async IO manipulations
 ///
@@ -241,7 +241,7 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
     fn register(
         &self,
         _: &mut Poll,
-        _: &AdditionalLifetimeEventsSet,
+        _: &mut AdditionalLifecycleEventsSet,
         _: &mut TokenFactory,
     ) -> crate::Result<()> {
         // registration is handled by IoLoopInner
@@ -251,7 +251,7 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
     fn reregister(
         &self,
         _: &mut Poll,
-        _: &AdditionalLifetimeEventsSet,
+        _: &mut AdditionalLifecycleEventsSet,
         _: &mut TokenFactory,
     ) -> crate::Result<bool> {
         // registration is handled by IoLoopInner
@@ -261,7 +261,7 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
     fn unregister(
         &self,
         poll: &mut Poll,
-        _: &AdditionalLifetimeEventsSet,
+        _: &mut AdditionalLifecycleEventsSet,
         _: RegistrationToken,
     ) -> crate::Result<bool> {
         let disp = self.borrow();
