@@ -4,6 +4,7 @@ use std::{
     rc::Rc,
 };
 
+pub use crate::loop_logic::EventIterator;
 use crate::{sys::TokenFactory, Poll, Readiness, RegistrationToken, Token};
 
 pub mod channel;
@@ -168,24 +169,34 @@ pub trait EventSource {
     /// and [`EventSource::before_handle_events`] notifications. These are opt-in because
     /// they require more expensive checks, and almost all sources will not need these notifications
     const NEEDS_EXTRA_LIFECYCLE_EVENTS: bool = false;
-    /// Notification that a single `poll` is about to begin.
-    /// If this returns Ok(Some), polling will shortcircuit, and
-    /// your event handler will be called with the returned Token and Readiness
+    /// Notification that a single `poll` is about to begin
     ///
     /// Use this to perform operations which must be done before polling,
     /// but which may conflict with other event handlers. For example,
-    /// if polling requires a lock to be taken.
+    /// if polling requires a lock to be taken
+    ///
+    /// If this returns Ok(Some), this will be treated as an event arriving in polling, and
+    /// your event handler will be called with the returned `Token` and `Readiness`.
+    /// Polling will however still occur, so additional events from this or other sources
+    /// may also be handled in the same loop.
+    /// The returned `Token` must belong to this source
+    // If you need to return multiple synthetic events from this notification, please
+    // open an issue
     fn before_sleep(&mut self) -> crate::Result<Option<(Readiness, Token)>> {
         Ok(None)
     }
-    /// Notification that polling is completed, and the resulting events are
-    /// going to be executed.
+    /// Notification that polling is complete, and [`EventSource::process_events`] will
+    /// be called with the given events for this source. The iterator may be empty,
+    /// which indicates that no events were generated for this source
+    ///
+    /// Please note, the iterator will also include any synthetic event returned from
+    /// [`EventSource::before_sleep`]
     ///
     /// Use this to perform a cleanup before event handlers with arbitrary
     /// code may run. This could be used to drop a lock obtained in
     /// [`EventSource::before_sleep`]
     #[allow(unused_variables)]
-    fn before_handle_events(&mut self, was_awoken: bool) {}
+    fn before_handle_events(&mut self, events: EventIterator<'_>) {}
 }
 
 /// Blanket implementation for boxed event sources. [`EventSource`] is not an
@@ -230,8 +241,8 @@ impl<T: EventSource> EventSource for Box<T> {
         T::before_sleep(&mut **self)
     }
 
-    fn before_handle_events(&mut self, was_awoken: bool) {
-        T::before_handle_events(&mut **self, was_awoken)
+    fn before_handle_events(&mut self, events: EventIterator) {
+        T::before_handle_events(&mut **self, events)
     }
 }
 
@@ -278,8 +289,8 @@ impl<T: EventSource> EventSource for &mut T {
         T::before_sleep(&mut **self)
     }
 
-    fn before_handle_events(&mut self, was_awoken: bool) {
-        T::before_handle_events(&mut **self, was_awoken)
+    fn before_handle_events(&mut self, events: EventIterator) {
+        T::before_handle_events(&mut **self, events)
     }
 }
 
@@ -365,10 +376,10 @@ where
         source.before_sleep()
     }
 
-    fn before_handle_events(&self, was_awoken: bool) {
+    fn before_handle_events(&self, events: EventIterator<'_>) {
         let mut disp = self.borrow_mut();
         let DispatcherInner { ref mut source, .. } = *disp;
-        source.before_handle_events(was_awoken);
+        source.before_handle_events(events);
     }
 }
 
@@ -402,26 +413,23 @@ pub(crate) trait EventDispatcher<Data> {
     ) -> crate::Result<bool>;
 
     fn before_sleep(&self) -> crate::Result<Option<(Readiness, Token)>>;
-    fn before_handle_events(&self, was_awoken: bool);
+    fn before_handle_events(&self, events: EventIterator<'_>);
 }
 
 #[derive(Default)]
 /// The list of events
 pub(crate) struct AdditionalLifecycleEventsSet {
-    /// The list of events. The boolean indicates whether the source had an event
-    /// - this is stored in this list because we need to know this value for each
-    /// item at once - that is, to avoid allocating in the hot loop
-    pub(crate) values: Vec<(RegistrationToken, bool)>,
+    /// The list of sources
+    pub(crate) values: Vec<RegistrationToken>,
 }
 
 impl AdditionalLifecycleEventsSet {
     fn register(&mut self, token: RegistrationToken) {
-        self.values.push((token, false))
+        self.values.push(token)
     }
 
     fn unregister(&mut self, token: RegistrationToken) {
-        self.values
-            .retain(|it: &(RegistrationToken, bool)| it.0 != token)
+        self.values.retain(|it| it != &token)
     }
 }
 

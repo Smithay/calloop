@@ -1,10 +1,11 @@
 use std::cell::{Cell, RefCell};
 use std::fmt::Debug;
-use std::io;
+use std::iter::Chain;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use std::{io, slice};
 
 #[cfg(feature = "block_on")]
 use std::future::Future;
@@ -15,7 +16,8 @@ use slab::Slab;
 use crate::sources::{Dispatcher, EventSource, Idle, IdleDispatcher};
 use crate::sys::{Notifier, PollEvent};
 use crate::{
-    AdditionalLifecycleEventsSet, EventDispatcher, InsertError, Poll, PostAction, TokenFactory,
+    AdditionalLifecycleEventsSet, EventDispatcher, InsertError, Poll, PostAction, Readiness, Token,
+    TokenFactory,
 };
 
 type IdleCallback<'i, Data> = Rc<RefCell<dyn IdleDispatcher<Data> + 'i>>;
@@ -342,8 +344,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                 .sources_with_additional_lifecycle_events
                 .borrow_mut();
             let sources = &self.handle.inner.sources.borrow();
-            for (source, has_event) in &mut *extra_lifecycle_sources.values {
-                *has_event = false;
+            for source in &mut *extra_lifecycle_sources.values {
                 if let Some(disp) = sources.get(source.key) {
                     if let Some((readiness, token)) = disp.before_sleep()? {
                         // Wake up instantly after polling if we recieved an event
@@ -384,17 +385,16 @@ impl<'l, Data> EventLoop<'l, Data> {
                 .sources_with_additional_lifecycle_events
                 .borrow_mut();
             if !extra_lifecycle_sources.values.is_empty() {
-                for (source, has_event) in &mut *extra_lifecycle_sources.values {
-                    for event in &events {
-                        *has_event |= (event.token.key & MAX_SOURCES_MASK) == source.key;
+                for source in &mut *extra_lifecycle_sources.values {
+                    if let Some(disp) = self.handle.inner.sources.borrow().get(source.key) {
+                        let iter = EventIterator {
+                            inner: self.synthetic_events.iter().chain(&events),
+                            registration_token: *source,
+                        };
+                        disp.before_handle_events(iter);
+                    } else {
+                        unreachable!()
                     }
-                }
-            }
-            for (source, has_event) in &*extra_lifecycle_sources.values {
-                if let Some(disp) = self.handle.inner.sources.borrow().get(source.key) {
-                    disp.before_handle_events(*has_event);
-                } else {
-                    unreachable!()
                 }
             }
         }
@@ -626,6 +626,31 @@ impl<'l, Data> EventLoop<'l, Data> {
     }
 }
 
+#[derive(Clone, Debug)]
+/// The EventIterator is an `Iterator` over the events relevant to a particular source
+/// This type is used in the [`EventSource::before_handle_events`] methods for
+/// two main reasons:
+/// - To avoid dynamic dispatch overhead
+/// - Secondly, it is to allow this type to be `Clone`, which is not
+/// possible with dynamic dispatch
+pub struct EventIterator<'a> {
+    inner: Chain<slice::Iter<'a, PollEvent>, slice::Iter<'a, PollEvent>>,
+    registration_token: RegistrationToken,
+}
+
+impl<'a> Iterator for EventIterator<'a> {
+    type Item = (Readiness, Token);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(next) = self.inner.next() {
+            if next.token.key & MAX_SOURCES_MASK == self.registration_token.key {
+                return Some((next.readiness, next.token));
+            }
+        }
+        None
+    }
+}
+
 /// A signal that can be shared between thread to stop or wakeup a running
 /// event loop
 #[derive(Clone)]
@@ -671,8 +696,8 @@ mod tests {
         channel::{channel, Channel},
         generic::Generic,
         ping::*,
-        Dispatcher, EventSource, Interest, Mode, Poll, PostAction, Readiness, RegistrationToken,
-        Token, TokenFactory,
+        Dispatcher, EventIterator, EventSource, Interest, Mode, Poll, PostAction, Readiness,
+        RegistrationToken, Token, TokenFactory,
     };
 
     use super::EventLoop;
@@ -859,7 +884,7 @@ mod tests {
                 Ok(None)
             }
 
-            fn before_handle_events(&mut self, _: bool) {
+            fn before_handle_events(&mut self, _: EventIterator) {
                 self.lock.unlock();
             }
         }
@@ -1015,7 +1040,7 @@ mod tests {
                 Ok(Some((Readiness::EMPTY, self.token.unwrap())))
             }
 
-            fn before_handle_events(&mut self, _: bool) {
+            fn before_handle_events(&mut self, _: EventIterator) {
                 self.lock.unlock();
             }
         }

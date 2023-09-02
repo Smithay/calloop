@@ -18,6 +18,7 @@ use rustix::fs::{fcntl_getfl, fcntl_setfl, OFlags};
 #[cfg(feature = "futures-io")]
 use futures_io::{AsyncRead, AsyncWrite, IoSlice, IoSliceMut};
 
+use crate::loop_logic::EventIterator;
 use crate::{
     loop_logic::{LoopInner, MAX_SOURCES_MASK},
     sources::EventDispatcher,
@@ -274,7 +275,7 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
     fn before_sleep(&self) -> crate::Result<Option<(Readiness, Token)>> {
         Ok(None)
     }
-    fn before_handle_events(&self, _: bool) {}
+    fn before_handle_events(&self, _: EventIterator<'_>) {}
 }
 
 /*
