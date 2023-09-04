@@ -177,8 +177,8 @@ pub trait EventSource {
     ///
     /// If this returns Ok(Some), this will be treated as an event arriving in polling, and
     /// your event handler will be called with the returned `Token` and `Readiness`.
-    /// Polling will however still occur, so additional events from this or other sources
-    /// may also be handled in the same loop.
+    /// Polling will however still occur, but with a timeout of 0, so additional events
+    /// from this or other sources may also be handled in the same iterations.
     /// The returned `Token` must belong to this source
     // If you need to return multiple synthetic events from this notification, please
     // open an issue
@@ -189,7 +189,7 @@ pub trait EventSource {
     /// be called with the given events for this source. The iterator may be empty,
     /// which indicates that no events were generated for this source
     ///
-    /// Please note, the iterator will also include any synthetic event returned from
+    /// Please note, the iterator excludes any synthetic events returned from
     /// [`EventSource::before_sleep`]
     ///
     /// Use this to perform a cleanup before event handlers with arbitrary

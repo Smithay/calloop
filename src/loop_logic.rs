@@ -388,7 +388,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                 for source in &mut *extra_lifecycle_sources.values {
                     if let Some(disp) = self.handle.inner.sources.borrow().get(source.key) {
                         let iter = EventIterator {
-                            inner: self.synthetic_events.iter().chain(&events),
+                            inner: self.synthetic_events.iter(),
                             registration_token: *source,
                         };
                         disp.before_handle_events(iter);
@@ -634,7 +634,7 @@ impl<'l, Data> EventLoop<'l, Data> {
 /// - Secondly, it is to allow this type to be `Clone`, which is not
 /// possible with dynamic dispatch
 pub struct EventIterator<'a> {
-    inner: Chain<slice::Iter<'a, PollEvent>, slice::Iter<'a, PollEvent>>,
+    inner: slice::Iter<'a, PollEvent>,
     registration_token: RegistrationToken,
 }
 
