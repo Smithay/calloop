@@ -1,6 +1,5 @@
 use std::cell::{Cell, RefCell};
 use std::fmt::Debug;
-use std::iter::Chain;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -642,7 +641,7 @@ impl<'a> Iterator for EventIterator<'a> {
     type Item = (Readiness, Token);
 
     fn next(&mut self) -> Option<Self::Item> {
-        while let Some(next) = self.inner.next() {
+        for next in self.inner.by_ref() {
             if next.token.key & MAX_SOURCES_MASK == self.registration_token.key {
                 return Some((next.readiness, next.token));
             }
