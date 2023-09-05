@@ -114,6 +114,13 @@ impl<T> ops::Deref for NoIoDrop<T> {
     }
 }
 
+impl<T: AsFd> AsFd for NoIoDrop<T> {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        // SAFETY: The innter type is not mutated.
+        self.0.as_fd()
+    }
+}
+
 /// A generic event source wrapping a FD-backed type
 #[derive(Debug)]
 pub struct Generic<F: AsFd, E = std::io::Error> {
@@ -305,7 +312,7 @@ mod tests {
                 // we have not registered for writability
                 assert!(!readiness.writable);
                 let mut buffer = vec![0; 10];
-                let ret = file.read(&mut buffer).unwrap();
+                let ret = (&**file).read(&mut buffer).unwrap();
                 assert_eq!(ret, 6);
                 assert_eq!(&buffer[..6], &[1, 2, 3, 4, 5, 6]);
 
@@ -380,7 +387,7 @@ mod tests {
                 // we have not registered for writability
                 assert!(!readiness.writable);
                 let mut buffer = vec![0; 10];
-                let ret = file.read(&mut buffer).unwrap();
+                let ret = (&**file).read(&mut buffer).unwrap();
                 assert_eq!(ret, 6);
                 assert_eq!(&buffer[..6], &[1, 2, 3, 4, 5, 6]);
 

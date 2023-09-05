@@ -12,7 +12,7 @@ use io_lifetimes::AsFd;
 #[cfg(windows)]
 use io_lifetimes::AsSocket;
 
-use polling::{Event, PollMode, Poller};
+use polling::{Event, Events, PollMode, Poller};
 
 use crate::loop_logic::{MAX_SOURCES, MAX_SUBSOURCES_TOTAL};
 use crate::sources::timer::TimerWheel;
@@ -183,7 +183,7 @@ pub struct Poll {
     poller: Arc<Poller>,
 
     /// The buffer of events returned by the poller.
-    events: RefCell<Vec<Event>>,
+    events: RefCell<Events>,
 
     /// The sources registered as level triggered.
     ///
@@ -221,7 +221,7 @@ impl Poll {
 
         Ok(Poll {
             poller: Arc::new(poller),
-            events: RefCell::new(Vec::new()),
+            events: RefCell::new(Events::new()),
             timers: Rc::new(RefCell::new(TimerWheel::new())),
             level_triggered,
         })
@@ -242,12 +242,13 @@ impl Poll {
         };
 
         let mut events = self.events.borrow_mut();
+        events.clear();
         self.poller.wait(&mut events, timeout)?;
 
         // Convert `polling` events to `calloop` events.
         let level_triggered = self.level_triggered.as_ref().map(RefCell::borrow);
         let mut poll_events = events
-            .drain(..)
+            .iter()
             .map(|ev| {
                 // If we need to emulate level-triggered events...
                 if let Some(level_triggered) = level_triggered.as_ref() {
@@ -438,11 +439,10 @@ impl Notifier {
 }
 
 fn cvt_interest(interest: Interest, tok: Token) -> Event {
-    Event {
-        readable: interest.readable,
-        writable: interest.writable,
-        key: tok.key,
-    }
+    let mut event = Event::none(tok.key);
+    event.readable = interest.readable;
+    event.writable = interest.writable;
+    event
 }
 
 fn cvt_mode(mode: Mode, supports_other_modes: bool) -> PollMode {

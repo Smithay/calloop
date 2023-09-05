@@ -79,7 +79,10 @@ impl Signals {
 
         // SAFETY: We don't drop the underlying mask.
         unsafe {
-            self.sfd.get_mut().set_mask(&self.mask).map_err(IoError::from)?;
+            self.sfd
+                .get_mut()
+                .set_mask(&self.mask)
+                .map_err(IoError::from)?;
         }
         Ok(())
     }
@@ -98,7 +101,10 @@ impl Signals {
 
         // SAFETY: We don't drop the underlying mask.
         unsafe {
-            self.sfd.get_mut().set_mask(&self.mask).map_err(IoError::from)?;
+            self.sfd
+                .get_mut()
+                .set_mask(&self.mask)
+                .map_err(IoError::from)?;
         }
         Ok(())
     }
@@ -118,7 +124,10 @@ impl Signals {
 
         // SAFETY: We don't drop the underlying mask.
         unsafe {
-            self.sfd.get_mut().set_mask(&new_mask).map_err(IoError::from)?;
+            self.sfd
+                .get_mut()
+                .set_mask(&new_mask)
+                .map_err(IoError::from)?;
         }
         self.mask = new_mask;
 
