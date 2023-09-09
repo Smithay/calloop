@@ -18,11 +18,13 @@ use rustix::fs::{fcntl_getfl, fcntl_setfl, OFlags};
 #[cfg(feature = "futures-io")]
 use futures_io::{AsyncRead, AsyncWrite, IoSlice, IoSliceMut};
 
+use crate::loop_logic::EventIterator;
 use crate::{
     loop_logic::{LoopInner, MAX_SOURCES_MASK},
     sources::EventDispatcher,
     Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory,
 };
+use crate::{AdditionalLifecycleEventsSet, RegistrationToken};
 
 /// Adapter for async IO manipulations
 ///
@@ -237,17 +239,32 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
         Ok(PostAction::Continue)
     }
 
-    fn register(&self, _: &mut Poll, _: &mut TokenFactory) -> crate::Result<()> {
+    fn register(
+        &self,
+        _: &mut Poll,
+        _: &mut AdditionalLifecycleEventsSet,
+        _: &mut TokenFactory,
+    ) -> crate::Result<()> {
         // registration is handled by IoLoopInner
         unreachable!()
     }
 
-    fn reregister(&self, _: &mut Poll, _: &mut TokenFactory) -> crate::Result<bool> {
+    fn reregister(
+        &self,
+        _: &mut Poll,
+        _: &mut AdditionalLifecycleEventsSet,
+        _: &mut TokenFactory,
+    ) -> crate::Result<bool> {
         // registration is handled by IoLoopInner
         unreachable!()
     }
 
-    fn unregister(&self, poll: &mut Poll) -> crate::Result<bool> {
+    fn unregister(
+        &self,
+        poll: &mut Poll,
+        _: &mut AdditionalLifecycleEventsSet,
+        _: RegistrationToken,
+    ) -> crate::Result<bool> {
         let disp = self.borrow();
         if disp.is_registered {
             poll.unregister(unsafe { BorrowedFd::borrow_raw(disp.fd) })?;
@@ -255,12 +272,10 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
         Ok(true)
     }
 
-    fn pre_run(&self, _data: &mut Data) -> crate::Result<()> {
-        Ok(())
+    fn before_sleep(&self) -> crate::Result<Option<(Readiness, Token)>> {
+        Ok(None)
     }
-    fn post_run(&self, _data: &mut Data) -> crate::Result<()> {
-        Ok(())
-    }
+    fn before_handle_events(&self, _: EventIterator<'_>) {}
 }
 
 /*

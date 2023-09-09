@@ -1,10 +1,10 @@
 use std::cell::{Cell, RefCell};
 use std::fmt::Debug;
-use std::io;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use std::{io, slice};
 
 #[cfg(feature = "block_on")]
 use std::future::Future;
@@ -13,8 +13,11 @@ use io_lifetimes::AsFd;
 use slab::Slab;
 
 use crate::sources::{Dispatcher, EventSource, Idle, IdleDispatcher};
-use crate::sys::Notifier;
-use crate::{EventDispatcher, InsertError, Poll, PostAction, TokenFactory};
+use crate::sys::{Notifier, PollEvent};
+use crate::{
+    AdditionalLifecycleEventsSet, EventDispatcher, InsertError, Poll, PostAction, Readiness, Token,
+    TokenFactory,
+};
 
 type IdleCallback<'i, Data> = Rc<RefCell<dyn IdleDispatcher<Data> + 'i>>;
 
@@ -53,9 +56,19 @@ pub struct RegistrationToken {
     key: usize,
 }
 
+impl RegistrationToken {
+    /// Create the RegistrationToken corresponding to the given raw key
+    /// This is needed because some methods use `RegistrationToken`s as
+    /// raw usizes within this crate
+    pub(crate) fn new(key: usize) -> Self {
+        Self { key }
+    }
+}
+
 pub(crate) struct LoopInner<'l, Data> {
     pub(crate) poll: RefCell<Poll>,
     pub(crate) sources: RefCell<Slab<Rc<dyn EventDispatcher<Data> + 'l>>>,
+    pub(crate) sources_with_additional_lifecycle_events: RefCell<AdditionalLifecycleEventsSet>,
     idles: RefCell<Vec<IdleCallback<'l, Data>>>,
     pending_action: Cell<PostAction>,
 }
@@ -135,10 +148,14 @@ impl<'l, Data> LoopHandle<'l, Data> {
         }
 
         let key = sources.insert(dispatcher.clone_as_event_dispatcher());
-        let ret = sources
-            .get(key)
-            .unwrap()
-            .register(&mut poll, &mut TokenFactory::new(key));
+        let ret = sources.get(key).unwrap().register(
+            &mut poll,
+            &mut self
+                .inner
+                .sources_with_additional_lifecycle_events
+                .borrow_mut(),
+            &mut TokenFactory::new(key),
+        );
 
         if let Err(error) = ret {
             sources.try_remove(key).expect("Source was just inserted?!");
@@ -172,6 +189,10 @@ impl<'l, Data> LoopHandle<'l, Data> {
         if let Some(source) = self.inner.sources.borrow().get(token.key) {
             source.register(
                 &mut self.inner.poll.borrow_mut(),
+                &mut self
+                    .inner
+                    .sources_with_additional_lifecycle_events
+                    .borrow_mut(),
                 &mut TokenFactory::new(token.key),
             )?;
         }
@@ -186,6 +207,10 @@ impl<'l, Data> LoopHandle<'l, Data> {
         if let Some(source) = self.inner.sources.borrow().get(token.key) {
             if !source.reregister(
                 &mut self.inner.poll.borrow_mut(),
+                &mut self
+                    .inner
+                    .sources_with_additional_lifecycle_events
+                    .borrow_mut(),
                 &mut TokenFactory::new(token.key),
             )? {
                 // we are in a callback, store for later processing
@@ -200,7 +225,14 @@ impl<'l, Data> LoopHandle<'l, Data> {
     /// The source remains in the event loop, but it'll no longer generate events
     pub fn disable(&self, token: &RegistrationToken) -> crate::Result<()> {
         if let Some(source) = self.inner.sources.borrow().get(token.key) {
-            if !source.unregister(&mut self.inner.poll.borrow_mut())? {
+            if !source.unregister(
+                &mut self.inner.poll.borrow_mut(),
+                &mut self
+                    .inner
+                    .sources_with_additional_lifecycle_events
+                    .borrow_mut(),
+                *token,
+            )? {
                 // we are in a callback, store for later processing
                 self.inner.pending_action.set(PostAction::Disable);
             }
@@ -211,7 +243,14 @@ impl<'l, Data> LoopHandle<'l, Data> {
     /// Removes this source from the event loop.
     pub fn remove(&self, token: RegistrationToken) {
         if let Some(source) = self.inner.sources.borrow_mut().try_remove(token.key) {
-            if let Err(e) = source.unregister(&mut self.inner.poll.borrow_mut()) {
+            if let Err(e) = source.unregister(
+                &mut self.inner.poll.borrow_mut(),
+                &mut self
+                    .inner
+                    .sources_with_additional_lifecycle_events
+                    .borrow_mut(),
+                token,
+            ) {
                 log::warn!(
                     "[calloop] Failed to unregister source from the polling system: {:?}",
                     e
@@ -238,6 +277,8 @@ impl<'l, Data> LoopHandle<'l, Data> {
 pub struct EventLoop<'l, Data> {
     handle: LoopHandle<'l, Data>,
     signals: Arc<Signals>,
+    // A caching vector for synthetic poll events
+    synthetic_events: Vec<PollEvent>,
 }
 
 impl<'l, Data> std::fmt::Debug for EventLoop<'l, Data> {
@@ -269,6 +310,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                 sources: RefCell::new(Slab::new()),
                 idles: RefCell::new(Vec::new()),
                 pending_action: Cell::new(PostAction::Continue),
+                sources_with_additional_lifecycle_events: Default::default(),
             }),
         };
 
@@ -279,6 +321,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                 #[cfg(feature = "block_on")]
                 future_ready: AtomicBool::new(false),
             }),
+            synthetic_events: vec![],
         })
     }
 
@@ -293,6 +336,25 @@ impl<'l, Data> EventLoop<'l, Data> {
         data: &mut Data,
     ) -> crate::Result<()> {
         let now = Instant::now();
+        {
+            let mut extra_lifecycle_sources = self
+                .handle
+                .inner
+                .sources_with_additional_lifecycle_events
+                .borrow_mut();
+            let sources = &self.handle.inner.sources.borrow();
+            for source in &mut *extra_lifecycle_sources.values {
+                if let Some(disp) = sources.get(source.key) {
+                    if let Some((readiness, token)) = disp.before_sleep()? {
+                        // Wake up instantly after polling if we recieved an event
+                        timeout = Some(Duration::ZERO);
+                        self.synthetic_events.push(PollEvent { readiness, token });
+                    }
+                } else {
+                    unreachable!()
+                }
+            }
+        }
         let events = {
             let poll = self.handle.inner.poll.borrow();
             loop {
@@ -315,8 +377,28 @@ impl<'l, Data> EventLoop<'l, Data> {
                 };
             }
         };
+        {
+            let mut extra_lifecycle_sources = self
+                .handle
+                .inner
+                .sources_with_additional_lifecycle_events
+                .borrow_mut();
+            if !extra_lifecycle_sources.values.is_empty() {
+                for source in &mut *extra_lifecycle_sources.values {
+                    if let Some(disp) = self.handle.inner.sources.borrow().get(source.key) {
+                        let iter = EventIterator {
+                            inner: self.synthetic_events.iter(),
+                            registration_token: *source,
+                        };
+                        disp.before_handle_events(iter);
+                    } else {
+                        unreachable!()
+                    }
+                }
+            }
+        }
 
-        for event in events {
+        for event in self.synthetic_events.drain(..).chain(events) {
             // Get the registration token associated with the event.
             let registroken_token = event.token.key & MAX_SOURCES_MASK;
 
@@ -345,11 +427,24 @@ impl<'l, Data> EventLoop<'l, Data> {
                     PostAction::Reregister => {
                         disp.reregister(
                             &mut self.handle.inner.poll.borrow_mut(),
+                            &mut self
+                                .handle
+                                .inner
+                                .sources_with_additional_lifecycle_events
+                                .borrow_mut(),
                             &mut TokenFactory::new(event.token.key),
                         )?;
                     }
                     PostAction::Disable => {
-                        disp.unregister(&mut self.handle.inner.poll.borrow_mut())?;
+                        disp.unregister(
+                            &mut self.handle.inner.poll.borrow_mut(),
+                            &mut self
+                                .handle
+                                .inner
+                                .sources_with_additional_lifecycle_events
+                                .borrow_mut(),
+                            RegistrationToken::new(registroken_token),
+                        )?;
                     }
                     PostAction::Remove => {
                         // delete the source from the list, it'll be cleaned up with the if just below
@@ -371,7 +466,15 @@ impl<'l, Data> EventLoop<'l, Data> {
                 {
                     // the source has been removed from within its callback, unregister it
                     let mut poll = self.handle.inner.poll.borrow_mut();
-                    if let Err(e) = disp.unregister(&mut poll) {
+                    if let Err(e) = disp.unregister(
+                        &mut poll,
+                        &mut self
+                            .handle
+                            .inner
+                            .sources_with_additional_lifecycle_events
+                            .borrow_mut(),
+                        RegistrationToken::new(registroken_token),
+                    ) {
                         log::warn!(
                             "[calloop] Failed to unregister source from the polling system: {:?}",
                             e
@@ -396,40 +499,6 @@ impl<'l, Data> EventLoop<'l, Data> {
         }
     }
 
-    fn invoke_pre_run(&self, data: &mut Data) -> crate::Result<()> {
-        let sources = self
-            .handle
-            .inner
-            .sources
-            .borrow()
-            .iter()
-            .map(|(_, source)| source.clone())
-            .collect::<Vec<_>>();
-
-        for source in sources {
-            source.pre_run(data)?;
-        }
-
-        Ok(())
-    }
-
-    fn invoke_post_run(&self, data: &mut Data) -> crate::Result<()> {
-        let sources = self
-            .handle
-            .inner
-            .sources
-            .borrow()
-            .iter()
-            .map(|(_, source)| source.clone())
-            .collect::<Vec<_>>();
-
-        for source in sources {
-            source.post_run(data)?;
-        }
-
-        Ok(())
-    }
-
     /// Dispatch pending events to their callbacks
     ///
     /// If some sources have events available, their callbacks will be immediatly called.
@@ -443,10 +512,8 @@ impl<'l, Data> EventLoop<'l, Data> {
         timeout: D,
         data: &mut Data,
     ) -> crate::Result<()> {
-        self.invoke_pre_run(data)?;
         self.dispatch_events(timeout.into(), data)?;
         self.dispatch_idles(data);
-        self.invoke_post_run(data)?;
 
         Ok(())
     }
@@ -481,13 +548,10 @@ impl<'l, Data> EventLoop<'l, Data> {
     {
         let timeout = timeout.into();
         self.signals.stop.store(false, Ordering::Release);
-        self.invoke_pre_run(data)?;
         while !self.signals.stop.load(Ordering::Acquire) {
-            self.dispatch_events(timeout, data)?;
-            self.dispatch_idles(data);
+            self.dispatch(timeout, data)?;
             cb(data);
         }
-        self.invoke_post_run(data)?;
         Ok(())
     }
 
@@ -541,8 +605,6 @@ impl<'l, Data> EventLoop<'l, Data> {
         self.signals.stop.store(false, Ordering::Release);
         self.signals.future_ready.store(true, Ordering::Release);
 
-        self.invoke_pre_run(data)?;
-
         while !self.signals.stop.load(Ordering::Acquire) {
             // If the future is ready to be polled, poll it.
             if self.signals.future_ready.swap(false, Ordering::AcqRel) {
@@ -559,8 +621,32 @@ impl<'l, Data> EventLoop<'l, Data> {
             cb(data);
         }
 
-        self.invoke_post_run(data)?;
         Ok(output)
+    }
+}
+
+#[derive(Clone, Debug)]
+/// The EventIterator is an `Iterator` over the events relevant to a particular source
+/// This type is used in the [`EventSource::before_handle_events`] methods for
+/// two main reasons:
+/// - To avoid dynamic dispatch overhead
+/// - Secondly, it is to allow this type to be `Clone`, which is not
+/// possible with dynamic dispatch
+pub struct EventIterator<'a> {
+    inner: slice::Iter<'a, PollEvent>,
+    registration_token: RegistrationToken,
+}
+
+impl<'a> Iterator for EventIterator<'a> {
+    type Item = (Readiness, Token);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        for next in self.inner.by_ref() {
+            if next.token.key & MAX_SOURCES_MASK == self.registration_token.key {
+                return Some((next.readiness, next.token));
+            }
+        }
+        None
     }
 }
 
@@ -603,10 +689,13 @@ impl LoopSignal {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    use std::{cell::Cell, rc::Rc, time::Duration};
 
     use crate::{
-        generic::Generic, ping::*, Dispatcher, Interest, Mode, Poll, PostAction, Readiness,
+        channel::{channel, Channel},
+        generic::Generic,
+        ping::*,
+        Dispatcher, EventIterator, EventSource, Interest, Mode, Poll, PostAction, Readiness,
         RegistrationToken, Token, TokenFactory,
     };
 
@@ -678,6 +767,282 @@ mod tests {
 
         // the test should return
         event_loop.run(None, &mut (), |_| {}).unwrap();
+    }
+
+    #[test]
+    fn additional_events() {
+        let mut event_loop: EventLoop<'_, Lock> = EventLoop::try_new().unwrap();
+        let mut lock = Lock {
+            lock: Rc::new((Cell::new(false), Cell::new(0))),
+        };
+        let (sender, channel) = channel();
+        let token = event_loop
+            .handle()
+            .insert_source(
+                LockingSource {
+                    channel,
+                    lock: lock.clone(),
+                },
+                |_, _, lock| {
+                    lock.lock();
+                    lock.unlock();
+                },
+            )
+            .unwrap();
+        sender.send(()).unwrap();
+
+        event_loop.dispatch(None, &mut lock).unwrap();
+        // We should have been locked twice so far
+        assert_eq!(lock.lock.1.get(), 2);
+        event_loop.handle().disable(&token).unwrap();
+        event_loop
+            .dispatch(Some(Duration::ZERO), &mut lock)
+            .unwrap();
+        assert_eq!(lock.lock.1.get(), 2);
+
+        event_loop.handle().enable(&token).unwrap();
+        event_loop
+            .dispatch(Some(Duration::ZERO), &mut lock)
+            .unwrap();
+        assert_eq!(lock.lock.1.get(), 3);
+        event_loop.handle().remove(token);
+        event_loop
+            .dispatch(Some(Duration::ZERO), &mut lock)
+            .unwrap();
+        assert_eq!(lock.lock.1.get(), 3);
+
+        #[derive(Clone)]
+        struct Lock {
+            lock: Rc<(Cell<bool>, Cell<u32>)>,
+        }
+        impl Lock {
+            fn lock(&self) {
+                if self.lock.0.get() {
+                    panic!();
+                }
+                // Increase the count
+                self.lock.1.set(self.lock.1.get() + 1);
+                self.lock.0.set(true)
+            }
+            fn unlock(&self) {
+                if !self.lock.0.get() {
+                    panic!();
+                }
+                self.lock.0.set(false);
+            }
+        }
+        struct LockingSource {
+            channel: Channel<()>,
+            lock: Lock,
+        }
+        impl EventSource for LockingSource {
+            type Event = <Channel<()> as EventSource>::Event;
+
+            type Metadata = <Channel<()> as EventSource>::Metadata;
+
+            type Ret = <Channel<()> as EventSource>::Ret;
+
+            type Error = <Channel<()> as EventSource>::Error;
+
+            fn process_events<F>(
+                &mut self,
+                readiness: Readiness,
+                token: Token,
+                callback: F,
+            ) -> Result<PostAction, Self::Error>
+            where
+                F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+            {
+                self.channel.process_events(readiness, token, callback)
+            }
+
+            fn register(
+                &mut self,
+                poll: &mut Poll,
+                token_factory: &mut TokenFactory,
+            ) -> crate::Result<()> {
+                self.channel.register(poll, token_factory)
+            }
+
+            fn reregister(
+                &mut self,
+                poll: &mut Poll,
+                token_factory: &mut TokenFactory,
+            ) -> crate::Result<()> {
+                self.channel.reregister(poll, token_factory)
+            }
+
+            fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
+                self.channel.unregister(poll)
+            }
+
+            const NEEDS_EXTRA_LIFECYCLE_EVENTS: bool = true;
+
+            fn before_sleep(&mut self) -> crate::Result<Option<(Readiness, Token)>> {
+                self.lock.lock();
+                Ok(None)
+            }
+
+            fn before_handle_events(&mut self, _: EventIterator) {
+                self.lock.unlock();
+            }
+        }
+    }
+    #[test]
+    fn default_additional_events() {
+        let (sender, channel) = channel();
+        let mut test_source = NoopWithDefaultHandlers { channel };
+        let mut event_loop = EventLoop::try_new().unwrap();
+        event_loop
+            .handle()
+            .insert_source(Box::new(&mut test_source), |_, _, _| {})
+            .unwrap();
+        sender.send(()).unwrap();
+
+        event_loop.dispatch(None, &mut ()).unwrap();
+        struct NoopWithDefaultHandlers {
+            channel: Channel<()>,
+        }
+        impl EventSource for NoopWithDefaultHandlers {
+            type Event = <Channel<()> as EventSource>::Event;
+
+            type Metadata = <Channel<()> as EventSource>::Metadata;
+
+            type Ret = <Channel<()> as EventSource>::Ret;
+
+            type Error = <Channel<()> as EventSource>::Error;
+
+            fn process_events<F>(
+                &mut self,
+                readiness: Readiness,
+                token: Token,
+                callback: F,
+            ) -> Result<PostAction, Self::Error>
+            where
+                F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+            {
+                self.channel.process_events(readiness, token, callback)
+            }
+
+            fn register(
+                &mut self,
+                poll: &mut Poll,
+                token_factory: &mut TokenFactory,
+            ) -> crate::Result<()> {
+                self.channel.register(poll, token_factory)
+            }
+
+            fn reregister(
+                &mut self,
+                poll: &mut Poll,
+                token_factory: &mut TokenFactory,
+            ) -> crate::Result<()> {
+                self.channel.reregister(poll, token_factory)
+            }
+
+            fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
+                self.channel.unregister(poll)
+            }
+
+            const NEEDS_EXTRA_LIFECYCLE_EVENTS: bool = true;
+        }
+    }
+
+    #[test]
+    fn additional_events_synthetic() {
+        let mut event_loop: EventLoop<'_, Lock> = EventLoop::try_new().unwrap();
+        let mut lock = Lock {
+            lock: Rc::new(Cell::new(false)),
+        };
+        event_loop
+            .handle()
+            .insert_source(
+                InstantWakeupLockingSource {
+                    lock: lock.clone(),
+                    token: None,
+                },
+                |_, _, lock| {
+                    lock.lock();
+                    lock.unlock();
+                },
+            )
+            .unwrap();
+
+        // Loop should finish, as
+        event_loop.dispatch(None, &mut lock).unwrap();
+        #[derive(Clone)]
+        struct Lock {
+            lock: Rc<Cell<bool>>,
+        }
+        impl Lock {
+            fn lock(&self) {
+                if self.lock.get() {
+                    panic!();
+                }
+                self.lock.set(true)
+            }
+            fn unlock(&self) {
+                if !self.lock.get() {
+                    panic!();
+                }
+                self.lock.set(false);
+            }
+        }
+        struct InstantWakeupLockingSource {
+            lock: Lock,
+            token: Option<Token>,
+        }
+        impl EventSource for InstantWakeupLockingSource {
+            type Event = ();
+
+            type Metadata = ();
+
+            type Ret = ();
+
+            type Error = <Channel<()> as EventSource>::Error;
+
+            fn process_events<F>(
+                &mut self,
+                _: Readiness,
+                token: Token,
+                mut callback: F,
+            ) -> Result<PostAction, Self::Error>
+            where
+                F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+            {
+                assert_eq!(token, self.token.unwrap());
+                callback((), &mut ());
+                Ok(PostAction::Continue)
+            }
+
+            fn register(
+                &mut self,
+                _: &mut Poll,
+                token_factory: &mut TokenFactory,
+            ) -> crate::Result<()> {
+                self.token = Some(token_factory.token());
+                Ok(())
+            }
+
+            fn reregister(&mut self, _: &mut Poll, _: &mut TokenFactory) -> crate::Result<()> {
+                unreachable!()
+            }
+
+            fn unregister(&mut self, _: &mut Poll) -> crate::Result<()> {
+                unreachable!()
+            }
+
+            const NEEDS_EXTRA_LIFECYCLE_EVENTS: bool = true;
+
+            fn before_sleep(&mut self) -> crate::Result<Option<(Readiness, Token)>> {
+                self.lock.lock();
+                Ok(Some((Readiness::EMPTY, self.token.unwrap())))
+            }
+
+            fn before_handle_events(&mut self, _: EventIterator) {
+                self.lock.unlock();
+            }
+        }
     }
 
     #[test]
