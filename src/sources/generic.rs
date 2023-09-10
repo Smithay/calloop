@@ -80,6 +80,20 @@ impl<T: AsRawFd> AsFd for FdWrapper<T> {
 }
 
 /// A wrapper around a type that doesn't expose it mutably safely.
+///
+/// The [`EventSource`] trait's `Metadata` type demands mutable access to the inner I/O source.
+/// However, the inner polling source used by `calloop` keeps the handle-based equivalent of an
+/// immutable pointer to the underlying object's I/O handle. Therefore, if the inner source is
+/// dropped, this leaves behind a dangling pointer which immediately invokes undefined behavior
+/// on the next poll of the event loop.
+///
+/// In order to prevent this from happening, the [`Generic`] I/O source must not directly expose
+/// a mutable reference to the underlying handle. This type wraps around the underlying handle and
+/// easily allows users to take immutable (`&`) references to the type, but makes mutable (`&mut`)
+/// references unsafe to get. Therefore, it prevents the source from being moved out and dropped
+/// while it is still registered in the event loop.
+///
+/// [`EventSource`]: crate::EventSource
 #[derive(Debug)]
 pub struct NoIoDrop<T>(T);
 
