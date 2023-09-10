@@ -161,7 +161,7 @@ where
             // on the socket that warrants reading the events again.
             let events = self
                 .socket
-                .file
+                .get_ref()
                 .get_events()
                 .context("Failed to read ZeroMQ events")?;
 
@@ -170,7 +170,7 @@ where
             if events.contains(zmq::POLLOUT) {
                 if let Some(parts) = self.outbox.pop_front() {
                     self.socket
-                        .file
+                        .get_ref()
                         .send_multipart(parts, 0)
                         .context("Failed to send message")?;
                     used_socket = true;
@@ -182,7 +182,7 @@ where
                 // sending, which includes all parts of a multipart message.
                 let messages = self
                     .socket
-                    .file
+                    .get_ref()
                     .recv_multipart(0)
                     .context("Failed to receive message")?;
                 used_socket = true;
@@ -247,14 +247,14 @@ where
         //
         // - https://stackoverflow.com/a/38338578/188535
         // - http://api.zeromq.org/4-0:zmq-ctx-term
-        self.socket.file.set_linger(0).ok();
-        self.socket.file.set_rcvtimeo(0).ok();
-        self.socket.file.set_sndtimeo(0).ok();
+        self.socket.get_ref().set_linger(0).ok();
+        self.socket.get_ref().set_rcvtimeo(0).ok();
+        self.socket.get_ref().set_sndtimeo(0).ok();
 
         // Double result because (a) possible failure on call and (b) possible
         // failure decoding.
-        if let Ok(Ok(last_endpoint)) = self.socket.file.get_last_endpoint() {
-            self.socket.file.disconnect(&last_endpoint).ok();
+        if let Ok(Ok(last_endpoint)) = self.socket.get_ref().get_last_endpoint() {
+            self.socket.get_ref().disconnect(&last_endpoint).ok();
         }
     }
 }
