@@ -76,7 +76,14 @@ impl Signals {
             self.mask.add(s);
         }
         self.mask.thread_block().map_err(IoError::from)?;
-        self.sfd.file.set_mask(&self.mask).map_err(IoError::from)?;
+
+        // SAFETY: We don't drop the underlying mask.
+        unsafe {
+            self.sfd
+                .get_mut()
+                .set_mask(&self.mask)
+                .map_err(IoError::from)?;
+        }
         Ok(())
     }
 
@@ -91,7 +98,14 @@ impl Signals {
             removed.add(s);
         }
         removed.thread_unblock().map_err(IoError::from)?;
-        self.sfd.file.set_mask(&self.mask).map_err(IoError::from)?;
+
+        // SAFETY: We don't drop the underlying mask.
+        unsafe {
+            self.sfd
+                .get_mut()
+                .set_mask(&self.mask)
+                .map_err(IoError::from)?;
+        }
         Ok(())
     }
 
@@ -107,7 +121,14 @@ impl Signals {
 
         self.mask.thread_unblock().map_err(IoError::from)?;
         new_mask.thread_block().map_err(IoError::from)?;
-        self.sfd.file.set_mask(&new_mask).map_err(IoError::from)?;
+
+        // SAFETY: We don't drop the underlying mask.
+        unsafe {
+            self.sfd
+                .get_mut()
+                .set_mask(&new_mask)
+                .map_err(IoError::from)?;
+        }
         self.mask = new_mask;
 
         Ok(())
@@ -141,7 +162,7 @@ impl EventSource for Signals {
         self.sfd
             .process_events(readiness, token, |_, sfd| {
                 loop {
-                    match sfd.read_signal() {
+                    match unsafe { sfd.get_mut().read_signal() } {
                         Ok(Some(info)) => callback(Event { info }, &mut ()),
                         Ok(None) => break,
                         Err(e) => {

@@ -1,10 +1,10 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc, time::Duration};
 
 #[cfg(unix)]
-use std::os::unix::io::{AsRawFd, RawFd as Raw};
+use std::os::unix::io::{AsRawFd, BorrowedFd as Borrowed, RawFd as Raw};
 
 #[cfg(windows)]
-use std::os::windows::io::{AsRawSocket, RawSocket as Raw};
+use std::os::windows::io::{AsRawSocket, BorrowedSocket as Borrowed, RawSocket as Raw};
 
 #[cfg(unix)]
 use io_lifetimes::AsFd;
@@ -12,7 +12,7 @@ use io_lifetimes::AsFd;
 #[cfg(windows)]
 use io_lifetimes::AsSocket;
 
-use polling::{Event, PollMode, Poller};
+use polling::{Event, Events, PollMode, Poller};
 
 use crate::loop_logic::{MAX_SOURCES, MAX_SUBSOURCES_TOTAL};
 use crate::sources::timer::TimerWheel;
@@ -189,7 +189,7 @@ pub struct Poll {
     poller: Arc<Poller>,
 
     /// The buffer of events returned by the poller.
-    events: RefCell<Vec<Event>>,
+    events: RefCell<Events>,
 
     /// The sources registered as level triggered.
     ///
@@ -227,7 +227,7 @@ impl Poll {
 
         Ok(Poll {
             poller: Arc::new(poller),
-            events: RefCell::new(Vec::new()),
+            events: RefCell::new(Events::new()),
             timers: Rc::new(RefCell::new(TimerWheel::new())),
             level_triggered,
         })
@@ -248,19 +248,22 @@ impl Poll {
         };
 
         let mut events = self.events.borrow_mut();
+        events.clear();
         self.poller.wait(&mut events, timeout)?;
 
         // Convert `polling` events to `calloop` events.
         let level_triggered = self.level_triggered.as_ref().map(RefCell::borrow);
         let mut poll_events = events
-            .drain(..)
+            .iter()
             .map(|ev| {
                 // If we need to emulate level-triggered events...
                 if let Some(level_triggered) = level_triggered.as_ref() {
                     // ...and this event is from a level-triggered source...
                     if let Some((source, interest)) = level_triggered.get(&ev.key) {
                         // ...then we need to re-register the source.
-                        self.poller.modify(source, *interest)?;
+                        // SAFETY: The source is valid.
+                        self.poller
+                            .modify(unsafe { Borrowed::borrow_raw(*source) }, *interest)?;
                     }
                 }
 
@@ -301,12 +304,16 @@ impl Poll {
     /// bad file descriptor or if the provided file descriptor is already
     /// registered.
     ///
+    /// # Safety
+    ///
+    /// The registered source must not be dropped before it is unregistered.
+    ///
     /// # Leaking tokens
     ///
     /// If your event source is dropped without being unregistered, the token
     /// passed in here will remain on the heap and continue to be used by the
     /// polling system even though no event source will match it.
-    pub fn register(
+    pub unsafe fn register(
         &self,
         #[cfg(unix)] fd: impl AsFd,
         #[cfg(windows)] fd: impl AsSocket,
@@ -327,8 +334,12 @@ impl Poll {
         };
 
         let ev = cvt_interest(interest, token);
-        self.poller
-            .add_with_mode(raw, ev, cvt_mode(mode, self.poller.supports_level()))?;
+
+        // SAFETY: See invariant on function.
+        unsafe {
+            self.poller
+                .add_with_mode(raw, ev, cvt_mode(mode, self.poller.supports_level()))?;
+        }
 
         // If this is level triggered and we're emulating level triggered mode...
         if let (Mode::Level, Some(level_triggered)) = (mode, self.level_triggered.as_ref()) {
@@ -354,21 +365,21 @@ impl Poll {
         mode: Mode,
         token: Token,
     ) -> crate::Result<()> {
-        let raw = {
+        let (borrowed, raw) = {
             #[cfg(unix)]
             {
-                fd.as_fd().as_raw_fd()
+                (fd.as_fd(), fd.as_fd().as_raw_fd())
             }
 
             #[cfg(windows)]
             {
-                fd.as_socket().as_raw_socket()
+                (fd.as_socket(), fd.as_socket().as_raw_socket())
             }
         };
 
         let ev = cvt_interest(interest, token);
         self.poller
-            .modify_with_mode(raw, ev, cvt_mode(mode, self.poller.supports_level()))?;
+            .modify_with_mode(borrowed, ev, cvt_mode(mode, self.poller.supports_level()))?;
 
         // If this is level triggered and we're emulating level triggered mode...
         if let (Mode::Level, Some(level_triggered)) = (mode, self.level_triggered.as_ref()) {
@@ -389,18 +400,18 @@ impl Poll {
         #[cfg(unix)] fd: impl AsFd,
         #[cfg(windows)] fd: impl AsSocket,
     ) -> crate::Result<()> {
-        let raw = {
+        let (borrowed, raw) = {
             #[cfg(unix)]
             {
-                fd.as_fd().as_raw_fd()
+                (fd.as_fd(), fd.as_fd().as_raw_fd())
             }
 
             #[cfg(windows)]
             {
-                fd.as_socket().as_raw_socket()
+                (fd.as_socket(), fd.as_socket().as_raw_socket())
             }
         };
-        self.poller.delete(raw)?;
+        self.poller.delete(borrowed)?;
 
         if let Some(level_triggered) = self.level_triggered.as_ref() {
             let mut level_triggered = level_triggered.borrow_mut();
@@ -413,6 +424,11 @@ impl Poll {
     /// Get a thread-safe handle which can be used to wake up the `Poll`.
     pub(crate) fn notifier(&self) -> Notifier {
         Notifier(self.poller.clone())
+    }
+
+    /// Get a reference to the poller.
+    pub(crate) fn poller(&self) -> &Arc<Poller> {
+        &self.poller
     }
 }
 
@@ -429,11 +445,10 @@ impl Notifier {
 }
 
 fn cvt_interest(interest: Interest, tok: Token) -> Event {
-    Event {
-        readable: interest.readable,
-        writable: interest.writable,
-        key: tok.key,
-    }
+    let mut event = Event::none(tok.key);
+    event.readable = interest.readable;
+    event.writable = interest.writable;
+    event
 }
 
 fn cvt_mode(mode: Mode, supports_other_modes: bool) -> PollMode {
