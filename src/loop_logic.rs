@@ -1,5 +1,6 @@
 use std::cell::{Cell, RefCell};
 use std::fmt::Debug;
+use std::os::unix::io::AsFd;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -9,7 +10,6 @@ use std::{io, slice};
 #[cfg(feature = "block_on")]
 use std::future::Future;
 
-use io_lifetimes::AsFd;
 use slab::Slab;
 
 use crate::sources::{Dispatcher, EventSource, Idle, IdleDispatcher};
@@ -1050,7 +1050,7 @@ mod tests {
         use std::os::unix::io::FromRawFd;
 
         let event_loop = EventLoop::<()>::try_new().unwrap();
-        let fd = unsafe { io_lifetimes::OwnedFd::from_raw_fd(420) };
+        let fd = unsafe { std::os::unix::io::OwnedFd::from_raw_fd(420) };
         let ret = event_loop.handle().insert_source(
             crate::sources::generic::Generic::new(fd, Interest::READ, Mode::Level),
             |_, _, _| Ok(PostAction::Continue),

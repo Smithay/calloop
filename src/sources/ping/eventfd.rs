@@ -18,9 +18,9 @@
 //! can then check the LSB and if it's set, we know it was a close event. This
 //! only works if a close event never fires more than once.
 
+use std::os::unix::io::{AsFd, BorrowedFd, OwnedFd};
 use std::sync::Arc;
 
-use io_lifetimes::{AsFd, BorrowedFd, OwnedFd};
 use rustix::event::{eventfd, EventfdFlags};
 use rustix::io::{read, write, Errno};
 

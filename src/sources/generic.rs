@@ -37,9 +37,14 @@
 //! these `Generic<_>` as fields of your event source, and delegate the
 //! [`EventSource`](crate::EventSource) implementation to them.
 
-use io_lifetimes::{AsFd, BorrowedFd};
 use polling::Poller;
-use std::{borrow, marker::PhantomData, ops, os::unix::io::AsRawFd, sync::Arc};
+use std::{
+    borrow,
+    marker::PhantomData,
+    ops,
+    os::unix::io::{AsFd, AsRawFd, BorrowedFd},
+    sync::Arc,
+};
 
 use crate::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
 

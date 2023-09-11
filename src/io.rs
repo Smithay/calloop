@@ -7,12 +7,11 @@
 //! [`LoopHandle::adapt_io`]: crate::LoopHandle#method.adapt_io
 
 use std::cell::RefCell;
-use std::os::unix::io::{AsRawFd, RawFd};
+use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, RawFd};
 use std::pin::Pin;
 use std::rc::Rc;
 use std::task::{Context, Poll as TaskPoll, Waker};
 
-use io_lifetimes::{AsFd, BorrowedFd};
 use rustix::fs::{fcntl_getfl, fcntl_setfl, OFlags};
 
 #[cfg(feature = "futures-io")]

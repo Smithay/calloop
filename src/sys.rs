@@ -1,16 +1,10 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc, time::Duration};
 
 #[cfg(unix)]
-use std::os::unix::io::{AsRawFd, BorrowedFd as Borrowed, RawFd as Raw};
+use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd as Borrowed, RawFd as Raw};
 
 #[cfg(windows)]
-use std::os::windows::io::{AsRawSocket, BorrowedSocket as Borrowed, RawSocket as Raw};
-
-#[cfg(unix)]
-use io_lifetimes::AsFd;
-
-#[cfg(windows)]
-use io_lifetimes::AsSocket;
+use std::os::windows::io::{AsRawSocket, AsSocket, BorrowedSocket as Borrowed, RawSocket as Raw};
 
 use polling::{Event, Events, PollMode, Poller};
 
