@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.12.0 -- 2023-09-11
+
 #### Breaking changes
 
 - Bump MSRV to 1.63
