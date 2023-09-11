@@ -2,9 +2,9 @@
 //! syscall. Sending a ping involves writing to one end of a pipe, and the other
 //! end becoming readable is what wakes up the event loop.
 
+use std::os::unix::io::{AsFd, BorrowedFd, OwnedFd};
 use std::sync::Arc;
 
-use io_lifetimes::{AsFd, BorrowedFd, OwnedFd};
 use rustix::io::{read, write, Errno};
 
 use super::PingError;
