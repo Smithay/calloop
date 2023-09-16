@@ -67,7 +67,7 @@ pub struct InsertError<T> {
 }
 
 impl<T> Debug for InsertError<T> {
-    #[cfg_attr(feature = "nightly_coverage", no_coverage)]
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn fmt(&self, formatter: &mut Formatter) -> core::result::Result<(), fmt::Error> {
         write!(formatter, "{:?}", self.error)
     }
@@ -76,7 +76,7 @@ impl<T> Debug for InsertError<T> {
 impl<T> From<InsertError<T>> for crate::Error {
     /// Converts the [`InsertError`] into Calloop's error type, throwing away
     /// the contained source.
-    #[cfg_attr(feature = "nightly_coverage", no_coverage)]
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn from(e: InsertError<T>) -> crate::Error {
         e.error
     }

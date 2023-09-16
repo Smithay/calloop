@@ -478,7 +478,7 @@ where
 pub struct Dispatcher<'a, S, Data>(Rc<dyn ErasedDispatcher<'a, S, Data> + 'a>);
 
 impl<'a, S, Data> std::fmt::Debug for Dispatcher<'a, S, Data> {
-    #[cfg_attr(feature = "nightly_coverage", no_coverage)]
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("Dispatcher { ... }")
     }
@@ -555,7 +555,7 @@ pub struct Idle<'i> {
 }
 
 impl<'i> std::fmt::Debug for Idle<'i> {
-    #[cfg_attr(feature = "nightly_coverage", no_coverage)]
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("Idle { ... }")
     }
