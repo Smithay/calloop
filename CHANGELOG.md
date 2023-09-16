@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+#### Bugfixes
+- Make the additional lifecycle events match the docs
+
 ## 0.12.0 -- 2023-09-11
 
 #### Breaking changes
