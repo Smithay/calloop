@@ -387,7 +387,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                 for source in &mut *extra_lifecycle_sources.values {
                     if let Some(disp) = self.handle.inner.sources.borrow().get(source.key) {
                         let iter = EventIterator {
-                            inner: self.synthetic_events.iter(),
+                            inner: events.iter(),
                             registration_token: *source,
                         };
                         disp.before_handle_events(iter);
@@ -773,7 +773,15 @@ mod tests {
     fn additional_events() {
         let mut event_loop: EventLoop<'_, Lock> = EventLoop::try_new().unwrap();
         let mut lock = Lock {
-            lock: Rc::new((Cell::new(false), Cell::new(0))),
+            lock: Rc::new((
+                // Whether the lock is locked
+                Cell::new(false),
+                // The total number of events processed in process_events
+                Cell::new(0),
+                // The total number of events processed in before_handle_events
+                // This is used to ensure that the count seen in before_handle_events is expected
+                Cell::new(0),
+            )),
         };
         let (sender, channel) = channel();
         let token = event_loop
@@ -794,6 +802,8 @@ mod tests {
         event_loop.dispatch(None, &mut lock).unwrap();
         // We should have been locked twice so far
         assert_eq!(lock.lock.1.get(), 2);
+        // And we should have received one event
+        assert_eq!(lock.lock.2.get(), 1);
         event_loop.handle().disable(&token).unwrap();
         event_loop
             .dispatch(Some(Duration::ZERO), &mut lock)
@@ -810,10 +820,11 @@ mod tests {
             .dispatch(Some(Duration::ZERO), &mut lock)
             .unwrap();
         assert_eq!(lock.lock.1.get(), 3);
+        assert_eq!(lock.lock.2.get(), 1);
 
         #[derive(Clone)]
         struct Lock {
-            lock: Rc<(Cell<bool>, Cell<u32>)>,
+            lock: Rc<(Cell<bool>, Cell<u32>, Cell<u32>)>,
         }
         impl Lock {
             fn lock(&self) {
@@ -883,7 +894,10 @@ mod tests {
                 Ok(None)
             }
 
-            fn before_handle_events(&mut self, _: EventIterator) {
+            fn before_handle_events(&mut self, events: EventIterator) {
+                let events_count = events.count();
+                let lock = &self.lock.lock;
+                lock.2.set(lock.2.get() + events_count as u32);
                 self.lock.unlock();
             }
         }
