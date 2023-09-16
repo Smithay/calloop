@@ -200,7 +200,7 @@ pub struct Poll {
 }
 
 impl std::fmt::Debug for Poll {
-    #[cfg_attr(feature = "nightly_coverage", no_coverage)]
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("Poll { ... }")
     }
