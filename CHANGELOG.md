@@ -3,7 +3,7 @@
 ## Unreleased
 
 #### Bugfixes
-- Make the additional lifecycle events match the docs
+- Fix `EventSource::before_handle_events()` being erroneously give an iterator over synthetic events instead of real events
 
 ## 0.12.0 -- 2023-09-11
 
