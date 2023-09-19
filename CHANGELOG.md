@@ -2,7 +2,10 @@
 
 ## Unreleased
 
+## 0.12.1 -- 2023-09-19
+
 #### Bugfixes
+
 - Fix `EventSource::before_handle_events()` being erroneously give an iterator over synthetic events instead of real events
 
 ## 0.12.0 -- 2023-09-11
