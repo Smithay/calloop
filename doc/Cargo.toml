@@ -5,7 +5,6 @@ edition = "2018"
 publish = false
 
 [dependencies]
-io-lifetimes = "1.0.3"
 calloop = { path = "..", features = ["futures-io", "executor"] }
 anyhow = "1.0.56"
 futures = "0.3.21"
