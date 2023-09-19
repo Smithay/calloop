@@ -16,7 +16,7 @@ The easiest constructor to use is the [`new()`](api/calloop/generic/struct.Gener
 
 ## Ownership and AsFd wrappers
 
-Rust 1.63 introduced a concept of file descriptor ownership and borrowing through the `OwnedFd` and `BorrowedFd` types, which are also available on older Rust versions through the `io-lifetimes` crate. The `AsFd` trait provides a way to get a `BorrowedFd` corresponding to a file, socket, etc. while guaranteeing the fd will be valid for the lifetime of the `BorrowedFd`.
+Rust 1.63 introduced a concept of file descriptor ownership and borrowing through the `OwnedFd` and `BorrowedFd` types. The `AsFd` trait provides a way to get a `BorrowedFd` corresponding to a file, socket, etc. while guaranteeing the fd will be valid for the lifetime of the `BorrowedFd`.
 
 Not all third party crates use `AsFd` yet, and may instead provide types implementing `AsRawFd`. ['AsFdWrapper'](api/calloop/generic/struct.AsFdWrapper.html) provides a way to adapt these types. To use this safely, ensure the `AsRawFd` implementation of the type it wraps returns a valid fd as long as the type exists. And to avoid an fd leak, it should ultimately be `close`d properly.
 
