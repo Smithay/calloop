@@ -4,6 +4,8 @@ use std::{
     rc::Rc,
 };
 
+use log::trace;
+
 pub use crate::loop_logic::EventIterator;
 use crate::{sys::TokenFactory, Poll, Readiness, RegistrationToken, Token};
 
@@ -317,6 +319,10 @@ where
             ref mut callback,
             ..
         } = *disp;
+        trace!(
+            "[calloop] Processing events for source type {}",
+            std::any::type_name::<S>()
+        );
         source
             .process_events(readiness, token, |event, meta| callback(event, meta, data))
             .map_err(|e| crate::Error::OtherError(e.into()))

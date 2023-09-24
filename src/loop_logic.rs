@@ -12,6 +12,8 @@ use std::future::Future;
 
 use slab::Slab;
 
+use log::trace;
+
 use crate::sources::{Dispatcher, EventSource, Idle, IdleDispatcher};
 use crate::sys::{Notifier, PollEvent};
 use crate::{
@@ -148,6 +150,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
         }
 
         let key = sources.insert(dispatcher.clone_as_event_dispatcher());
+        trace!("[calloop] Inserting new source #{}", key);
         let ret = sources.get(key).unwrap().register(
             &mut poll,
             &mut self
@@ -187,6 +190,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
     /// **Note:** this cannot be done from within the source callback.
     pub fn enable(&self, token: &RegistrationToken) -> crate::Result<()> {
         if let Some(source) = self.inner.sources.borrow().get(token.key) {
+            trace!("[calloop] Registering source #{}", token.key);
             source.register(
                 &mut self.inner.poll.borrow_mut(),
                 &mut self
@@ -205,6 +209,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
     /// updating its registration.
     pub fn update(&self, token: &RegistrationToken) -> crate::Result<()> {
         if let Some(source) = self.inner.sources.borrow().get(token.key) {
+            trace!("[calloop] Updating registration of source #{}", token.key);
             if !source.reregister(
                 &mut self.inner.poll.borrow_mut(),
                 &mut self
@@ -213,6 +218,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
                     .borrow_mut(),
                 &mut TokenFactory::new(token.key),
             )? {
+                trace!("[calloop] Cannot do it now, storing for later.");
                 // we are in a callback, store for later processing
                 self.inner.pending_action.set(PostAction::Reregister);
             }
@@ -225,6 +231,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
     /// The source remains in the event loop, but it'll no longer generate events
     pub fn disable(&self, token: &RegistrationToken) -> crate::Result<()> {
         if let Some(source) = self.inner.sources.borrow().get(token.key) {
+            trace!("[calloop] Unregistering source #{}", token.key);
             if !source.unregister(
                 &mut self.inner.poll.borrow_mut(),
                 &mut self
@@ -233,6 +240,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
                     .borrow_mut(),
                 *token,
             )? {
+                trace!("[calloop] Cannot do it now, storing for later.");
                 // we are in a callback, store for later processing
                 self.inner.pending_action.set(PostAction::Disable);
             }
@@ -243,6 +251,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
     /// Removes this source from the event loop.
     pub fn remove(&self, token: RegistrationToken) {
         if let Some(source) = self.inner.sources.borrow_mut().try_remove(token.key) {
+            trace!("[calloop] Removing source #{}", token.key);
             if let Err(e) = source.unregister(
                 &mut self.inner.poll.borrow_mut(),
                 &mut self
@@ -411,6 +420,10 @@ impl<'l, Data> EventLoop<'l, Data> {
                 .cloned();
 
             if let Some(disp) = opt_disp {
+                trace!(
+                    "[calloop] Dispatching events for source #{}",
+                    registroken_token
+                );
                 let mut ret = disp.process_events(event.readiness, event.token, data)?;
 
                 // if the returned PostAction is Continue, it may be overwritten by an user-specified pending action
@@ -425,6 +438,10 @@ impl<'l, Data> EventLoop<'l, Data> {
 
                 match ret {
                     PostAction::Reregister => {
+                        trace!(
+                            "[calloop] Postaction reregister for source #{}",
+                            registroken_token
+                        );
                         disp.reregister(
                             &mut self.handle.inner.poll.borrow_mut(),
                             &mut self
@@ -436,6 +453,10 @@ impl<'l, Data> EventLoop<'l, Data> {
                         )?;
                     }
                     PostAction::Disable => {
+                        trace!(
+                            "[calloop] Postaction unregister for source #{}",
+                            registroken_token
+                        );
                         disp.unregister(
                             &mut self.handle.inner.poll.borrow_mut(),
                             &mut self
@@ -447,6 +468,10 @@ impl<'l, Data> EventLoop<'l, Data> {
                         )?;
                     }
                     PostAction::Remove => {
+                        trace!(
+                            "[calloop] Postaction remove for source #{}",
+                            registroken_token
+                        );
                         // delete the source from the list, it'll be cleaned up with the if just below
                         self.handle
                             .inner
