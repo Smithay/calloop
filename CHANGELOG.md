@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.12.2 -- 2023-09-25
+
 #### Bugfixes
 
 - Fix an issue where the `Generic` event source would try to unregister its contents from the event loop
