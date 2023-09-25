@@ -449,7 +449,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                                 .inner
                                 .sources_with_additional_lifecycle_events
                                 .borrow_mut(),
-                            &mut TokenFactory::new(event.token.key),
+                            &mut TokenFactory::new(registroken_token),
                         )?;
                     }
                     PostAction::Disable => {
@@ -477,7 +477,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                             .inner
                             .sources
                             .borrow_mut()
-                            .remove(event.token.key);
+                            .remove(registroken_token);
                     }
                     PostAction::Continue => {}
                 }
@@ -509,7 +509,7 @@ impl<'l, Data> EventLoop<'l, Data> {
             } else {
                 log::warn!(
                     "[calloop] Received an event for non-existence source: {:?}",
-                    event.token.key
+                    registroken_token
                 );
             }
         }
@@ -1455,6 +1455,79 @@ mod tests {
         let result = evl.block_on(timeout, &mut (), |&mut ()| {}).unwrap();
         assert_eq!(result, None);
         assert_eq!(data, 22);
+    }
+
+    #[test]
+    fn drop_of_subsource() {
+        struct WithSubSource {
+            token: Option<Token>,
+        }
+
+        impl crate::EventSource for WithSubSource {
+            type Event = ();
+            type Metadata = ();
+            type Ret = ();
+            type Error = crate::Error;
+            const NEEDS_EXTRA_LIFECYCLE_EVENTS: bool = true;
+
+            fn process_events<F>(
+                &mut self,
+                _: Readiness,
+                _: Token,
+                mut callback: F,
+            ) -> Result<PostAction, Self::Error>
+            where
+                F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+            {
+                callback((), &mut ());
+                // Drop the source
+                Ok(PostAction::Remove)
+            }
+
+            fn register(&mut self, _: &mut Poll, fact: &mut TokenFactory) -> crate::Result<()> {
+                // produce a few tokens to emulate a subsource
+                fact.token();
+                fact.token();
+                self.token = Some(fact.token());
+                Ok(())
+            }
+
+            fn reregister(&mut self, _: &mut Poll, _: &mut TokenFactory) -> crate::Result<()> {
+                Ok(())
+            }
+
+            fn unregister(&mut self, _: &mut Poll) -> crate::Result<()> {
+                Ok(())
+            }
+
+            // emulate a readiness
+            fn before_sleep(&mut self) -> crate::Result<Option<(Readiness, Token)>> {
+                Ok(self.token.map(|token| {
+                    (
+                        Readiness {
+                            readable: true,
+                            writable: false,
+                            error: false,
+                        },
+                        token,
+                    )
+                }))
+            }
+        }
+
+        // Now the actual test
+        let mut evl = EventLoop::<bool>::try_new().unwrap();
+        evl.handle()
+            .insert_source(WithSubSource { token: None }, |_, _, ran| {
+                *ran = true;
+            })
+            .unwrap();
+
+        let mut ran = false;
+
+        evl.dispatch(Some(Duration::ZERO), &mut ran).unwrap();
+
+        assert!(ran);
     }
 
     // A dummy EventSource to test insertion and removal of sources

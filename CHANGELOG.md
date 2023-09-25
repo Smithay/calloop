@@ -6,6 +6,8 @@
 
 - Fix an issue where the `Generic` event source would try to unregister its contents from the event loop
   after a failed registration.
+- Fix an issue where the `EventLoop` would panic when processing a `PostAction::Remove` from an event source
+  with subsources.
 
 ## 0.12.1 -- 2023-09-19
 
