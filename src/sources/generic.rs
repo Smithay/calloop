@@ -261,10 +261,7 @@ where
     fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
         let token = token_factory.token();
 
-        // Make sure we can use the poller to deregister if need be.
-        self.poller = Some(poll.poller().clone());
-
-        // SAFETY: We've now ensured that we have a poller to deregister with.
+        // SAFETY: We ensure that we have a poller to deregister with (see below).
         unsafe {
             poll.register(
                 &self.file.as_ref().unwrap().0,
@@ -274,7 +271,13 @@ where
             )?;
         }
 
+        // Make sure we can use the poller to deregister if need be.
+        // But only if registration actually succeeded
+        // So that we don't try to unregister the FD on drop if it wasn't registered
+        // in the first place (for example if registration failed because of a duplicate insertion)
+        self.poller = Some(poll.poller().clone());
         self.token = Some(token);
+
         Ok(())
     }
 
@@ -421,5 +424,51 @@ mod tests {
 
         // the has now been properly dispatched
         assert!(dispached);
+    }
+
+    // Duplicate insertion does not fail on all platforms, but does on Linux
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn duplicate_insert() {
+        use std::os::unix::{
+            io::{AsFd, BorrowedFd},
+            net::UnixStream,
+        };
+        let event_loop = crate::EventLoop::<()>::try_new().unwrap();
+
+        let handle = event_loop.handle();
+
+        let (_, rx) = UnixStream::pair().unwrap();
+
+        // Rc only implements AsFd since 1.69...
+        struct RcFd<T> {
+            rc: std::rc::Rc<T>,
+        }
+
+        impl<T: AsFd> AsFd for RcFd<T> {
+            fn as_fd(&self) -> BorrowedFd<'_> {
+                self.rc.as_fd()
+            }
+        }
+
+        let rx = std::rc::Rc::new(rx);
+
+        let token = handle
+            .insert_source(
+                Generic::new(RcFd { rc: rx.clone() }, Interest::READ, Mode::Level),
+                |_, _, _| Ok(PostAction::Continue),
+            )
+            .unwrap();
+
+        // inserting the same FD a second time should fail
+        let ret = handle.insert_source(
+            Generic::new(RcFd { rc: rx.clone() }, Interest::READ, Mode::Level),
+            |_, _, _| Ok(PostAction::Continue),
+        );
+        assert!(ret.is_err());
+        std::mem::drop(ret);
+
+        // but the original token is still registered
+        handle.update(&token).unwrap();
     }
 }
