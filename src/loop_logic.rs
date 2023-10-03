@@ -12,7 +12,7 @@ use std::future::Future;
 
 use slab::Slab;
 
-use log::trace;
+use log::{debug, trace, warn};
 
 use crate::sources::{Dispatcher, EventSource, Idle, IdleDispatcher};
 use crate::sys::{Notifier, PollEvent};
@@ -260,7 +260,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
                     .borrow_mut(),
                 token,
             ) {
-                log::warn!(
+                warn!(
                     "[calloop] Failed to unregister source from the polling system: {:?}",
                     e
                 );
@@ -419,98 +419,105 @@ impl<'l, Data> EventLoop<'l, Data> {
                 .get(registroken_token)
                 .cloned();
 
-            if let Some(disp) = opt_disp {
-                trace!(
-                    "[calloop] Dispatching events for source #{}",
-                    registroken_token
-                );
-                let mut ret = disp.process_events(event.readiness, event.token, data)?;
-
-                // if the returned PostAction is Continue, it may be overwritten by an user-specified pending action
-                let pending_action = self
-                    .handle
-                    .inner
-                    .pending_action
-                    .replace(PostAction::Continue);
-                if let PostAction::Continue = ret {
-                    ret = pending_action;
+            let disp = match opt_disp {
+                Some(disp) => disp,
+                None => {
+                    debug!(
+                        "[calloop] Received an event for non-existent source: {:?}",
+                        registroken_token
+                    );
+                    continue;
                 }
+            };
 
-                match ret {
-                    PostAction::Reregister => {
-                        trace!(
-                            "[calloop] Postaction reregister for source #{}",
-                            registroken_token
-                        );
-                        disp.reregister(
-                            &mut self.handle.inner.poll.borrow_mut(),
-                            &mut self
-                                .handle
-                                .inner
-                                .sources_with_additional_lifecycle_events
-                                .borrow_mut(),
-                            &mut TokenFactory::new(registroken_token),
-                        )?;
-                    }
-                    PostAction::Disable => {
-                        trace!(
-                            "[calloop] Postaction unregister for source #{}",
-                            registroken_token
-                        );
-                        disp.unregister(
-                            &mut self.handle.inner.poll.borrow_mut(),
-                            &mut self
-                                .handle
-                                .inner
-                                .sources_with_additional_lifecycle_events
-                                .borrow_mut(),
-                            RegistrationToken::new(registroken_token),
-                        )?;
-                    }
-                    PostAction::Remove => {
-                        trace!(
-                            "[calloop] Postaction remove for source #{}",
-                            registroken_token
-                        );
-                        // delete the source from the list, it'll be cleaned up with the if just below
-                        self.handle
+            trace!(
+                "[calloop] Dispatching events for source #{}",
+                registroken_token
+            );
+            let mut ret = disp.process_events(event.readiness, event.token, data)?;
+
+            // if the returned PostAction is Continue, it may be overwritten by an user-specified pending action
+            let pending_action = self
+                .handle
+                .inner
+                .pending_action
+                .replace(PostAction::Continue);
+            if let PostAction::Continue = ret {
+                ret = pending_action;
+            }
+
+            match ret {
+                PostAction::Reregister => {
+                    trace!(
+                        "[calloop] Postaction reregister for source #{}",
+                        registroken_token
+                    );
+                    disp.reregister(
+                        &mut self.handle.inner.poll.borrow_mut(),
+                        &mut self
+                            .handle
                             .inner
-                            .sources
-                            .borrow_mut()
-                            .remove(registroken_token);
-                    }
-                    PostAction::Continue => {}
+                            .sources_with_additional_lifecycle_events
+                            .borrow_mut(),
+                        &mut TokenFactory::new(registroken_token),
+                    )?;
                 }
-
-                if !self
-                    .handle
-                    .inner
-                    .sources
-                    .borrow()
-                    .contains(registroken_token)
-                {
-                    // the source has been removed from within its callback, unregister it
-                    let mut poll = self.handle.inner.poll.borrow_mut();
-                    if let Err(e) = disp.unregister(
-                        &mut poll,
+                PostAction::Disable => {
+                    trace!(
+                        "[calloop] Postaction unregister for source #{}",
+                        registroken_token
+                    );
+                    disp.unregister(
+                        &mut self.handle.inner.poll.borrow_mut(),
                         &mut self
                             .handle
                             .inner
                             .sources_with_additional_lifecycle_events
                             .borrow_mut(),
                         RegistrationToken::new(registroken_token),
-                    ) {
-                        log::warn!(
-                            "[calloop] Failed to unregister source from the polling system: {:?}",
-                            e
+                    )?;
+                }
+                PostAction::Remove => {
+                    trace!(
+                        "[calloop] Postaction remove for source #{}",
+                        registroken_token
+                    );
+
+                    // Delete the source from the list, unregister is performed separately.
+                    let mut sources = self.handle.inner.sources.borrow_mut();
+                    if sources.try_remove(registroken_token).is_none() {
+                        debug!(
+                            "[calloop] could not remove event source #{}: token does not exist",
+                            registroken_token
                         );
                     }
                 }
-            } else {
-                log::warn!(
-                    "[calloop] Received an event for non-existence source: {:?}",
-                    registroken_token
-                );
+                PostAction::Continue => {}
+            }
+
+            if !self
+                .handle
+                .inner
+                .sources
+                .borrow()
+                .contains(registroken_token)
+            {
+                // the source has been removed from within its callback, unregister it
+                let mut poll = self.handle.inner.poll.borrow_mut();
+                if let Err(e) = disp.unregister(
+                    &mut poll,
+                    &mut self
+                        .handle
+                        .inner
+                        .sources_with_additional_lifecycle_events
+                        .borrow_mut(),
+                    RegistrationToken::new(registroken_token),
+                ) {
+                    warn!(
+                        "[calloop] Failed to unregister source from the polling system: {:?}",
+                        e
+                    );
+                }
             }
         }
 
