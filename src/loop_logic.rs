@@ -1105,6 +1105,23 @@ mod tests {
     }
 
     #[test]
+    fn remove_during_callback() {
+        use crate::sources::timer::{TimeoutAction, Timer};
+
+        let mut event_loop = EventLoop::<RegistrationToken>::try_new().unwrap();
+        let handle = event_loop.handle();
+        let mut token = event_loop
+            .handle()
+            .insert_source(Timer::immediate(), move |_, _, token| {
+                handle.remove(*token);
+                TimeoutAction::Drop
+            })
+            .unwrap();
+
+        event_loop.dispatch(Duration::ZERO, &mut token).unwrap();
+    }
+
+    #[test]
     fn insert_source_no_interest() {
         use rustix::pipe::pipe;
 
