@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+#### Bugfixes
+
+- Fixed a crash when removing a token in a callback with a `PostAction::Remove`
+
 ## 0.12.2 -- 2023-09-25
 
 #### Bugfixes
