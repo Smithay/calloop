@@ -62,7 +62,7 @@ impl<'l, F: AsFd> Async<'l, F> {
             interest: Interest::EMPTY,
             last_readiness: Readiness::EMPTY,
         }));
-        let key = inner.sources.borrow_mut().insert(dispatcher.clone());
+        let key = inner.sources.borrow_mut().insert(Some(dispatcher.clone()));
         dispatcher.borrow_mut().token = Some(Token { key });
 
         // SAFETY: We are sure to deregister on drop.
