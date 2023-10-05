@@ -1,6 +1,6 @@
 use std::cell::{Cell, RefCell};
 use std::fmt::Debug;
-use std::os::unix::io::AsFd;
+use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, RawFd};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -11,6 +11,7 @@ use std::{io, slice};
 use std::future::Future;
 
 use log::trace;
+use polling::Poller;
 
 use crate::list::{SourceEntry, SourceList};
 use crate::sources::{Dispatcher, EventSource, Idle, IdleDispatcher};
@@ -286,6 +287,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
 ///
 /// This loop can host several event sources, that can be dynamically added or removed.
 pub struct EventLoop<'l, Data> {
+    poller: Arc<Poller>,
     handle: LoopHandle<'l, Data>,
     signals: Arc<Signals>,
     // A caching vector for synthetic poll events
@@ -315,6 +317,7 @@ impl<'l, Data> EventLoop<'l, Data> {
     /// Fails if the initialization of the polling system failed.
     pub fn try_new() -> crate::Result<Self> {
         let poll = Poll::new()?;
+        let poller = poll.poller.clone();
         let handle = LoopHandle {
             inner: Rc::new(LoopInner {
                 poll: RefCell::new(poll),
@@ -332,6 +335,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                 #[cfg(feature = "block_on")]
                 future_ready: AtomicBool::new(false),
             }),
+            poller,
             synthetic_events: vec![],
         })
     }
@@ -657,6 +661,31 @@ impl<'l, Data> EventLoop<'l, Data> {
         }
 
         Ok(output)
+    }
+}
+
+impl<'l, Data> AsRawFd for EventLoop<'l, Data> {
+    /// Get the underlying raw-fd of the poller.
+    ///
+    /// This could be used to create [`Generic`] source out of the current loop
+    /// and inserting into some other [`EventLoop`]. It's recommended to clone `fd`
+    /// before doing so.
+    ///
+    /// [`Generic`]: crate::generic::Generic
+    fn as_raw_fd(&self) -> RawFd {
+        self.poller.as_raw_fd()
+    }
+}
+
+impl<'l, Data> AsFd for EventLoop<'l, Data> {
+    /// Get the underlying fd of the poller.
+    ///
+    /// This could be used to create [`Generic`] source out of the current loop
+    /// and inserting into some other [`EventLoop`].
+    ///
+    /// [`Generic`]: crate::generic::Generic
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        self.poller.as_fd()
     }
 }
 

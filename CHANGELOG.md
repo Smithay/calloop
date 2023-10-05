@@ -5,6 +5,7 @@
 #### Additions
 
 - `Token` and `RegistrationToken` are now invalidated when the event source they represent is removed from the event loop.
+- Implement `AsRawFd` and `AsFd` for `EventLoop<'l, Data>`
 
 #### Bugfixes
 
