@@ -8,8 +8,8 @@ use std::os::windows::io::{AsRawSocket, AsSocket, BorrowedSocket as Borrowed, Ra
 
 use polling::{Event, Events, PollMode, Poller};
 
-use crate::loop_logic::{MAX_SOURCES, MAX_SUBSOURCES_TOTAL};
 use crate::sources::timer::TimerWheel;
+use crate::token::TokenInner;
 use crate::RegistrationToken;
 
 /// Possible modes for registering a file descriptor
@@ -120,39 +120,26 @@ pub(crate) struct PollEvent {
 
 #[derive(Debug)]
 pub struct TokenFactory {
-    /// The key of the source this factory is associated with.
-    key: usize,
-
-    /// The next sub-id to use.
-    sub_id: u32,
+    next_token: TokenInner,
 }
 
 impl TokenFactory {
-    pub(crate) fn new(key: usize) -> TokenFactory {
-        TokenFactory { key, sub_id: 0 }
+    pub(crate) fn new(token: TokenInner) -> TokenFactory {
+        TokenFactory {
+            next_token: token.forget_sub_id(),
+        }
     }
 
     /// Get the "raw" registration token of this TokenFactory
     pub(crate) fn registration_token(&self) -> RegistrationToken {
-        RegistrationToken::new(self.key)
+        RegistrationToken::new(self.next_token.forget_sub_id())
     }
 
     /// Produce a new unique token
     pub fn token(&mut self) -> Token {
-        // Ensure we don't overflow the sub-id.
-        if self.sub_id >= MAX_SUBSOURCES_TOTAL as _ {
-            panic!("Too many sub-sources for this source");
-        }
-
-        // Compose the key and the sub-key together.
-        let mut key = self.key;
-        key |= (self.sub_id as usize) << MAX_SOURCES;
-
-        let token = Token { key };
-
-        self.sub_id += 1;
-
-        token
+        let token = self.next_token;
+        self.next_token = token.increment_sub_id();
+        Token { inner: token }
     }
 }
 
@@ -165,7 +152,7 @@ impl TokenFactory {
 /// You should forward it to the [`Poll`] when registering your file descriptors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Token {
-    pub(crate) key: usize,
+    pub(crate) inner: TokenInner,
 }
 
 /// The polling system
@@ -267,7 +254,9 @@ impl Poll {
                         writable: ev.writable,
                         error: false,
                     },
-                    token: Token { key: ev.key },
+                    token: Token {
+                        inner: TokenInner::from(ev.key),
+                    },
                 })
             })
             .collect::<std::io::Result<Vec<_>>>()?;
@@ -439,7 +428,7 @@ impl Notifier {
 }
 
 fn cvt_interest(interest: Interest, tok: Token) -> Event {
-    let mut event = Event::none(tok.key);
+    let mut event = Event::none(tok.inner.into());
     event.readable = interest.readable;
     event.writable = interest.writable;
     event
@@ -454,55 +443,5 @@ fn cvt_mode(mode: Mode, supports_other_modes: bool) -> PollMode {
         Mode::Edge => PollMode::Edge,
         Mode::Level => PollMode::Level,
         Mode::OneShot => PollMode::Oneshot,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{loop_logic::MAX_SOURCES_TOTAL, sources::ping::make_ping, EventSource};
-
-    #[should_panic]
-    #[test]
-    fn overflow_subid() {
-        let mut gen = TokenFactory {
-            key: 0,
-            sub_id: u32::MAX - 1,
-        };
-
-        let _ = gen.token();
-    }
-
-    #[test]
-    fn test_fallback_lt() {
-        let mut poll = Poll::new_inner(true).unwrap();
-        let mut gen = TokenFactory { key: 0, sub_id: 0 };
-        let (dst, mut src) = make_ping().unwrap();
-
-        src.register(&mut poll, &mut gen).unwrap();
-        let mut key = 0;
-
-        for _ in 0..2 {
-            // Send a ping.
-            dst.ping();
-
-            // The ping should arrive at this point.
-            let events = poll.poll(Some(Duration::from_secs(3))).unwrap();
-
-            assert_eq!(events.len(), 1);
-            assert_eq!(events[0].token, Token { key });
-
-            // Since we haven't read the ping, polling again should return the same result.
-            let events = poll.poll(Some(Duration::from_secs(3))).unwrap();
-            assert_eq!(events.len(), 1);
-            assert_eq!(events[0].token, Token { key });
-
-            // Reregister and poll again.
-            src.reregister(&mut poll, &mut gen).unwrap();
-            key += MAX_SOURCES_TOTAL;
-        }
-
-        // Remove the source.
-        src.unregister(&mut poll).unwrap();
     }
 }
