@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+#### Additions
+
+- `Token` and `RegistrationToken` are now invalidated when the event source they represent is removed from the event loop.
+
 #### Bugfixes
 
 - Fix an issue, where id-reuse could execute a PostAction on a newly registered event source

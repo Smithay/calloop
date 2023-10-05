@@ -19,9 +19,8 @@ use futures_io::{AsyncRead, AsyncWrite, IoSlice, IoSliceMut};
 
 use crate::loop_logic::EventIterator;
 use crate::{
-    loop_logic::{LoopInner, MAX_SOURCES_MASK},
-    sources::EventDispatcher,
-    Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory,
+    loop_logic::LoopInner, sources::EventDispatcher, Interest, Mode, Poll, PostAction, Readiness,
+    Token, TokenFactory,
 };
 use crate::{AdditionalLifecycleEventsSet, RegistrationToken};
 
@@ -62,8 +61,13 @@ impl<'l, F: AsFd> Async<'l, F> {
             interest: Interest::EMPTY,
             last_readiness: Readiness::EMPTY,
         }));
-        let key = inner.sources.borrow_mut().insert(Some(dispatcher.clone()));
-        dispatcher.borrow_mut().token = Some(Token { key });
+
+        {
+            let mut sources = inner.sources.borrow_mut();
+            let slot = sources.vacant_entry();
+            slot.source = Some(dispatcher.clone());
+            dispatcher.borrow_mut().token = Some(Token { inner: slot.token });
+        }
 
         // SAFETY: We are sure to deregister on drop.
         unsafe {
@@ -198,17 +202,13 @@ impl<'l, Data> IoLoopInner for LoopInner<'l, Data> {
     }
 
     fn kill(&self, dispatcher: &RefCell<IoDispatcher>) {
-        let key = dispatcher
+        let token = dispatcher
             .borrow()
             .token
-            .expect("No token for IO dispatcher")
-            .key
-            & MAX_SOURCES_MASK;
-        let _source = self
-            .sources
-            .borrow_mut()
-            .try_remove(key)
-            .expect("Attempting to remove a non-existent source?!");
+            .expect("No token for IO dispatcher");
+        if let Ok(slot) = self.sources.borrow_mut().get_mut(token.inner) {
+            slot.source = None;
+        }
     }
 }
 
