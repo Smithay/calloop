@@ -167,7 +167,7 @@ pub struct Token {
 /// source and delegate the implementations to it.
 pub struct Poll {
     /// The handle to wepoll/epoll/kqueue/... used to poll for events.
-    poller: Arc<Poller>,
+    pub(crate) poller: Arc<Poller>,
 
     /// The buffer of events returned by the poller.
     events: RefCell<Events>,
