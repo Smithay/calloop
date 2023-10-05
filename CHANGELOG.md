@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+#### Bugfixes
+
+- Fix an issue, where id-reuse could execute a PostAction on a newly registered event source
+
 ## 0.12.2 -- 2023-09-25
 
 #### Bugfixes
