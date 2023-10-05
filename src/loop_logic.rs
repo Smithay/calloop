@@ -488,6 +488,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                             .sources
                             .borrow_mut()
                             .get_mut(registroken_token)
+                            .unwrap_or(&mut None)
                             .take();
                     }
                     PostAction::Continue => {}
