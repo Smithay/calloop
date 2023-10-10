@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.12.3 -- 2023-10-10
+
 #### Additions
 
 - `Token` and `RegistrationToken` are now invalidated when the event source they represent is removed from the event loop.
