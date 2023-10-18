@@ -26,7 +26,7 @@ Breaking this down, the callback we provide receives 3 arguments:
 In addition your callback is expected to return a [`TimeoutAction`](api/calloop/timer/enum.TimeoutAction.html), that will instruct calloop what to do next. This enum has 3 values:
 
 - `Drop` will disable the timer and destroy it, freeing the callback.
-- `ToInstant` will rechedule the callback to fire again at given `Instant`, invoking the same callback again. This is useful if you need to create a timer that fires events at regular intervals, for example to encode key repetition in a graphical app. You would compute the next instant by adding the duration to the previous instant. It is not a problem if that duration is in the past, it'll simply cause the timer to fire again instantly. THis way, even if some other part of your app lags, you'll still have on average the correct amount of events per second.
+- `ToInstant` will reschedule the callback to fire again at given `Instant`, invoking the same callback again. This is useful if you need to create a timer that fires events at regular intervals, for example to encode key repetition in a graphical app. You would compute the next instant by adding the duration to the previous instant. It is not a problem if that duration is in the past, it'll simply cause the timer to fire again instantly. This way, even if some other part of your app lags, you'll still have on average the correct amount of events per second.
 - `ToDuration` will reschedule the callback to fire again after a given `Duration`. This is useful if you need to schedule some background task to execute again after some time after it was last completed, when there is no point in catching up some previous lag.
 
 ## The whole program
