@@ -329,6 +329,9 @@ impl<T> EventSource for Executor<T> {
                             _ => unreachable!(),
                         };
 
+                        // Drop the guard since the callback may register another future to the scheduler.
+                        drop(active_guard);
+
                         callback(result, &mut ());
                     }
                 }
