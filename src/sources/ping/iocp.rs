@@ -171,7 +171,7 @@ impl EventSource for PingSource {
     fn reregister(
         &mut self,
         poll: &mut crate::Poll,
-        _token_factory: &mut crate::TokenFactory,
+        token_factory: &mut crate::TokenFactory,
     ) -> crate::Result<()> {
         let mut counter = self.state.counter.lock().unwrap_or_else(|e| e.into_inner());
 
@@ -190,7 +190,18 @@ impl EventSource for PingSource {
             .into());
         }
 
-        // Nothing should really be changed here.
+        // Change the token if needed.
+        let packet = {
+            let token = token_factory.token().inner.into();
+            let event = polling::Event::readable(token);
+            CompletionPacket::new(event)
+        };
+        poll_state.packet = packet;
+        if poll_state.inserted {
+            poll_state.inserted = false;
+            poll_state.notify()?;
+        }
+
         Ok(())
     }
 
