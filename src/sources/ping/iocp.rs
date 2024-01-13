@@ -105,7 +105,7 @@ impl EventSource for PingSource {
             Some(ps) => ps,
             None => {
                 // We were deregistered; remove ourselves from the list.
-                return Ok(crate::PostAction::Remove); 
+                return Ok(crate::PostAction::Remove);
             }
         };
 
