@@ -83,6 +83,20 @@ impl Ping {
     }
 }
 
+impl Drop for Ping {
+    fn drop(&mut self) {
+        // If this is the last ping, wake up the source so it removes itself.
+        if Arc::strong_count(&self.state) <= 2 {
+            let mut counter = self.state.counter.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(poll_state) = &mut counter.poll_state {
+                if let Err(e) = poll_state.notify() {
+                    log::warn!("[calloop] failed to post packet to IOCP during drop: {}", e);
+                }
+            }
+        }
+    }
+}
+
 impl EventSource for PingSource {
     type Error = super::PingError;
     type Event = ();
@@ -104,8 +118,8 @@ impl EventSource for PingSource {
         let poll_state = match &mut counter.poll_state {
             Some(ps) => ps,
             None => {
-                // We were deregistered; remove ourselves from the list.
-                return Ok(crate::PostAction::Remove);
+                // We were deregistered; indicate to the higher level loop.
+                return Ok(crate::PostAction::Disable);
             }
         };
 
@@ -146,6 +160,7 @@ impl EventSource for PingSource {
         poll: &mut crate::Poll,
         token_factory: &mut crate::TokenFactory,
     ) -> crate::Result<()> {
+        let token = token_factory.token();
         let mut counter = self.state.counter.lock().unwrap_or_else(|e| e.into_inner());
 
         // Make sure we haven't already been registered.
@@ -155,7 +170,7 @@ impl EventSource for PingSource {
 
         // Create the event to send.
         let packet = {
-            let token = token_factory.token().inner.into();
+            let token = token.inner.into();
             let event = polling::Event::readable(token);
             CompletionPacket::new(event)
         };
@@ -173,6 +188,7 @@ impl EventSource for PingSource {
         poll: &mut crate::Poll,
         token_factory: &mut crate::TokenFactory,
     ) -> crate::Result<()> {
+        let token = token_factory.token();
         let mut counter = self.state.counter.lock().unwrap_or_else(|e| e.into_inner());
 
         // Make sure that the poller has been registered.
@@ -191,15 +207,16 @@ impl EventSource for PingSource {
         }
 
         // Change the token if needed.
-        let packet = {
-            let token = token_factory.token().inner.into();
-            let event = polling::Event::readable(token);
-            CompletionPacket::new(event)
-        };
-        poll_state.packet = packet;
-        if poll_state.inserted {
-            poll_state.inserted = false;
-            poll_state.notify()?;
+        let token = token.inner.into();
+        let event = polling::Event::readable(token);
+
+        if event.key != poll_state.packet.event().key {
+            poll_state.packet = CompletionPacket::new(event);
+
+            if poll_state.inserted {
+                poll_state.inserted = false;
+                poll_state.notify()?;
+            }
         }
 
         Ok(())
@@ -209,7 +226,9 @@ impl EventSource for PingSource {
         let mut counter = self.state.counter.lock().unwrap_or_else(|e| e.into_inner());
 
         // Remove our current registration.
-        counter.poll_state = None;
+        if counter.poll_state.take().is_none() {
+            log::trace!("[calloop] unregistered a source that wasn't registered");
+        }
         Ok(())
     }
 }
