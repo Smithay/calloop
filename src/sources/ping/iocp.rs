@@ -149,7 +149,7 @@ impl EventSource for PingSource {
         let mut counter = self.state.counter.lock().unwrap_or_else(|e| e.into_inner());
 
         // Make sure we haven't already been registered.
-        if counter.poll_state.is_none() {
+        if counter.poll_state.is_some() {
             return Err(io::Error::from(io::ErrorKind::AlreadyExists).into());
         }
 
