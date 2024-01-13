@@ -104,9 +104,8 @@ impl EventSource for PingSource {
         let poll_state = match &mut counter.poll_state {
             Some(ps) => ps,
             None => {
-                return Err(super::PingError(Box::new(io::Error::from(
-                    io::ErrorKind::NotFound,
-                ))));
+                // We were deregistered; remove ourselves from the list.
+                return Ok(crate::PostAction::Remove); 
             }
         };
 
@@ -121,6 +120,7 @@ impl EventSource for PingSource {
                 poll_state.packet.event().key,
                 token
             );
+            return Ok(PostAction::Continue);
         }
 
         // Tell if we are registered.
@@ -132,7 +132,7 @@ impl EventSource for PingSource {
         }
 
         // Stop looping if all of the Ping's have been dropped.
-        let action = if Arc::strong_count(&self.state) == 1 {
+        let action = if Arc::strong_count(&self.state) <= 1 {
             crate::PostAction::Remove
         } else {
             crate::PostAction::Continue
