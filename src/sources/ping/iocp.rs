@@ -120,7 +120,7 @@ impl EventSource for PingSource {
                 poll_state.packet.event().key,
                 token
             );
-            return Ok(PostAction::Continue);
+            return Ok(crate::PostAction::Continue);
         }
 
         // Tell if we are registered.
