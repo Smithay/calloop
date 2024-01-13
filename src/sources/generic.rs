@@ -7,7 +7,8 @@
 //! notification itself, and the monitored object is provided to your callback as the second
 //! argument.
 //!
-//! ```
+#![cfg_attr(unix, doc = "```")]
+#![cfg_attr(not(unix), doc = "```no_run")]
 //! # extern crate calloop;
 //! use calloop::{generic::Generic, Interest, Mode, PostAction};
 //!
@@ -15,7 +16,10 @@
 //! # let mut event_loop = calloop::EventLoop::<()>::try_new()
 //! #                .expect("Failed to initialize the event loop!");
 //! # let handle = event_loop.handle();
+//! # #[cfg(unix)]
 //! # let io_object = std::io::stdin();
+//! # #[cfg(windows)]
+//! # let io_object: std::net::TcpStream = panic!();
 //! handle.insert_source(
 //!     // wrap your IO object in a Generic, here we register for read readiness
 //!     // in level-triggering mode
