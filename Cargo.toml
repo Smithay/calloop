@@ -41,7 +41,7 @@ nightly_coverage = []
 signals = ["nix"]
 
 [package.metadata.docs.rs]
-features = ["block_on", "executor"]
+features = ["block_on", "executor", "signals"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [[test]]
