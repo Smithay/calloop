@@ -1,6 +1,5 @@
 use std::cell::{Cell, RefCell};
 use std::fmt::Debug;
-use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, RawFd};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -9,6 +8,11 @@ use std::{io, slice};
 
 #[cfg(feature = "block_on")]
 use std::future::Future;
+
+#[cfg(unix)]
+use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, RawFd};
+#[cfg(windows)]
+use std::os::windows::io::{AsHandle, AsRawHandle, AsSocket as AsFd, BorrowedHandle, RawHandle};
 
 use log::trace;
 use polling::Poller;
@@ -287,6 +291,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
 ///
 /// This loop can host several event sources, that can be dynamically added or removed.
 pub struct EventLoop<'l, Data> {
+    #[allow(dead_code)]
     poller: Arc<Poller>,
     handle: LoopHandle<'l, Data>,
     signals: Arc<Signals>,
@@ -664,6 +669,7 @@ impl<'l, Data> EventLoop<'l, Data> {
     }
 }
 
+#[cfg(unix)]
 impl<'l, Data> AsRawFd for EventLoop<'l, Data> {
     /// Get the underlying raw-fd of the poller.
     ///
@@ -677,6 +683,7 @@ impl<'l, Data> AsRawFd for EventLoop<'l, Data> {
     }
 }
 
+#[cfg(unix)]
 impl<'l, Data> AsFd for EventLoop<'l, Data> {
     /// Get the underlying fd of the poller.
     ///
@@ -686,6 +693,20 @@ impl<'l, Data> AsFd for EventLoop<'l, Data> {
     /// [`Generic`]: crate::generic::Generic
     fn as_fd(&self) -> BorrowedFd<'_> {
         self.poller.as_fd()
+    }
+}
+
+#[cfg(windows)]
+impl<Data> AsRawHandle for EventLoop<'_, Data> {
+    fn as_raw_handle(&self) -> RawHandle {
+        self.poller.as_raw_handle()
+    }
+}
+
+#[cfg(windows)]
+impl<Data> AsHandle for EventLoop<'_, Data> {
+    fn as_handle(&self) -> BorrowedHandle<'_> {
+        self.poller.as_handle()
     }
 }
 
@@ -761,11 +782,13 @@ mod tests {
 
     use crate::{
         channel::{channel, Channel},
-        generic::Generic,
         ping::*,
-        Dispatcher, EventIterator, EventSource, Interest, Mode, Poll, PostAction, Readiness,
-        RegistrationToken, Token, TokenFactory,
+        EventIterator, EventSource, Poll, PostAction, Readiness, RegistrationToken, Token,
+        TokenFactory,
     };
+
+    #[cfg(unix)]
+    use crate::{generic::Generic, Dispatcher, Interest, Mode};
 
     use super::EventLoop;
 
@@ -1127,6 +1150,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn insert_bad_source() {
         use std::os::unix::io::FromRawFd;
@@ -1153,6 +1177,7 @@ mod tests {
         assert!(ret.is_err());
     }
 
+    #[cfg(unix)]
     #[test]
     fn insert_source_no_interest() {
         use rustix::pipe::pipe;
@@ -1310,6 +1335,7 @@ mod tests {
         assert_eq!(dispatched, 3);
     }
 
+    #[cfg(unix)]
     #[test]
     fn change_interests() {
         use rustix::io::write;

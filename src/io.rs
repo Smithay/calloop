@@ -7,12 +7,16 @@
 //! [`LoopHandle::adapt_io`]: crate::LoopHandle#method.adapt_io
 
 use std::cell::RefCell;
-use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, RawFd};
 use std::pin::Pin;
 use std::rc::Rc;
 use std::task::{Context, Poll as TaskPoll, Waker};
 
-use rustix::fs::{fcntl_getfl, fcntl_setfl, OFlags};
+#[cfg(unix)]
+use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, RawFd};
+#[cfg(windows)]
+use std::os::windows::io::{
+    AsRawSocket as AsRawFd, AsSocket as AsFd, BorrowedSocket as BorrowedFd, RawSocket as RawFd,
+};
 
 #[cfg(feature = "futures-io")]
 use futures_io::{AsyncRead, AsyncWrite, IoSlice, IoSliceMut};
@@ -37,7 +41,6 @@ pub struct Async<'l, F: AsFd> {
     fd: Option<F>,
     dispatcher: Rc<RefCell<IoDispatcher>>,
     inner: Rc<dyn IoLoopInner + 'l>,
-    old_flags: OFlags,
 }
 
 impl<'l, F: AsFd + std::fmt::Debug> std::fmt::Debug for Async<'l, F> {
@@ -50,11 +53,19 @@ impl<'l, F: AsFd + std::fmt::Debug> std::fmt::Debug for Async<'l, F> {
 impl<'l, F: AsFd> Async<'l, F> {
     pub(crate) fn new<Data>(inner: Rc<LoopInner<'l, Data>>, fd: F) -> crate::Result<Async<'l, F>> {
         // set non-blocking
-        let old_flags = fcntl_getfl(&fd).map_err(std::io::Error::from)?;
-        fcntl_setfl(&fd, old_flags | OFlags::NONBLOCK).map_err(std::io::Error::from)?;
+        set_nonblocking(
+            #[cfg(unix)]
+            fd.as_fd(),
+            #[cfg(windows)]
+            fd.as_socket(),
+            true,
+        )?;
         // register in the loop
         let dispatcher = Rc::new(RefCell::new(IoDispatcher {
+            #[cfg(unix)]
             fd: fd.as_fd().as_raw_fd(),
+            #[cfg(windows)]
+            fd: fd.as_socket().as_raw_socket(),
             token: None,
             waker: None,
             is_registered: false,
@@ -83,7 +94,6 @@ impl<'l, F: AsFd> Async<'l, F> {
             fd: Some(fd),
             dispatcher,
             inner,
-            old_flags,
         })
     }
 
@@ -165,9 +175,9 @@ impl<'l, F: AsFd> Drop for Async<'l, F> {
     fn drop(&mut self) {
         self.inner.kill(&self.dispatcher);
         // restore flags
-        let _ = fcntl_setfl(
+        let _ = set_nonblocking(
             unsafe { BorrowedFd::borrow_raw(self.dispatcher.borrow().fd) },
-            self.old_flags,
+            false,
         );
     }
 }
@@ -358,7 +368,37 @@ impl<'l, F: AsFd + std::io::Write> AsyncWrite for Async<'l, F> {
     }
 }
 
-#[cfg(all(test, feature = "executor", feature = "futures-io"))]
+// https://github.com/smol-rs/async-io/blob/6499077421495f2200d5b86918399f3a84bbe8e4/src/lib.rs#L2171-L2195
+#[inline]
+fn set_nonblocking(fd: BorrowedFd<'_>, is_nonblocking: bool) -> std::io::Result<()> {
+    #[cfg(any(windows, target_os = "linux"))]
+    {
+        // ioctl(FIONBIO) sets the flag atomically, but we use this only on Linux
+        // for now, as with the standard library, because it seems to behave
+        // differently depending on the platform.
+        // https://github.com/rust-lang/rust/commit/efeb42be2837842d1beb47b51bb693c7474aba3d
+        // https://github.com/libuv/libuv/blob/e9d91fccfc3e5ff772d5da90e1c4a24061198ca0/src/unix/poll.c#L78-L80
+        // https://github.com/tokio-rs/mio/commit/0db49f6d5caf54b12176821363d154384357e70a
+        rustix::io::ioctl_fionbio(fd, is_nonblocking)?;
+    }
+
+    #[cfg(not(any(windows, target_os = "linux")))]
+    {
+        let previous = rustix::fs::fcntl_getfl(fd)?;
+        let new = if is_nonblocking {
+            previous | rustix::fs::OFlags::NONBLOCK
+        } else {
+            previous & !(rustix::fs::OFlags::NONBLOCK)
+        };
+        if new != previous {
+            rustix::fs::fcntl_setfl(fd, new)?;
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(all(test, unix, feature = "executor", feature = "futures-io"))]
 mod tests {
     use futures::io::{AsyncReadExt, AsyncWriteExt};
 

@@ -22,9 +22,14 @@ mod eventfd;
 #[cfg(target_os = "linux")]
 use eventfd as platform;
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(windows)]
+mod iocp;
+#[cfg(windows)]
+use iocp as platform;
+
+#[cfg(not(any(target_os = "linux", windows)))]
 mod pipe;
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", windows)))]
 use pipe as platform;
 
 /// Create a new ping event source
