@@ -37,9 +37,9 @@ use crate::{AdditionalLifecycleEventsSet, RegistrationToken};
 /// `AsyncWrite` if the underlying type implements `Read` and/or `Write`.
 ///
 /// Note that this adapter and the futures procuded from it and *not* threadsafe.
-/// 
+///
 /// ## Platform-Specific
-/// 
+///
 /// - **Windows:** Usually, on drop, the file descriptor is set back to its previous status.
 ///   For example, if the file was previously nonblocking it will be set to nonblocking, and
 ///   if the file was blocking it will be set to blocking. However, on Windows, it is impossible
@@ -102,7 +102,7 @@ impl<'l, F: AsFd> Async<'l, F> {
             fd: Some(fd),
             dispatcher,
             inner,
-            was_nonblocking
+            was_nonblocking,
         })
     }
 
