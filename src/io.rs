@@ -37,10 +37,18 @@ use crate::{AdditionalLifecycleEventsSet, RegistrationToken};
 /// `AsyncWrite` if the underlying type implements `Read` and/or `Write`.
 ///
 /// Note that this adapter and the futures procuded from it and *not* threadsafe.
+/// 
+/// ## Platform-Specific
+/// 
+/// - **Windows:** Usually, on drop, the file descriptor is set back to its previous status.
+///   For example, if the file was previously nonblocking it will be set to nonblocking, and
+///   if the file was blocking it will be set to blocking. However, on Windows, it is impossible
+///   to tell what its status was before. Therefore it will always be set to blocking.
 pub struct Async<'l, F: AsFd> {
     fd: Option<F>,
     dispatcher: Rc<RefCell<IoDispatcher>>,
     inner: Rc<dyn IoLoopInner + 'l>,
+    was_nonblocking: bool,
 }
 
 impl<'l, F: AsFd + std::fmt::Debug> std::fmt::Debug for Async<'l, F> {
@@ -53,7 +61,7 @@ impl<'l, F: AsFd + std::fmt::Debug> std::fmt::Debug for Async<'l, F> {
 impl<'l, F: AsFd> Async<'l, F> {
     pub(crate) fn new<Data>(inner: Rc<LoopInner<'l, Data>>, fd: F) -> crate::Result<Async<'l, F>> {
         // set non-blocking
-        set_nonblocking(
+        let was_nonblocking = set_nonblocking(
             #[cfg(unix)]
             fd.as_fd(),
             #[cfg(windows)]
@@ -94,6 +102,7 @@ impl<'l, F: AsFd> Async<'l, F> {
             fd: Some(fd),
             dispatcher,
             inner,
+            was_nonblocking
         })
     }
 
@@ -177,7 +186,7 @@ impl<'l, F: AsFd> Drop for Async<'l, F> {
         // restore flags
         let _ = set_nonblocking(
             unsafe { BorrowedFd::borrow_raw(self.dispatcher.borrow().fd) },
-            false,
+            self.was_nonblocking,
         );
     }
 }
@@ -369,20 +378,20 @@ impl<'l, F: AsFd + std::io::Write> AsyncWrite for Async<'l, F> {
 }
 
 // https://github.com/smol-rs/async-io/blob/6499077421495f2200d5b86918399f3a84bbe8e4/src/lib.rs#L2171-L2195
+/// Set the nonblocking status of an FD and return whether it was nonblocking before.
+#[allow(clippy::needless_return)]
 #[inline]
-fn set_nonblocking(fd: BorrowedFd<'_>, is_nonblocking: bool) -> std::io::Result<()> {
-    #[cfg(any(windows, target_os = "linux"))]
+fn set_nonblocking(fd: BorrowedFd<'_>, is_nonblocking: bool) -> std::io::Result<bool> {
+    #[cfg(windows)]
     {
-        // ioctl(FIONBIO) sets the flag atomically, but we use this only on Linux
-        // for now, as with the standard library, because it seems to behave
-        // differently depending on the platform.
-        // https://github.com/rust-lang/rust/commit/efeb42be2837842d1beb47b51bb693c7474aba3d
-        // https://github.com/libuv/libuv/blob/e9d91fccfc3e5ff772d5da90e1c4a24061198ca0/src/unix/poll.c#L78-L80
-        // https://github.com/tokio-rs/mio/commit/0db49f6d5caf54b12176821363d154384357e70a
         rustix::io::ioctl_fionbio(fd, is_nonblocking)?;
+
+        // Unfortunately it is impossible to tell if a socket was nonblocking on Windows.
+        // Just say it wasn't for now.
+        return Ok(false);
     }
 
-    #[cfg(not(any(windows, target_os = "linux")))]
+    #[cfg(not(windows))]
     {
         let previous = rustix::fs::fcntl_getfl(fd)?;
         let new = if is_nonblocking {
@@ -393,9 +402,9 @@ fn set_nonblocking(fd: BorrowedFd<'_>, is_nonblocking: bool) -> std::io::Result<
         if new != previous {
             rustix::fs::fcntl_setfl(fd, new)?;
         }
-    }
 
-    Ok(())
+        return Ok(previous.contains(rustix::fs::OFlags::NONBLOCK));
+    }
 }
 
 #[cfg(all(test, unix, feature = "executor", feature = "futures-io"))]
