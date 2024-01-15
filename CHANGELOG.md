@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.12.4 -- 2024-01-15
+
+#### Additions
+
+- `calloop` is now supported for Windows. (#168)
+- Add the `signals` feature to `docs.rs`. (#166)
+
+#### Bugfixes
+
+- Fix a borrow error that can occur while using the executor. (#165)
+
 ## 0.12.3 -- 2023-10-10
 
 #### Additions
