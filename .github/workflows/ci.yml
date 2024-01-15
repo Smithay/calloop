@@ -150,6 +150,35 @@ jobs:
           command: test
           args: --all-features --manifest-path ./doc/Cargo.toml
 
+  ci-windows:
+    name: CI (Windows)
+
+    needs:
+      - lint
+
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: ['1.63.0', 'stable']
+
+    runs-on: 'windows-latest'
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          override: true
+
+      - name: Run tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --features "block_on executor"
+
   coverage:
     name: Coverage
 

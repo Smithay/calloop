@@ -7,12 +7,16 @@
 //! [`LoopHandle::adapt_io`]: crate::LoopHandle#method.adapt_io
 
 use std::cell::RefCell;
-use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, RawFd};
 use std::pin::Pin;
 use std::rc::Rc;
 use std::task::{Context, Poll as TaskPoll, Waker};
 
-use rustix::fs::{fcntl_getfl, fcntl_setfl, OFlags};
+#[cfg(unix)]
+use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, RawFd};
+#[cfg(windows)]
+use std::os::windows::io::{
+    AsRawSocket as AsRawFd, AsSocket as AsFd, BorrowedSocket as BorrowedFd, RawSocket as RawFd,
+};
 
 #[cfg(feature = "futures-io")]
 use futures_io::{AsyncRead, AsyncWrite, IoSlice, IoSliceMut};
@@ -33,11 +37,18 @@ use crate::{AdditionalLifecycleEventsSet, RegistrationToken};
 /// `AsyncWrite` if the underlying type implements `Read` and/or `Write`.
 ///
 /// Note that this adapter and the futures procuded from it and *not* threadsafe.
+///
+/// ## Platform-Specific
+///
+/// - **Windows:** Usually, on drop, the file descriptor is set back to its previous status.
+///   For example, if the file was previously nonblocking it will be set to nonblocking, and
+///   if the file was blocking it will be set to blocking. However, on Windows, it is impossible
+///   to tell what its status was before. Therefore it will always be set to blocking.
 pub struct Async<'l, F: AsFd> {
     fd: Option<F>,
     dispatcher: Rc<RefCell<IoDispatcher>>,
     inner: Rc<dyn IoLoopInner + 'l>,
-    old_flags: OFlags,
+    was_nonblocking: bool,
 }
 
 impl<'l, F: AsFd + std::fmt::Debug> std::fmt::Debug for Async<'l, F> {
@@ -50,11 +61,19 @@ impl<'l, F: AsFd + std::fmt::Debug> std::fmt::Debug for Async<'l, F> {
 impl<'l, F: AsFd> Async<'l, F> {
     pub(crate) fn new<Data>(inner: Rc<LoopInner<'l, Data>>, fd: F) -> crate::Result<Async<'l, F>> {
         // set non-blocking
-        let old_flags = fcntl_getfl(&fd).map_err(std::io::Error::from)?;
-        fcntl_setfl(&fd, old_flags | OFlags::NONBLOCK).map_err(std::io::Error::from)?;
+        let was_nonblocking = set_nonblocking(
+            #[cfg(unix)]
+            fd.as_fd(),
+            #[cfg(windows)]
+            fd.as_socket(),
+            true,
+        )?;
         // register in the loop
         let dispatcher = Rc::new(RefCell::new(IoDispatcher {
+            #[cfg(unix)]
             fd: fd.as_fd().as_raw_fd(),
+            #[cfg(windows)]
+            fd: fd.as_socket().as_raw_socket(),
             token: None,
             waker: None,
             is_registered: false,
@@ -83,7 +102,7 @@ impl<'l, F: AsFd> Async<'l, F> {
             fd: Some(fd),
             dispatcher,
             inner,
-            old_flags,
+            was_nonblocking,
         })
     }
 
@@ -165,9 +184,9 @@ impl<'l, F: AsFd> Drop for Async<'l, F> {
     fn drop(&mut self) {
         self.inner.kill(&self.dispatcher);
         // restore flags
-        let _ = fcntl_setfl(
+        let _ = set_nonblocking(
             unsafe { BorrowedFd::borrow_raw(self.dispatcher.borrow().fd) },
-            self.old_flags,
+            self.was_nonblocking,
         );
     }
 }
@@ -358,7 +377,37 @@ impl<'l, F: AsFd + std::io::Write> AsyncWrite for Async<'l, F> {
     }
 }
 
-#[cfg(all(test, feature = "executor", feature = "futures-io"))]
+// https://github.com/smol-rs/async-io/blob/6499077421495f2200d5b86918399f3a84bbe8e4/src/lib.rs#L2171-L2195
+/// Set the nonblocking status of an FD and return whether it was nonblocking before.
+#[allow(clippy::needless_return)]
+#[inline]
+fn set_nonblocking(fd: BorrowedFd<'_>, is_nonblocking: bool) -> std::io::Result<bool> {
+    #[cfg(windows)]
+    {
+        rustix::io::ioctl_fionbio(fd, is_nonblocking)?;
+
+        // Unfortunately it is impossible to tell if a socket was nonblocking on Windows.
+        // Just say it wasn't for now.
+        return Ok(false);
+    }
+
+    #[cfg(not(windows))]
+    {
+        let previous = rustix::fs::fcntl_getfl(fd)?;
+        let new = if is_nonblocking {
+            previous | rustix::fs::OFlags::NONBLOCK
+        } else {
+            previous & !(rustix::fs::OFlags::NONBLOCK)
+        };
+        if new != previous {
+            rustix::fs::fcntl_setfl(fd, new)?;
+        }
+
+        return Ok(previous.contains(rustix::fs::OFlags::NONBLOCK));
+    }
+}
+
+#[cfg(all(test, unix, feature = "executor", feature = "futures-io"))]
 mod tests {
     use futures::io::{AsyncReadExt, AsyncWriteExt};
 

@@ -7,7 +7,8 @@
 //! notification itself, and the monitored object is provided to your callback as the second
 //! argument.
 //!
-//! ```
+#![cfg_attr(unix, doc = "```")]
+#![cfg_attr(not(unix), doc = "```no_run")]
 //! # extern crate calloop;
 //! use calloop::{generic::Generic, Interest, Mode, PostAction};
 //!
@@ -15,7 +16,10 @@
 //! # let mut event_loop = calloop::EventLoop::<()>::try_new()
 //! #                .expect("Failed to initialize the event loop!");
 //! # let handle = event_loop.handle();
+//! # #[cfg(unix)]
 //! # let io_object = std::io::stdin();
+//! # #[cfg(windows)]
+//! # let io_object: std::net::TcpStream = panic!();
 //! handle.insert_source(
 //!     // wrap your IO object in a Generic, here we register for read readiness
 //!     // in level-triggering mode
@@ -38,12 +42,13 @@
 //! [`EventSource`](crate::EventSource) implementation to them.
 
 use polling::Poller;
-use std::{
-    borrow,
-    marker::PhantomData,
-    ops,
-    os::unix::io::{AsFd, AsRawFd, BorrowedFd},
-    sync::Arc,
+use std::{borrow, marker::PhantomData, ops, sync::Arc};
+
+#[cfg(unix)]
+use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd};
+#[cfg(windows)]
+use std::os::windows::io::{
+    AsRawSocket as AsRawFd, AsSocket as AsFd, BorrowedSocket as BorrowedFd,
 };
 
 use crate::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
@@ -79,8 +84,14 @@ impl<T: AsRawFd> ops::DerefMut for FdWrapper<T> {
 }
 
 impl<T: AsRawFd> AsFd for FdWrapper<T> {
+    #[cfg(unix)]
     fn as_fd(&self) -> BorrowedFd {
         unsafe { BorrowedFd::borrow_raw(self.0.as_raw_fd()) }
+    }
+
+    #[cfg(windows)]
+    fn as_socket(&self) -> BorrowedFd {
+        unsafe { BorrowedFd::borrow_raw(self.0.as_raw_socket()) }
     }
 }
 
@@ -134,9 +145,16 @@ impl<T> ops::Deref for NoIoDrop<T> {
 }
 
 impl<T: AsFd> AsFd for NoIoDrop<T> {
+    #[cfg(unix)]
     fn as_fd(&self) -> BorrowedFd<'_> {
         // SAFETY: The innter type is not mutated.
         self.0.as_fd()
+    }
+
+    #[cfg(windows)]
+    fn as_socket(&self) -> BorrowedFd<'_> {
+        // SAFETY: The innter type is not mutated.
+        self.0.as_socket()
     }
 }
 
@@ -199,7 +217,14 @@ impl<F: AsFd, E> Generic<F, E> {
 
         // Remove it from the poller.
         if let Some(poller) = self.poller.take() {
-            poller.delete(file.as_fd()).ok();
+            poller
+                .delete(
+                    #[cfg(unix)]
+                    file.as_fd(),
+                    #[cfg(windows)]
+                    file.as_socket(),
+                )
+                .ok();
         }
 
         file
@@ -226,7 +251,14 @@ impl<F: AsFd, E> Drop for Generic<F, E> {
     fn drop(&mut self) {
         // Remove it from the poller.
         if let (Some(file), Some(poller)) = (self.file.take(), self.poller.take()) {
-            poller.delete(file.as_fd()).ok();
+            poller
+                .delete(
+                    #[cfg(unix)]
+                    file.as_fd(),
+                    #[cfg(windows)]
+                    file.as_socket(),
+                )
+                .ok();
         }
     }
 }
@@ -307,7 +339,7 @@ where
     }
 }
 
-#[cfg(test)]
+#[cfg(all(unix, test))]
 mod tests {
     use std::io::{Read, Write};
 
