@@ -296,9 +296,6 @@ impl<T> EventSource for Executor<T> {
     {
         let state = &self.state;
 
-        // Set to the unnotified state.
-        state.sender.notified.store(false, Ordering::SeqCst);
-
         let clear_readiness = {
             let mut clear_readiness = false;
 
@@ -346,6 +343,9 @@ impl<T> EventSource for Executor<T> {
                 .process_events(readiness, token, |(), &mut ()| {})
                 .map_err(ExecutorError::WakeError)?;
         }
+
+        // Set to the unnotified state.
+        state.sender.notified.store(false, Ordering::SeqCst);
 
         Ok(PostAction::Continue)
     }
