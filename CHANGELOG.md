@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.13.0 -- 2024-02-25
+
+#### Breaking changes
+
+- Bump `nix` to `v0.28`. As `nix` is exposed in the public API, this is a
+  breaking change. (#176)
+
+#### Bugfixes
+
+- Fix a panic that would occur when a task is scheduled in an event callback.
+  (#172)
+
 ## 0.12.4 -- 2024-01-15
 
 #### Additions
