@@ -145,4 +145,10 @@ OpenBSD, DragonFlyBSD.
 Those platforms *should* work based on the fact that they have the same polling mechanism as
 tested platforms, but some subtle bugs might still occur.
 
+### Minimum Safe Rust Version
+
+The current MSRV (Minimum Safe Rust Version) for this crate is Rust **1.63**.
+When the `signals` feature is enabled, however, it will be bumped to `nix`'s
+MSRV. At the time of writing this is Rust **1.69**.
+
 License: MIT
