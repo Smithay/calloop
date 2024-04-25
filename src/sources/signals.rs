@@ -27,7 +27,7 @@ macro_rules! define_signal_enum {
         pub enum Signal {
             $(
                 $(#[$inner:meta])*
-                $name:ident = $value:ident,
+                $value:ident,
             )*
         }
     ) => {
@@ -37,7 +37,7 @@ macro_rules! define_signal_enum {
         pub enum Signal {
             $(
                 $(#[$inner])*
-                $name = nix::sys::signal::Signal::$value as i32,
+                $value = nix::sys::signal::Signal::$value as i32,
             )*
         }
 
@@ -46,7 +46,7 @@ macro_rules! define_signal_enum {
             fn as_nix(self) -> nix::sys::signal::Signal {
                 match self {
                     $(
-                        Signal::$name => nix::sys::signal::Signal::$value,
+                        Signal::$value => nix::sys::signal::Signal::$value,
                     )*
                 }
             }
@@ -55,7 +55,7 @@ macro_rules! define_signal_enum {
             fn from_num(id: i32) -> Self {
                 match nix::sys::signal::Signal::try_from(id) {
                     $(
-                        Ok(nix::sys::signal::Signal::$value) => Self::$name,
+                        Ok(nix::sys::signal::Signal::$value) => Self::$value,
                     )*
 
                     Ok(sig) => panic!("unknown signal: {:?}", sig),
@@ -72,70 +72,70 @@ define_signal_enum! {
     /// The signal types that we are able to listen for.
     pub enum Signal {
         /// `SIGHUP`
-        Hup = SIGHUP,
+        SIGHUP,
         /// `SIGINT`
-        Int = SIGINT,
+        SIGINT,
         /// `SIGQUIT`
-        Quit = SIGQUIT,
+        SIGQUIT,
         /// `SIGILL`
-        Ill = SIGILL,
+        SIGILL,
         /// `SIGTRAP`
-        Trap = SIGTRAP,
+        SIGTRAP,
         /// `SIGABRT`, aka `SIGIOT`
         #[doc(alias = "Iot")]
         #[doc(alias = "Abrt")]
-        Abort = SIGABRT,
+        SIGABRT,
         /// `SIGBUS`
-        Bus = SIGBUS,
+        SIGBUS,
         /// `SIGFPE`
-        Fpe = SIGFPE,
+        SIGFPE,
         /// `SIGKILL`
-        Kill = SIGKILL,
+        SIGKILL,
         /// `SIGUSR1`
-        Usr1 = SIGUSR1,
+        SIGUSR1,
         /// `SIGSEGV`
-        Segv = SIGSEGV,
+        SIGSEGV,
         /// `SIGUSR2`
-        Usr2 = SIGUSR2,
+        SIGUSR2,
         /// `SIGPIPE`
-        Pipe = SIGPIPE,
+        SIGPIPE,
         /// `SIGALRM`
         #[doc(alias = "Alrm")]
-        Alarm = SIGALRM,
+        SIGALRM,
         /// `SIGTERM`
-        Term = SIGTERM,
+        SIGTERM,
         /// `SIGCHLD`
         #[doc(alias = "Chld")]
-        Child = SIGCHLD,
+        SIGCHLD,
         /// `SIGCONT`
-        Cont = SIGCONT,
+        SIGCONT,
         /// `SIGSTOP`
-        Stop = SIGSTOP,
+        SIGSTOP,
         /// `SIGTSTP`
-        Tstp = SIGTSTP,
+        SIGTSTP,
         /// `SIGTTIN`
-        Ttin = SIGTTIN,
+        SIGTTIN,
         /// `SIGTTOU`
-        Ttou = SIGTTOU,
+        SIGTTOU,
         /// `SIGURG`
-        Urg = SIGURG,
+        SIGURG,
         /// `SIGXCPU`
-        Xcpu = SIGXCPU,
+        SIGXCPU,
         /// `SIGXFSZ`
-        Xfsz = SIGXFSZ,
+        SIGXFSZ,
         /// `SIGVTALRM`
         #[doc(alias = "Vtalrm")]
-        Vtalarm = SIGVTALRM,
+        SIGVTALRM,
         /// `SIGPROF`
-        Prof = SIGPROF,
+        SIGPROF,
         /// `SIGWINCH`
-        Winch = SIGWINCH,
+        SIGWINCH,
         /// `SIGIO`, aka `SIGPOLL`
         #[doc(alias = "Poll")]
-        Io = SIGIO,
+        SIGIO,
         /// `SIGSYS`, aka `SIGUNUSED`
         #[doc(alias = "Unused")]
-        Sys = SIGSYS,
+        SIGSYS,
     }
 }
 
