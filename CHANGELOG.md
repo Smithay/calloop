@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+#### Breaking Changes
+
+- Remove `nix` from the public API. This replaces `Signal` with a home-grown
+  `Signal` enum and `siginfo` with a structure that provides most of its fields.
+
 ## 0.13.0 -- 2024-02-25
 
 #### Breaking changes
