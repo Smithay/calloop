@@ -49,7 +49,7 @@ mod test {
             .unwrap();
 
         // send ourselves a SIGUSR1
-        kill(Pid::this(), Signal::SIGUSR1).unwrap();
+        kill(Pid::this(), nix::sys::signal::Signal::SIGUSR1).unwrap();
 
         event_loop
             .dispatch(Some(Duration::from_millis(10)), &mut signal_received)
@@ -79,7 +79,7 @@ mod test {
             .unwrap();
 
         // send ourselves a SIGUSR2
-        kill(Pid::this(), Signal::SIGUSR2).unwrap();
+        kill(Pid::this(), nix::sys::signal::Signal::SIGUSR2).unwrap();
 
         event_loop
             .dispatch(Some(Duration::from_millis(10)), &mut signal_received)
@@ -110,11 +110,11 @@ mod test {
 
         // block sigusr2 anyway, to not be killed by it
         let mut set = SigSet::empty();
-        set.add(Signal::SIGUSR2);
+        set.add(nix::sys::signal::Signal::SIGUSR2);
         set.thread_block().unwrap();
 
         // send ourselves a SIGUSR2
-        kill(Pid::this(), Signal::SIGUSR2).unwrap();
+        kill(Pid::this(), nix::sys::signal::Signal::SIGUSR2).unwrap();
 
         event_loop
             .dispatch(Some(Duration::from_millis(10)), &mut signal_received)
