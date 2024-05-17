@@ -276,6 +276,7 @@ impl TimerWheel {
 // trait implementations for TimeoutData
 
 impl std::cmp::Ord for TimeoutData {
+    #[inline]
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // earlier values have priority
         self.deadline.cmp(&other.deadline).reverse()
@@ -283,6 +284,7 @@ impl std::cmp::Ord for TimeoutData {
 }
 
 impl std::cmp::PartialOrd for TimeoutData {
+    #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
@@ -292,6 +294,7 @@ impl std::cmp::PartialOrd for TimeoutData {
 // and the type is private, so ignore its coverage
 impl std::cmp::PartialEq for TimeoutData {
     #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.deadline == other.deadline
     }
