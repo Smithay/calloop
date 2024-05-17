@@ -241,6 +241,7 @@ impl TimerWheel {
 
         self.heap
             .iter()
+            .rev()
             .find(|data| data.counter == counter)
             .map(|data| data.token.take());
     }
