@@ -229,6 +229,16 @@ impl TimerWheel {
     }
 
     pub(crate) fn cancel(&mut self, counter: u32) {
+        if self
+            .heap
+            .peek()
+            .map(|data| data.counter == counter)
+            .unwrap_or(false)
+        {
+            self.heap.pop();
+            return;
+        };
+
         self.heap
             .iter()
             .find(|data| data.counter == counter)
