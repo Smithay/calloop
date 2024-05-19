@@ -1153,10 +1153,21 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn insert_bad_source() {
-        use std::os::unix::io::FromRawFd;
+        use std::mem::ManuallyDrop;
+        use std::os::unix::io::{AsFd, FromRawFd, OwnedFd};
+
+        struct LeakedFd(ManuallyDrop<OwnedFd>);
+
+        impl AsFd for LeakedFd {
+            fn as_fd(&self) -> std::os::unix::prelude::BorrowedFd<'_> {
+                self.0.as_fd()
+            }
+        }
 
         let event_loop = EventLoop::<()>::try_new().unwrap();
-        let fd = unsafe { std::os::unix::io::OwnedFd::from_raw_fd(420) };
+        let fd = LeakedFd(ManuallyDrop::new(unsafe {
+            std::os::unix::io::OwnedFd::from_raw_fd(420)
+        }));
         let ret = event_loop.handle().insert_source(
             crate::sources::generic::Generic::new(fd, Interest::READ, Mode::Level),
             |_, _, _| Ok(PostAction::Continue),
