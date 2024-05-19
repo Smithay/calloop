@@ -11,6 +11,7 @@
 //! they'll inherit their parent signal mask.
 
 use std::convert::TryFrom;
+use std::fmt;
 use std::io::Error as IoError;
 use std::os::raw::c_int;
 
@@ -331,6 +332,17 @@ impl EventSource for Signals {
 }
 
 /// An error arising from processing events for a process signal.
-#[derive(thiserror::Error, Debug)]
-#[error(transparent)]
+#[derive(Debug)]
 pub struct SignalError(Box<dyn std::error::Error + Sync + Send>);
+
+impl fmt::Display for SignalError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl std::error::Error for SignalError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&*self.0)
+    }
+}
