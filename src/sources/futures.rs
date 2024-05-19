@@ -111,9 +111,9 @@ impl<T> Scheduler<T> {
     /// Sends the given future to the executor associated to this scheduler
     ///
     /// Returns an error if the the executor not longer exists.
-    pub fn schedule<Fut: 'static>(&self, future: Fut) -> Result<(), ExecutorDestroyed>
+    pub fn schedule<Fut>(&self, future: Fut) -> Result<(), ExecutorDestroyed>
     where
-        Fut: Future<Output = T>,
+        Fut: Future<Output = T> + 'static,
         T: 'static,
     {
         /// Store this future's result in the executor.
