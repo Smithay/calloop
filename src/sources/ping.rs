@@ -32,6 +32,8 @@ mod pipe;
 #[cfg(not(any(target_os = "linux", windows)))]
 use pipe as platform;
 
+use std::fmt;
+
 /// Create a new ping event source
 ///
 /// you are given a [`Ping`] instance, which can be cloned and used to ping the
@@ -56,9 +58,20 @@ pub type Ping = platform::Ping;
 pub type PingSource = platform::PingSource;
 
 /// An error arising from processing events for a ping.
-#[derive(thiserror::Error, Debug)]
-#[error(transparent)]
+#[derive(Debug)]
 pub struct PingError(Box<dyn std::error::Error + Sync + Send>);
+
+impl fmt::Display for PingError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl std::error::Error for PingError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&*self.0)
+    }
+}
 
 #[cfg(test)]
 mod tests {

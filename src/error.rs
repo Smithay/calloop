@@ -20,25 +20,44 @@ use std::fmt::{self, Debug, Formatter};
 /// The primary error type used by Calloop covering internal errors and I/O
 /// errors that arise during loop operations such as source registration or
 /// event dispatching.
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug)]
 pub enum Error {
     /// When an event source is registered (or re- or un-registered) with the
     /// event loop, this error variant will occur if the token Calloop uses to
     /// keep track of the event source is not valid.
-    #[error("invalid token provided to internal function")]
     InvalidToken,
 
     /// This variant wraps a [`std::io::Error`], which might arise from
     /// Calloop's internal operations.
-    #[error("underlying IO error")]
-    IoError(#[from] std::io::Error),
+    IoError(std::io::Error),
 
     /// Any other unexpected error kind (most likely from a user implementation of
     /// [`EventSource::process_events()`]) will be wrapped in this.
     ///
     /// [`EventSource::process_events()`]: crate::EventSource::process_events()
-    #[error("other error during loop operation")]
-    OtherError(#[from] Box<dyn std::error::Error + Sync + Send>),
+    OtherError(Box<dyn std::error::Error + Sync + Send>),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidToken => f.write_str("invalid token provided to internal function"),
+            Self::IoError(err) => write!(f, "underlying IO error: {}", err),
+            Self::OtherError(err) => write!(f, "other error during loop operation: {}", err),
+        }
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(value: std::io::Error) -> Self {
+        Self::IoError(value)
+    }
+}
+
+impl From<Box<dyn std::error::Error + Sync + Send>> for Error {
+    fn from(value: Box<dyn std::error::Error + Sync + Send>) -> Self {
+        Self::OtherError(value)
+    }
 }
 
 impl From<Error> for std::io::Error {
@@ -52,17 +71,24 @@ impl From<Error> for std::io::Error {
     }
 }
 
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::InvalidToken => None,
+            Self::IoError(err) => Some(err),
+            Self::OtherError(err) => Some(&**err),
+        }
+    }
+}
+
 /// [`Result`] alias using Calloop's error type.
 pub type Result<T> = core::result::Result<T, Error>;
 
 /// An error generated when trying to insert an event source
-#[derive(thiserror::Error)]
-#[error("error inserting event source")]
 pub struct InsertError<T> {
     /// The source that could not be inserted
     pub inserted: T,
     /// The generated error
-    #[source]
     pub error: Error,
 }
 
@@ -73,11 +99,23 @@ impl<T> Debug for InsertError<T> {
     }
 }
 
+impl<T> fmt::Display for InsertError<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "error inserting event source: {}", &self.error)
+    }
+}
+
 impl<T> From<InsertError<T>> for crate::Error {
     /// Converts the [`InsertError`] into Calloop's error type, throwing away
     /// the contained source.
     #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn from(e: InsertError<T>) -> crate::Error {
         e.error
+    }
+}
+
+impl<T> std::error::Error for InsertError<T> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.error)
     }
 }
