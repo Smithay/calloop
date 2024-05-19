@@ -218,12 +218,14 @@ impl<T> EventSource for Channel<T> {
 pub struct ChannelError(PingError);
 
 impl fmt::Display for ChannelError {
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&self.0, f)
     }
 }
 
 impl std::error::Error for ChannelError {
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         Some(&self.0)
     }

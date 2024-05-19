@@ -62,12 +62,14 @@ pub type PingSource = platform::PingSource;
 pub struct PingError(Box<dyn std::error::Error + Sync + Send>);
 
 impl fmt::Display for PingError {
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&self.0, f)
     }
 }
 
 impl std::error::Error for PingError {
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         Some(&*self.0)
     }

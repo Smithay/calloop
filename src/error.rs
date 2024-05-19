@@ -39,6 +39,7 @@ pub enum Error {
 }
 
 impl fmt::Display for Error {
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidToken => f.write_str("invalid token provided to internal function"),
@@ -49,12 +50,14 @@ impl fmt::Display for Error {
 }
 
 impl From<std::io::Error> for Error {
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn from(value: std::io::Error) -> Self {
         Self::IoError(value)
     }
 }
 
 impl From<Box<dyn std::error::Error + Sync + Send>> for Error {
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn from(value: Box<dyn std::error::Error + Sync + Send>) -> Self {
         Self::OtherError(value)
     }
@@ -62,6 +65,7 @@ impl From<Box<dyn std::error::Error + Sync + Send>> for Error {
 
 impl From<Error> for std::io::Error {
     /// Converts Calloop's error type into a [`std::io::Error`].
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn from(err: Error) -> Self {
         match err {
             Error::IoError(source) => source,
@@ -72,6 +76,7 @@ impl From<Error> for std::io::Error {
 }
 
 impl std::error::Error for Error {
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::InvalidToken => None,
@@ -100,6 +105,7 @@ impl<T> Debug for InsertError<T> {
 }
 
 impl<T> fmt::Display for InsertError<T> {
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "error inserting event source: {}", &self.error)
     }
@@ -115,6 +121,7 @@ impl<T> From<InsertError<T>> for crate::Error {
 }
 
 impl<T> std::error::Error for InsertError<T> {
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         Some(&self.error)
     }
