@@ -151,4 +151,8 @@ The current MSRV (Minimum Safe Rust Version) for this crate is Rust **1.63**.
 When the `signals` feature is enabled, however, it will be bumped to `nix`'s
 MSRV. At the time of writing this is Rust **1.69**.
 
+Prior to `calloop` v1.0, bumps in the MSRV will result in bumps to the patch version. Once `calloop` v1.0 is release, bumps in the MSRV will result in bumps to the minor version. In short, MSRV bumps are not considered breaking changes.
+
+As a **tentative** policy, the base MSRV will not advance past the [current Rust version provided by Debian Stable](https://packages.debian.org/stable/rust/rustc). At the time of writing, this version of Rust is *1.63*. However, the MSRV may be advanced further in the event of a major ecosystem shift or a security vulnerability.
+
 License: MIT
