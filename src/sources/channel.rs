@@ -8,6 +8,7 @@
 //! A synchronous version of the channel is provided by [`sync_channel`], in which
 //! the [`SyncSender`] will block when the channel is full.
 
+use std::fmt;
 use std::sync::mpsc;
 
 use crate::{EventSource, Poll, PostAction, Readiness, Token, TokenFactory};
@@ -213,9 +214,22 @@ impl<T> EventSource for Channel<T> {
 }
 
 /// An error arising from processing events for a channel.
-#[derive(thiserror::Error, Debug)]
-#[error(transparent)]
+#[derive(Debug)]
 pub struct ChannelError(PingError);
+
+impl fmt::Display for ChannelError {
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl std::error::Error for ChannelError {
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.0)
+    }
+}
 
 #[cfg(test)]
 mod tests {

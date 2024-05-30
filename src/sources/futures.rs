@@ -22,6 +22,7 @@ use async_task::{Builder, Runnable};
 use slab::Slab;
 use std::{
     cell::RefCell,
+    fmt,
     future::Future,
     rc::Rc,
     sync::{
@@ -248,9 +249,17 @@ impl<T> Drop for Executor<T> {
 
 /// Error generated when trying to schedule a future after the
 /// executor was destroyed.
-#[derive(thiserror::Error, Debug)]
-#[error("the executor was destroyed")]
+#[derive(Debug)]
 pub struct ExecutorDestroyed;
+
+impl fmt::Display for ExecutorDestroyed {
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("the executor was destroyed")
+    }
+}
+
+impl std::error::Error for ExecutorDestroyed {}
 
 /// Create a new executor, and its associated scheduler
 ///
@@ -371,16 +380,26 @@ impl<T> EventSource for Executor<T> {
 }
 
 /// An error arising from processing events in an async executor event source.
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug)]
 pub enum ExecutorError {
     /// Error while reading new futures added via [`Scheduler::schedule()`].
-    #[error("error adding new futures")]
     NewFutureError(ChannelError),
 
     /// Error while processing wake events from existing futures.
-    #[error("error processing wake events")]
     WakeError(PingError),
 }
+
+impl fmt::Display for ExecutorError {
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NewFutureError(err) => write!(f, "error adding new futures: {}", err),
+            Self::WakeError(err) => write!(f, "error processing wake events: {}", err),
+        }
+    }
+}
+
+impl std::error::Error for ExecutorError {}
 
 #[cfg(test)]
 mod tests {
