@@ -3,9 +3,9 @@ task:
   environment:
     CODECOV_TOKEN: ENCRYPTED[cfd48b16731c254067ef7b39a7083384127a594c6ad52e51cc32982da2eb8cc67c0a54f69736c29559a28664c615ab99]
   matrix:
-    - name: FreeBSD 13.2
+    - name: FreeBSD 13.3
       freebsd_instance:
-        image_family: freebsd-13-2
+        image_family: freebsd-13-3
     - name: FreeBSD 14.0
       freebsd_instance:
         image_family: freebsd-14-0
