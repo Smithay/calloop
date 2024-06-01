@@ -2,10 +2,21 @@
 
 ## Unreleased
 
+## 0.14.0 -- 2024-06-01
+
 #### Breaking Changes
 
 - Remove `nix` from the public API. This replaces `Signal` with a home-grown
-  `Signal` enum and `siginfo` with a structure that provides most of its fields.
+  `Signal` enum and `siginfo` with a structure that provides most of its fields. (#182)
+- Replace `thiserror` usage with manual implementations. This may cause the API to be slightly different in some cases, but should mostly be identical. (#186)
+
+#### Additions
+
+- Improve the MSRV policy. Now, changes to the MSRV are no longer considered breaking changes, improving stability. (#189)
+
+#### Bugfixes
+
+- Bump `nix` to v0.29. (#188)
 
 ## 0.13.0 -- 2024-02-25
 
@@ -88,7 +99,7 @@
 - **Breaking:** `Timer::current_deadline` returns `Option<Instant>`, so that it can return `None`
   in the event of an overflow.
 - **Breaking:** Use `AsFd` instead of `AsRawFd`/`RawFd`.
-  
+
 ## 0.10.2 -- 2022-11-08
 
 #### Bugfixes
