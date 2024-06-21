@@ -17,6 +17,7 @@ use std::os::raw::c_int;
 
 use nix::sys::signal::SigSet;
 use nix::sys::signalfd::{siginfo, SfdFlags, SignalFd};
+use tracing::warn;
 
 use super::generic::{FdWrapper, Generic};
 use crate::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
@@ -277,7 +278,7 @@ impl Drop for Signals {
     fn drop(&mut self) {
         // we cannot handle error here
         if let Err(e) = self.mask.thread_unblock() {
-            log::warn!("[calloop] Failed to unmask signals: {:?}", e);
+            warn!("Failed to unmask signals: {e:?}");
         }
     }
 }
@@ -304,7 +305,7 @@ impl EventSource for Signals {
                         Ok(Some(info)) => callback(Event { info }, &mut ()),
                         Ok(None) => break,
                         Err(e) => {
-                            log::warn!("[callop] Error reading from signalfd: {}", e);
+                            warn!("Error reading from signalfd: {e}");
                             return Err(e.into());
                         }
                     }

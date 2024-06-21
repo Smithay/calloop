@@ -23,6 +23,7 @@ use std::sync::Arc;
 
 use rustix::event::{eventfd, EventfdFlags};
 use rustix::io::{read, write, Errno};
+use tracing::warn;
 
 use super::PingError;
 use crate::{
@@ -175,7 +176,7 @@ impl Ping {
     /// Send a ping to the `PingSource`.
     pub fn ping(&self) {
         if let Err(e) = send_ping(self.event.0.as_fd(), INCREMENT_PING) {
-            log::warn!("[calloop] Failed to write a ping: {:?}", e);
+            warn!("Failed to write a ping: {e:?}");
         }
     }
 }
@@ -188,7 +189,7 @@ struct FlagOnDrop(Arc<OwnedFd>);
 impl Drop for FlagOnDrop {
     fn drop(&mut self) {
         if let Err(e) = send_ping(self.0.as_fd(), INCREMENT_CLOSE) {
-            log::warn!("[calloop] Failed to send close ping: {:?}", e);
+            warn!("Failed to send close ping: {e:?}");
         }
     }
 }
