@@ -13,6 +13,7 @@ use crate::sources::EventSource;
 
 use polling::os::iocp::{CompletionPacket, PollerIocpExt};
 use polling::Poller;
+use tracing::{trace, warn};
 
 use std::fmt;
 use std::io;
@@ -71,14 +72,14 @@ impl Ping {
         let poll_state = match &mut counter.poll_state {
             Some(ps) => ps,
             None => {
-                log::warn!("[calloop] ping was not registered with the event loop");
+                warn!("ping was not registered with the event loop");
                 return;
             }
         };
 
         // If we aren't currently inserted in the loop, send our packet.
         if let Err(e) = poll_state.notify() {
-            log::warn!("[calloop] failed to post packet to IOCP: {}", e);
+            warn!("failed to post packet to IOCP: {e}");
         }
     }
 }
@@ -90,7 +91,7 @@ impl Drop for Ping {
             let mut counter = self.state.counter.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(poll_state) = &mut counter.poll_state {
                 if let Err(e) = poll_state.notify() {
-                    log::warn!("[calloop] failed to post packet to IOCP during drop: {}", e);
+                    warn!("failed to post packet to IOCP during drop: {e}");
                 }
             }
         }
@@ -129,8 +130,8 @@ impl EventSource for PingSource {
         // Make sure this is our token.
         let token: usize = token.inner.into();
         if poll_state.packet.event().key != token {
-            log::warn!(
-                "[calloop] token does not match; expected {:x}, got {:x}",
+            warn!(
+                "token does not match; expected {:x}, got {:x}",
                 poll_state.packet.event().key,
                 token
             );
@@ -227,7 +228,7 @@ impl EventSource for PingSource {
 
         // Remove our current registration.
         if counter.poll_state.take().is_none() {
-            log::trace!("[calloop] unregistered a source that wasn't registered");
+            trace!("unregistered a source that wasn't registered");
         }
         Ok(())
     }

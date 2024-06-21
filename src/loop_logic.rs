@@ -14,8 +14,8 @@ use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, RawFd};
 #[cfg(windows)]
 use std::os::windows::io::{AsHandle, AsRawHandle, AsSocket as AsFd, BorrowedHandle, RawHandle};
 
-use log::trace;
 use polling::Poller;
+use tracing::{trace, warn};
 
 use crate::list::{SourceEntry, SourceList};
 use crate::sources::{Dispatcher, EventSource, Idle, IdleDispatcher};
@@ -127,7 +127,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
         let slot = sources.vacant_entry();
 
         slot.source = Some(dispatcher.clone_as_event_dispatcher());
-        trace!("[calloop] Inserting new source #{}", slot.token.get_id());
+        trace!(source = slot.token.get_id(), "Inserting new source");
         let ret = slot.source.as_ref().unwrap().register(
             &mut poll,
             &mut self
@@ -171,7 +171,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
             source: Some(ref source),
         } = self.inner.sources.borrow().get(token.inner)?
         {
-            trace!("[calloop] Registering source #{}", entry_token.get_id());
+            trace!(source = entry_token.get_id(), "Registering source");
             source.register(
                 &mut self.inner.poll.borrow_mut(),
                 &mut self
@@ -196,8 +196,8 @@ impl<'l, Data> LoopHandle<'l, Data> {
         } = self.inner.sources.borrow().get(token.inner)?
         {
             trace!(
-                "[calloop] Updating registration of source #{}",
-                entry_token.get_id()
+                source = entry_token.get_id(),
+                "Updating registration of source"
             );
             if !source.reregister(
                 &mut self.inner.poll.borrow_mut(),
@@ -207,7 +207,10 @@ impl<'l, Data> LoopHandle<'l, Data> {
                     .borrow_mut(),
                 &mut TokenFactory::new(entry_token),
             )? {
-                trace!("[calloop] Cannot do it now, storing for later.");
+                trace!(
+                    source = entry_token.get_id(),
+                    "Can't update registration withing a callback, storing for later."
+                );
                 // we are in a callback, store for later processing
                 self.inner.pending_action.set(PostAction::Reregister);
             }
@@ -230,7 +233,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
                 // The token provided by the user is no longer valid
                 return Err(crate::Error::InvalidToken);
             }
-            trace!("[calloop] Unregistering source #{}", entry_token.get_id());
+            trace!(source = entry_token.get_id(), "Unregistering source");
             if !source.unregister(
                 &mut self.inner.poll.borrow_mut(),
                 &mut self
@@ -239,7 +242,10 @@ impl<'l, Data> LoopHandle<'l, Data> {
                     .borrow_mut(),
                 *token,
             )? {
-                trace!("[calloop] Cannot do it now, storing for later.");
+                trace!(
+                    source = entry_token.get_id(),
+                    "Cannot unregister source in callback, storing for later."
+                );
                 // we are in a callback, store for later processing
                 self.inner.pending_action.set(PostAction::Disable);
             }
@@ -257,7 +263,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
         }) = self.inner.sources.borrow_mut().get_mut(token.inner)
         {
             if let Some(source) = source.take() {
-                trace!("[calloop] Removing source #{}", entry_token.get_id());
+                trace!(source = entry_token.get_id(), "Removing source");
                 if let Err(e) = source.unregister(
                     &mut self.inner.poll.borrow_mut(),
                     &mut self
@@ -266,10 +272,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
                         .borrow_mut(),
                     token,
                 ) {
-                    log::warn!(
-                        "[calloop] Failed to unregister source from the polling system: {:?}",
-                        e
-                    );
+                    warn!("Failed to unregister source from the polling system: {e:?}");
                 }
             }
         }
@@ -438,10 +441,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                 .and_then(|entry| entry.source.clone());
 
             if let Some(disp) = opt_disp {
-                trace!(
-                    "[calloop] Dispatching events for source #{}",
-                    reg_token.get_id()
-                );
+                trace!(source = reg_token.get_id(), "Dispatching events for source");
                 let mut ret = disp.process_events(event.readiness, event.token, data)?;
 
                 // if the returned PostAction is Continue, it may be overwritten by an user-specified pending action
@@ -457,8 +457,8 @@ impl<'l, Data> EventLoop<'l, Data> {
                 match ret {
                     PostAction::Reregister => {
                         trace!(
-                            "[calloop] Postaction reregister for source #{}",
-                            reg_token.get_id()
+                            source = reg_token.get_id(),
+                            "Postaction reregister for source"
                         );
                         disp.reregister(
                             &mut self.handle.inner.poll.borrow_mut(),
@@ -472,8 +472,8 @@ impl<'l, Data> EventLoop<'l, Data> {
                     }
                     PostAction::Disable => {
                         trace!(
-                            "[calloop] Postaction unregister for source #{}",
-                            reg_token.get_id()
+                            source = reg_token.get_id(),
+                            "Postaction unregister for source"
                         );
                         disp.unregister(
                             &mut self.handle.inner.poll.borrow_mut(),
@@ -486,10 +486,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                         )?;
                     }
                     PostAction::Remove => {
-                        trace!(
-                            "[calloop] Postaction remove for source #{}",
-                            reg_token.get_id()
-                        );
+                        trace!(source = reg_token.get_id(), "Postaction remove for source");
                         if let Ok(entry) = self.handle.inner.sources.borrow_mut().get_mut(reg_token)
                         {
                             entry.source = None;
@@ -519,17 +516,11 @@ impl<'l, Data> EventLoop<'l, Data> {
                             .borrow_mut(),
                         RegistrationToken::new(reg_token),
                     ) {
-                        log::warn!(
-                            "[calloop] Failed to unregister source from the polling system: {:?}",
-                            e
-                        );
+                        warn!("Failed to unregister source from the polling system: {e:?}",);
                     }
                 }
             } else {
-                log::warn!(
-                    "[calloop] Received an event for non-existence source: {:?}",
-                    reg_token
-                );
+                warn!(?reg_token, "Received an event for non-existence source");
             }
         }
 

@@ -4,7 +4,7 @@ use std::{
     rc::Rc,
 };
 
-use log::trace;
+use tracing::trace;
 
 pub use crate::loop_logic::EventIterator;
 use crate::{sys::TokenFactory, Poll, Readiness, RegistrationToken, Token};
@@ -320,7 +320,7 @@ where
             ..
         } = *disp;
         trace!(
-            "[calloop] Processing events for source type {}",
+            "Processing events for source type {}",
             std::any::type_name::<S>()
         );
         source

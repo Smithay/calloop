@@ -6,6 +6,7 @@ use std::os::unix::io::{AsFd, BorrowedFd, OwnedFd};
 use std::sync::Arc;
 
 use rustix::io::{read, write, Errno};
+use tracing::warn;
 
 use super::PingError;
 use crate::{
@@ -140,7 +141,7 @@ impl Ping {
     /// Send a ping to the `PingSource`
     pub fn ping(&self) {
         if let Err(e) = send_ping(self.pipe.as_fd()) {
-            log::warn!("[calloop] Failed to write a ping: {:?}", e);
+            warn!("Failed to write a ping: {e:?}");
         }
     }
 }
