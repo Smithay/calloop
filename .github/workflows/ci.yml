@@ -3,11 +3,10 @@ name: Continuous Integration
 on:
   push:
     branches:
-    - master
+      - master
   pull_request:
 
 jobs:
-
   lint:
     runs-on: ubuntu-latest
 
@@ -86,9 +85,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rust: ['1.63.0', '1.69.0', 'stable', 'beta']
+        rust: ["1.63.0", "1.69.0", "stable", "beta"]
 
-    runs-on: 'ubuntu-latest'
+    runs-on: "ubuntu-latest"
 
     steps:
       - name: Checkout sources
@@ -167,9 +166,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rust: ['1.63.0', 'stable']
+        rust: ["1.63.0", "stable"]
 
-    runs-on: 'windows-latest'
+    runs-on: "windows-latest"
 
     steps:
       - name: Checkout sources
@@ -210,7 +209,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ['ubuntu-latest', 'macos-latest']
+        os: ["ubuntu-latest", "macos-latest"]
 
     runs-on: ${{ matrix.os }}
 
@@ -241,11 +240,11 @@ jobs:
           toolchain: nightly # required for feature(no_coverage)
           override: true
           components: llvm-tools-preview # Required for grcov
-      
+
       - name: Get grcov latest version
         id: grcovversion
         run: echo "::set-output name=version::$(cargo search 'grcov' --limit 1 | head -n 1 | cut -d ' ' -f 3 | cut -d '"' -f 2)"
-      
+
       - name: grcov cache
         uses: actions/cache@v4
         with:
@@ -272,7 +271,7 @@ jobs:
 
       - name: Coverage
         run: grcov . --binary-path ./target/debug -s . -t lcov --branch --llvm --ignore-not-existing --ignore 'examples/*' --ignore 'tests/*' --ignore '*/.cargo/registry/*' --excl-br-start "mod tests \{" --excl-start "mod tests \{" --excl-br-line "#\[derive\(" --excl-line "#\[derive\(" -o lcov.info
-    
+
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v4
         with:
@@ -325,7 +324,7 @@ jobs:
       - name: Build mdBook
         uses: peaceiris/actions-mdbook@v2
         with:
-          mdbook-version: '0.4.8'
+          mdbook-version: "0.4.8"
 
       - run: mdbook build doc
 
