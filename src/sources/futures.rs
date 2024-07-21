@@ -405,6 +405,9 @@ impl std::error::Error for ExecutorError {}
 mod tests {
     use super::*;
 
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
     #[test]
     fn ready() {
         let mut event_loop = crate::EventLoop::<u32>::try_new().unwrap();
@@ -438,5 +441,36 @@ mod tests {
 
         // the future has run
         assert_eq!(got, 42);
+    }
+
+    #[test]
+    fn more_than_1024() {
+        let mut event_loop = crate::EventLoop::<()>::try_new().unwrap();
+        let handle = event_loop.handle();
+
+        let (exec, sched) = executor::<()>().unwrap();
+        handle.insert_source(exec, move |_, _, _| ()).unwrap();
+
+        let counter = Rc::new(RefCell::new(0));
+        for _ in 0..1025 {
+            let counter = counter.clone();
+            sched
+                .schedule(async move {
+                    *counter.borrow_mut() += 1;
+                })
+                .unwrap();
+        }
+
+        event_loop
+            .dispatch(Some(::std::time::Duration::ZERO), &mut ())
+            .unwrap();
+
+        assert_eq!(*counter.borrow(), 1024);
+
+        event_loop
+            .dispatch(Some(::std::time::Duration::ZERO), &mut ())
+            .unwrap();
+
+        assert_eq!(*counter.borrow(), 1025);
     }
 }
