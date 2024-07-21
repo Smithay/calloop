@@ -1,0 +1,266 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Composition - A Guide to Calloop</title>
+        
+        
+
+
+        <!-- Custom HTML head -->
+        
+
+
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        
+        <link rel="icon" href="favicon.svg">
+        
+        
+        <link rel="shortcut icon" href="favicon.png">
+        
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        
+        <link rel="stylesheet" href="css/print.css" media="print">
+        
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        
+        <link rel="stylesheet" href="fonts/fonts.css">
+        
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        
+
+        
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="ch00-00-where-to-start.html">Where to start</a></li><li class="chapter-item expanded "><a href="ch01-00-how-an-event-loop-works.html"><strong aria-hidden="true">1.</strong> How an event loop works</a></li><li class="chapter-item expanded "><a href="ch02-00-event-sources.html"><strong aria-hidden="true">2.</strong> Using event sources</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="ch02-01-generic.html"><strong aria-hidden="true">2.1.</strong> Monitoring a file descriptor</a></li><li class="chapter-item expanded "><a href="ch02-02-timers.html"><strong aria-hidden="true">2.2.</strong> Timers</a></li><li class="chapter-item expanded "><a href="ch02-03-ping.html"><strong aria-hidden="true">2.3.</strong> Ping</a></li><li class="chapter-item expanded "><a href="ch02-04-channels.html"><strong aria-hidden="true">2.4.</strong> Channels</a></li><li class="chapter-item expanded "><a href="ch02-05-signals.html"><strong aria-hidden="true">2.5.</strong> Unix Signals</a></li><li class="chapter-item expanded "><a href="ch02-06-errors.html"><strong aria-hidden="true">2.6.</strong> Error handling</a></li></ol></li><li class="chapter-item expanded "><a href="ch03-00-async-await.html"><strong aria-hidden="true">3.</strong> I need async/await!</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="ch03-01-run-async-code.html"><strong aria-hidden="true">3.1.</strong> Run async code</a></li><li class="chapter-item expanded "><a href="ch03-02-async-io-types.html"><strong aria-hidden="true">3.2.</strong> Async IO types</a></li></ol></li><li class="chapter-item expanded "><a href="ch04-00-a-full-example-zeromq.html"><strong aria-hidden="true">4.</strong> A full example: ZeroMQ</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="ch04-01-composition.html" class="active"><strong aria-hidden="true">4.1.</strong> Composition</a></li><li class="chapter-item expanded "><a href="ch04-02-creating-our-source-part-1-our-types.html"><strong aria-hidden="true">4.2.</strong> Creating our source, part I: our types</a></li><li class="chapter-item expanded "><a href="ch04-03-creating-our-source-part-2-setup-methods.html"><strong aria-hidden="true">4.3.</strong> Creating our source, part II: setup methods</a></li><li class="chapter-item expanded "><a href="ch04-04-creating-our-source-part-3-processing-events-almost.html"><strong aria-hidden="true">4.4.</strong> Creating our source, part III: processing events (almost)</a></li><li class="chapter-item expanded "><a href="ch04-05-creating-our-source-part-4-processing-events-really.html"><strong aria-hidden="true">4.5.</strong> Creating our source, part IV: processing events (really)</a></li><li class="chapter-item expanded "><a href="ch04-06-the-full-zeromq-event-source-code.html"><strong aria-hidden="true">4.6.</strong> The full ZeroMQ event source code</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                        
+                    </div>
+
+                    <h1 class="menu-title">A Guide to Calloop</h1>
+
+                    <div class="right-buttons">
+                        
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        
+                        
+                        <a href="https://github.com/detly/calloop/" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        
+                        
+
+                    </div>
+                </div>
+
+                
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+                
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="composing-event-sources"><a class="header" href="#composing-event-sources">Composing event sources</a></h1>
+<p>Calloop is designed to work by <em>composition</em>. It provides you with some single-responsibility sources (timers, message channels, file descriptors), and you can combine these together, bit by bit, to make more complex event sources. These new sources can express more and more of your program's internal logic and the relationships between them, always in terms of events and how you process them.</p>
+<p>You can greatly simplify even a highly complex program if you identify and expose the &quot;real&quot; events you care about and use composition to tidy the other events away in internal details of event sources.</p>
+<p>So what do we need to compose?</p>
+<h2 id="the-generic-source"><a class="header" href="#the-generic-source">The generic source</a></h2>
+<p>Most obviously, ZeroMQ exposes a file descriptor for us to use. (This is a common thing for event-related libraries to do, so if you're wondering how to integrate, say, I²C or GPIO on Linux with Calloop, that's your answer.)</p>
+<p>Calloop can use file descriptors via the <code>calloop::generic::Generic</code> source. So that's one.</p>
+<h2 id="the-mpsc-channel-source"><a class="header" href="#the-mpsc-channel-source">The MPSC channel source</a></h2>
+<p>Secondly, we might want to send messages on the socket. This means our event source needs to react when we send it a message. Calloop has a message channel for precisely this purpose: <code>calloop::channel::Channel</code>. That's another one.</p>
+<h2 id="the-wakeup-call"><a class="header" href="#the-wakeup-call">The wakeup call</a></h2>
+<p>The third event source we need is a bit subtle, but since this isn't a mystery novel I can save you hours of debugging and spoil the ending now: we need a &quot;ping&quot; event source because ZeroMQ's FD is edge triggered.</p>
+<p><a href="http://api.zeromq.org/master:zmq-getsockopt#toc11">ZeroMQ's file descriptor</a> is not the FD of an actual file or socket — you do not actually read data from it. It exists as an interface, with three important details:</p>
+<ul>
+<li>
+<p>It is only ever readable. Even if the underlying socket can be written to, the FD that ZeroMQ gives you signals this by becoming readable. In fact, this FD will become readable under three circumstances: the ZeroMQ socket (henceforth called a &quot;zsocket&quot;) is readable, writeable, or has an error. There is a separate function call, <code>zmq::Socket::get_events()</code> that will tell you which.</p>
+</li>
+<li>
+<p><strong>It is edge triggered.</strong> It will only ever change from not-readable to readable when the socket's state changes. So if a zsocket receives two messages, and you only read one, <strong>the file descriptor will not wake up the event loop again</strong>. Why not? Because it hasn't changed state! After you read one message, the zsocket still has events waiting. If it receives yet another message... it still has events waiting. No change in internal state = no external event.</p>
+</li>
+<li>
+<p>This edge triggering <strong>also covers user actions.</strong> If a zsocket becomes writeable, and then you write to the zsocket, it might immediately (and atomically) change from writeable to readable. In this case <strong>you will not get another event on the FD</strong>.</p>
+</li>
+</ul>
+<p>(The docs make this quite explicit, but there's a lot of docs to read so I'm spelling it out here.)</p>
+<p>What this adds up to is this: when we create our zsocket, it might already be readable or writeable. So when we add it to our event loop, it won't fire any events. Our entire source will just sit there until we wake it up by sending a message (which we might never do if it's eg. a pull socket).</p>
+<p>So the last event source we need is something that doesn't really convey any kind of message except &quot;please wake up the event loop on the next iteration&quot;, and that is exactly what a <code>calloop::ping::PingSource</code> does. And that's three.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                        
+                            <a rel="prev" href="ch04-00-a-full-example-zeromq.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+                        
+
+                        
+                            <a rel="next" href="ch04-02-creating-our-source-part-1-our-types.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+                        
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                
+                    <a rel="prev" href="ch04-00-a-full-example-zeromq.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+                
+
+                
+                    <a rel="next" href="ch04-02-creating-our-source-part-1-our-types.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+                
+            </nav>
+
+        </div>
+
+        
+
+        
+
+        
+
+        
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+        
+
+        
+
+        
+        <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
+        
+
+        <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+        
+
+        
+
+    </body>
+</html>
