@@ -126,6 +126,7 @@ impl<T> SyncSender<T> {
 pub struct Channel<T> {
     receiver: mpsc::Receiver<T>,
     source: PingSource,
+    ping: Ping,
     capacity: usize,
 }
 
@@ -161,9 +162,13 @@ pub fn channel<T>() -> (Sender<T>, Channel<T>) {
     let (sender, receiver) = mpsc::channel();
     let (ping, source) = make_ping().expect("Failed to create a Ping.");
     (
-        Sender { sender, ping },
+        Sender {
+            sender,
+            ping: ping.clone(),
+        },
         Channel {
             receiver,
+            ping,
             source,
             capacity: usize::MAX,
         },
@@ -175,10 +180,14 @@ pub fn sync_channel<T>(bound: usize) -> (SyncSender<T>, Channel<T>) {
     let (sender, receiver) = mpsc::sync_channel(bound);
     let (ping, source) = make_ping().expect("Failed to create a Ping.");
     (
-        SyncSender { sender, ping },
+        SyncSender {
+            sender,
+            ping: ping.clone(),
+        },
         Channel {
             receiver,
             source,
+            ping,
             capacity: bound,
         },
     )
@@ -200,31 +209,36 @@ impl<T> EventSource for Channel<T> {
         C: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
         let receiver = &self.receiver;
-
+        let capacity = self.capacity;
         let mut clear_readiness = false;
 
-        // Limit the number of elements we process at a time to the channel's capacity, or 1024.
-        let max = cmp::min(self.capacity, MAX_EVENTS_CHECK);
-        for _ in 0..max {
-            match receiver.try_recv() {
-                Ok(val) => callback(Event::Msg(val), &mut ()),
-                Err(mpsc::TryRecvError::Empty) => {
-                    clear_readiness = true;
-                    break;
+        let action = self
+            .source
+            .process_events(readiness, token, |(), &mut ()| {
+                // Limit the number of elements we process at a time to the channel's capacity, or 1024.
+                let max = cmp::min(capacity.saturating_add(1), MAX_EVENTS_CHECK);
+                for _ in 0..max {
+                    match receiver.try_recv() {
+                        Ok(val) => callback(Event::Msg(val), &mut ()),
+                        Err(mpsc::TryRecvError::Empty) => {
+                            clear_readiness = true;
+                            break;
+                        }
+                        Err(mpsc::TryRecvError::Disconnected) => {
+                            callback(Event::Closed, &mut ());
+                            clear_readiness = true;
+                            break;
+                        }
+                    }
                 }
-                Err(mpsc::TryRecvError::Disconnected) => {
-                    callback(Event::Closed, &mut ());
-                    clear_readiness = true;
-                    break;
-                }
-            }
-        }
+            })
+            .map_err(ChannelError)?;
 
         if clear_readiness {
-            self.source
-                .process_events(readiness, token, |(), &mut ()| {})
-                .map_err(ChannelError)
+            Ok(action)
         } else {
+            // Re-notify the ping source so we can try again.
+            self.ping.ping();
             Ok(PostAction::Continue)
         }
     }

@@ -48,7 +48,10 @@ pub struct Executor<T> {
     state: Rc<State<T>>,
 
     /// Notifies us when the executor is woken up.
-    ping: PingSource,
+    source: PingSource,
+
+    /// Used for when we need to wake ourselves up.
+    ping: Ping,
 }
 
 /// A scheduler to send futures to an executor
@@ -274,7 +277,7 @@ pub fn executor<T>() -> crate::Result<(Executor<T>, Scheduler<T>)> {
         active_tasks: RefCell::new(Some(Slab::new())),
         sender: Arc::new(Sender {
             sender: Mutex::new(sender),
-            wake_up,
+            wake_up: wake_up.clone(),
             notified: AtomicBool::new(false),
         }),
     });
@@ -282,7 +285,8 @@ pub fn executor<T>() -> crate::Result<(Executor<T>, Scheduler<T>)> {
     Ok((
         Executor {
             state: state.clone(),
-            ping,
+            source: ping,
+            ping: wake_up,
         },
         Scheduler { state },
     ))
@@ -305,62 +309,66 @@ impl<T> EventSource for Executor<T> {
     {
         let state = &self.state;
 
-        let clear_readiness = {
-            let mut clear_readiness = false;
-
-            // Process runnables, but not too many at a time; better to move onto the next event quickly!
-            for _ in 0..1024 {
-                let runnable = match state.incoming.try_recv() {
-                    Ok(runnable) => runnable,
-                    Err(_) => {
-                        // Make sure to clear the readiness if there are no more runnables.
-                        clear_readiness = true;
-                        break;
-                    }
-                };
-
-                // Run the runnable.
-                let index = *runnable.metadata();
-                runnable.run();
-
-                // If the runnable finished with a result, call the callback.
-                let mut active_guard = state.active_tasks.borrow_mut();
-                let active_tasks = active_guard.as_mut().unwrap();
-
-                if let Some(state) = active_tasks.get(index) {
-                    if state.is_finished() {
-                        // Take out the state and provide it to the caller.
-                        let result = match active_tasks.remove(index) {
-                            Active::Finished(result) => result,
-                            _ => unreachable!(),
-                        };
-
-                        // Drop the guard since the callback may register another future to the scheduler.
-                        drop(active_guard);
-
-                        callback(result, &mut ());
-                    }
-                }
-            }
-
-            clear_readiness
-        };
-
-        // Clear the readiness of the ping source if there are no more runnables.
-        if clear_readiness {
-            self.ping
-                .process_events(readiness, token, |(), &mut ()| {})
-                .map_err(ExecutorError::WakeError)?;
-        }
-
         // Set to the unnotified state.
         state.sender.notified.store(false, Ordering::SeqCst);
 
-        Ok(PostAction::Continue)
+        let (clear_readiness, action) = {
+            let mut clear_readiness = false;
+
+            let action = self
+                .source
+                .process_events(readiness, token, |(), &mut ()| {
+                    // Process runnables, but not too many at a time; better to move onto the next event quickly!
+                    for _ in 0..1024 {
+                        let runnable = match state.incoming.try_recv() {
+                            Ok(runnable) => runnable,
+                            Err(_) => {
+                                // Make sure to clear the readiness if there are no more runnables.
+                                clear_readiness = true;
+                                break;
+                            }
+                        };
+
+                        // Run the runnable.
+                        let index = *runnable.metadata();
+                        runnable.run();
+
+                        // If the runnable finished with a result, call the callback.
+                        let mut active_guard = state.active_tasks.borrow_mut();
+                        let active_tasks = active_guard.as_mut().unwrap();
+
+                        if let Some(state) = active_tasks.get(index) {
+                            if state.is_finished() {
+                                // Take out the state and provide it to the caller.
+                                let result = match active_tasks.remove(index) {
+                                    Active::Finished(result) => result,
+                                    _ => unreachable!(),
+                                };
+
+                                // Drop the guard since the callback may register another future to the scheduler.
+                                drop(active_guard);
+
+                                callback(result, &mut ());
+                            }
+                        }
+                    }
+                })
+                .map_err(ExecutorError::WakeError)?;
+
+            (clear_readiness, action)
+        };
+
+        // Re-ready the ping source if we need to re-run this handler.
+        if !clear_readiness {
+            self.ping.ping();
+            Ok(PostAction::Continue)
+        } else {
+            Ok(action)
+        }
     }
 
     fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
-        self.ping.register(poll, token_factory)?;
+        self.source.register(poll, token_factory)?;
         Ok(())
     }
 
@@ -369,12 +377,12 @@ impl<T> EventSource for Executor<T> {
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<()> {
-        self.ping.reregister(poll, token_factory)?;
+        self.source.reregister(poll, token_factory)?;
         Ok(())
     }
 
     fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
-        self.ping.unregister(poll)?;
+        self.source.unregister(poll)?;
         Ok(())
     }
 }
