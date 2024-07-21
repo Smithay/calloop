@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: taiki-e/checkout-action@v1
 
       - name: Get date for registry cache
         id: date
@@ -30,11 +30,9 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-registry-
 
       - name: Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-          components: rustfmt, clippy
+        run: |
+          rustup default stable
+          rustup component add rustfmt clippy
 
       - name: Get cargo-cache latest version
         id: cargocacheversion
@@ -50,16 +48,10 @@ jobs:
           key: ${{ runner.os }}-cargo-binaries-${{ steps.cargocacheversion.outputs.version }}
 
       - name: Install cargo-cache
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: cargo-cache --version ${{ steps.cargocacheversion.outputs.version }}
+        run: cargo install cargo-cache --version ${{ steps.cargocacheversion.outputs.version }}
 
       - name: Clean cargo cache of old items
-        uses: actions-rs/cargo@v1
-        with:
-          command: cache
-          args: clean-unref
+        run: cargo cache clean-unref
 
       - name: Get rustc version for caching
         id: rustcversion
@@ -92,7 +84,7 @@ jobs:
 
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: taiki-e/checkout-action@v1
 
       - name: Get date for registry cache
         id: date
@@ -109,10 +101,7 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-registry-
 
       - name: Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ matrix.rust }}
-          override: true
+        run: rustup default ${{ matrix.rust }}
 
       - name: Get rustc version for caching
         id: rustcversion
@@ -125,38 +114,23 @@ jobs:
           key: ${{ runner.os }}-test-${{ steps.rustcversion.outputs.version }}-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Downgrade regex
-        uses: actions-rs/cargo@v1
         if: ${{ matrix.rust == '1.63.0' }}
-        with:
-          command: update
-          args: --package regex --precise 1.9.6
+        run: cargo update --package regex --precise 1.9.6
 
       - name: Downgrade half
-        uses: actions-rs/cargo@v1
         if: ${{ matrix.rust == '1.63.0' || matrix.rust == '1.69.0' }}
-        with:
-          command: update
-          args: --package half --precise 2.2.1
+        run: cargo update --package half --precise 2.2.1
 
       - name: Run tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --features "block_on executor"
+        run: cargo test --features "block_on executor"
 
       - name: Run tests with signals
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --features "block_on executor signals"
+        run: cargo test --features "block_on executor signals"
         if: ${{ matrix.rust != '1.63.0' }}
 
       - name: Run book tests
-        uses: actions-rs/cargo@v1
+        run: cargo test --all-features --manifest-path ./doc/Cargo.toml
         if: ${{ matrix.rust == 'stable' || matrix.rust == 'beta' }}
-        with:
-          command: test
-          args: --all-features --manifest-path ./doc/Cargo.toml
 
   ci-windows:
     name: CI (Windows)
@@ -173,33 +147,21 @@ jobs:
 
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: taiki-e/checkout-action@v1
 
       - name: Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ matrix.rust }}
-          override: true
+        run: rustup default ${{ matrix.rust }}
 
       - name: Downgrade regex
-        uses: actions-rs/cargo@v1
         if: ${{ matrix.rust == '1.63.0' }}
-        with:
-          command: update
-          args: --package regex --precise 1.9.6
+        run: cargo update --package regex --precise 1.9.6
 
       - name: Downgrade half
-        uses: actions-rs/cargo@v1
         if: ${{ matrix.rust == '1.63.0' }}
-        with:
-          command: update
-          args: --package half --precise 2.2.1
+        run: cargo update --package half --precise 2.2.1
 
       - name: Run tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --features "block_on executor"
+        run: cargo test --features "block_on executor"
 
   coverage:
     name: Coverage
@@ -219,7 +181,7 @@ jobs:
 
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: taiki-e/checkout-action@v1
 
       - name: Get date for registry cache
         id: date
@@ -236,11 +198,9 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-registry-
 
       - name: Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly # required for feature(no_coverage)
-          override: true
-          components: llvm-tools-preview # Required for grcov
+        run: |
+          rustup default nightly
+          rustup component add llvm-tools-preview
       
       - name: Get grcov latest version
         id: grcovversion
@@ -256,16 +216,10 @@ jobs:
           key: ${{ runner.os }}-grcov-${{ steps.grcovversion.outputs.version }}
 
       - name: Install grcov
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: grcov --version ${{ steps.grcovversion.outputs.version }}
+        run: cargo install grcov --version ${{ steps.grcovversion.outputs.version }}
 
       - name: Run tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features
+        run: cargo test --all-features
         env:
           LLVM_PROFILE_FILE: "calloop-%p-%m.profraw"
           RUSTFLAGS: "-Cinstrument-coverage --cfg coverage"
@@ -288,7 +242,7 @@ jobs:
 
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: taiki-e/checkout-action@v1
 
       - name: Get date for registry cache
         id: date
@@ -305,20 +259,14 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-registry-
 
       - name: Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: beta
-          override: true
+        run: rustup default beta
 
       # Combining these docs is order-dependent. The API docs must be copied
       # into mdBook's source directory for it to copy it to the output directory
       # as static content.
 
       - name: Build Documentation
-        uses: actions-rs/cargo@v1
-        with:
-          command: doc
-          args: --no-deps --features "block_on executor"
+        run: cargo doc --no-deps --features "block_on executor"
 
       - run: rsync -r target/doc/ doc/src/api
 
