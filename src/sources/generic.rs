@@ -42,7 +42,7 @@
 //! [`EventSource`](crate::EventSource) implementation to them.
 
 use polling::Poller;
-use std::{borrow, marker::PhantomData, ops, sync::Arc};
+use std::{borrow, marker::PhantomData, ops, panic::AssertUnwindSafe, sync::Arc};
 
 #[cfg(unix)]
 use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd};
@@ -180,7 +180,7 @@ pub struct Generic<F: AsFd, E = std::io::Error> {
     token: Option<Token>,
 
     // This allows us to make the associated error and return types generic.
-    _error_type: PhantomData<E>,
+    _error_type: PhantomData<AssertUnwindSafe<E>>,
 }
 
 impl<F: AsFd> Generic<F, std::io::Error> {
