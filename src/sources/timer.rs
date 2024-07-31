@@ -278,8 +278,11 @@ impl TimerWheel {
 impl std::cmp::Ord for TimeoutData {
     #[inline]
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        // earlier values have priority
-        self.deadline.cmp(&other.deadline).reverse()
+        // earlier values have priority, on same deadline items queued first have priority
+        self.deadline
+            .cmp(&other.deadline)
+            .then_with(|| self.counter.cmp(&other.counter))
+            .reverse()
     }
 }
 
@@ -380,6 +383,31 @@ mod tests {
     use super::*;
     use crate::*;
     use std::time::Duration;
+
+    #[test]
+    fn timeout_data_cmp() {
+        let now = Instant::now();
+        let timeout_now_0 = TimeoutData {
+            deadline: now,
+            token: RefCell::new(None),
+            counter: 0,
+        };
+        let timeout_now_1 = TimeoutData {
+            deadline: now,
+            token: RefCell::new(None),
+            counter: 1,
+        };
+        assert!(timeout_now_0 > timeout_now_1);
+        assert!(timeout_now_1 < timeout_now_0);
+
+        let timeout_future_0 = TimeoutData {
+            deadline: now + Duration::from_millis(100),
+            token: RefCell::new(None),
+            counter: 0,
+        };
+        assert!(timeout_now_1 > timeout_future_0);
+        assert!(timeout_future_0 < timeout_now_1);
+    }
 
     #[test]
     fn simple_timer() {
