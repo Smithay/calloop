@@ -705,9 +705,10 @@ impl<Data> AsHandle for EventLoop<'_, Data> {
 /// The EventIterator is an `Iterator` over the events relevant to a particular source
 /// This type is used in the [`EventSource::before_handle_events`] methods for
 /// two main reasons:
+///
 /// - To avoid dynamic dispatch overhead
 /// - Secondly, it is to allow this type to be `Clone`, which is not
-/// possible with dynamic dispatch
+///   possible with dynamic dispatch
 pub struct EventIterator<'a> {
     inner: slice::Iter<'a, PollEvent>,
     registration_token: RegistrationToken,
