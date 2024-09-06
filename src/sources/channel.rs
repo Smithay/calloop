@@ -211,6 +211,7 @@ impl<T> EventSource for Channel<T> {
         let receiver = &self.receiver;
         let capacity = self.capacity;
         let mut clear_readiness = false;
+        let mut disconnected = false;
 
         let action = self
             .source
@@ -226,7 +227,7 @@ impl<T> EventSource for Channel<T> {
                         }
                         Err(mpsc::TryRecvError::Disconnected) => {
                             callback(Event::Closed, &mut ());
-                            clear_readiness = true;
+                            disconnected = true;
                             break;
                         }
                     }
@@ -234,7 +235,9 @@ impl<T> EventSource for Channel<T> {
             })
             .map_err(ChannelError)?;
 
-        if clear_readiness {
+        if disconnected {
+            Ok(PostAction::Remove)
+        } else if clear_readiness {
             Ok(action)
         } else {
             // Re-notify the ping source so we can try again.
