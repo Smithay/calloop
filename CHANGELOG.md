@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.14.1 -- 2024-09-05
+
+#### Additions
+
+- Use the `tracing` crate for logging instead of the `log` crate. (#195)
+- Make the `Generic` type `UnwindSafe`, even if its error is not. (#204)
+
+#### Bugfixes
+
+- Optimizer timers in such a way that cancelling and restarting a timer doesn't
+  allocate on the heap. (#184)
+- Make it so the number of channel elements are bounded per iteration of the
+  event loop. (#200)
+
 ## 0.14.0 -- 2024-06-01
 
 #### Breaking Changes
