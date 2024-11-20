@@ -180,7 +180,7 @@ pub struct Poll {
     ///
     /// One can emulate level triggered events on top of oneshot events by just re-registering the
     /// file descriptor every time it is polled. However, this is not ideal, as it requires a
-    /// system call every time. It's better to use the intergrated system, if available.
+    /// system call every time. It's better to use the integrated system, if available.
     level_triggered: Option<RefCell<HashMap<usize, (Raw, polling::Event)>>>,
 
     pub(crate) timers: Rc<RefCell<TimerWheel>>,

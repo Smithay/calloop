@@ -113,19 +113,19 @@ impl EventSource for PingSource {
             .map_err(|e| PingError(e.into()))
     }
 
-    fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
+    fn register(&mut self, poll: &Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
         self.pipe.register(poll, token_factory)
     }
 
     fn reregister(
         &mut self,
-        poll: &mut Poll,
+        poll: &Poll,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<()> {
         self.pipe.reregister(poll, token_factory)
     }
 
-    fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
+    fn unregister(&mut self, poll: &Poll) -> crate::Result<()> {
         self.pipe.unregister(poll)
     }
 }

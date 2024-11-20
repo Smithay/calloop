@@ -140,7 +140,7 @@ mod tests {
 
         fn register(
             &mut self,
-            poll: &mut crate::Poll,
+            poll: &crate::Poll,
             token_factory: &mut crate::TokenFactory,
         ) -> crate::Result<()> {
             crate::batch_register!(poll, token_factory, self.ping0, self.ping1, self.ping2)
@@ -148,13 +148,13 @@ mod tests {
 
         fn reregister(
             &mut self,
-            poll: &mut crate::Poll,
+            poll: &crate::Poll,
             token_factory: &mut crate::TokenFactory,
         ) -> crate::Result<()> {
             crate::batch_reregister!(poll, token_factory, self.ping0, self.ping1, self.ping2)
         }
 
-        fn unregister(&mut self, poll: &mut crate::Poll) -> crate::Result<()> {
+        fn unregister(&mut self, poll: &crate::Poll) -> crate::Result<()> {
             crate::batch_unregister!(poll, self.ping0, self.ping1, self.ping2)
         }
     }

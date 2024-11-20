@@ -202,7 +202,7 @@ trait IoLoopInner {
 impl<'l, Data> IoLoopInner for LoopInner<'l, Data> {
     unsafe fn register(&self, dispatcher: &RefCell<IoDispatcher>) -> crate::Result<()> {
         let disp = dispatcher.borrow();
-        self.poll.borrow_mut().register(
+        self.poll.register(
             unsafe { BorrowedFd::borrow_raw(disp.fd) },
             Interest::EMPTY,
             Mode::OneShot,
@@ -212,7 +212,7 @@ impl<'l, Data> IoLoopInner for LoopInner<'l, Data> {
 
     fn reregister(&self, dispatcher: &RefCell<IoDispatcher>) -> crate::Result<()> {
         let disp = dispatcher.borrow();
-        self.poll.borrow_mut().reregister(
+        self.poll.reregister(
             unsafe { BorrowedFd::borrow_raw(disp.fd) },
             disp.interest,
             Mode::OneShot,
@@ -263,7 +263,7 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
 
     fn register(
         &self,
-        _: &mut Poll,
+        _: &Poll,
         _: &mut AdditionalLifecycleEventsSet,
         _: &mut TokenFactory,
     ) -> crate::Result<()> {
@@ -273,7 +273,7 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
 
     fn reregister(
         &self,
-        _: &mut Poll,
+        _: &Poll,
         _: &mut AdditionalLifecycleEventsSet,
         _: &mut TokenFactory,
     ) -> crate::Result<bool> {
@@ -283,7 +283,7 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
 
     fn unregister(
         &self,
-        poll: &mut Poll,
+        poll: &Poll,
         _: &mut AdditionalLifecycleEventsSet,
         _: RegistrationToken,
     ) -> crate::Result<bool> {

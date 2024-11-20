@@ -48,7 +48,7 @@ impl RegistrationToken {
 }
 
 pub(crate) struct LoopInner<'l, Data> {
-    pub(crate) poll: RefCell<Poll>,
+    pub(crate) poll: Poll,
     // The `Option` is used to keep slots of the slab occipied, to prevent id reuse
     // while in-flight events might still referr to a recently destroyed event source.
     pub(crate) sources: RefCell<SourceList<'l, Data>>,
@@ -57,7 +57,7 @@ pub(crate) struct LoopInner<'l, Data> {
     pending_action: Cell<PostAction>,
 }
 
-/// An handle to an event loop
+/// A handle to an event loop
 ///
 /// This handle allows you to insert new sources and idles in this event loop,
 /// it can be cloned, and it is possible to insert new sources from within a source
@@ -121,7 +121,6 @@ impl<'l, Data> LoopHandle<'l, Data> {
         S: EventSource + 'l,
     {
         let mut sources = self.inner.sources.borrow_mut();
-        let mut poll = self.inner.poll.borrow_mut();
 
         // Find an empty slot if any
         let slot = sources.vacant_entry();
@@ -129,7 +128,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
         slot.source = Some(dispatcher.clone_as_event_dispatcher());
         trace!(source = slot.token.get_id(), "Inserting new source");
         let ret = slot.source.as_ref().unwrap().register(
-            &mut poll,
+            &self.inner.poll,
             &mut self
                 .inner
                 .sources_with_additional_lifecycle_events
@@ -173,7 +172,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
         {
             trace!(source = entry_token.get_id(), "Registering source");
             source.register(
-                &mut self.inner.poll.borrow_mut(),
+                &self.inner.poll,
                 &mut self
                     .inner
                     .sources_with_additional_lifecycle_events
@@ -200,7 +199,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
                 "Updating registration of source"
             );
             if !source.reregister(
-                &mut self.inner.poll.borrow_mut(),
+                &self.inner.poll,
                 &mut self
                     .inner
                     .sources_with_additional_lifecycle_events
@@ -235,7 +234,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
             }
             trace!(source = entry_token.get_id(), "Unregistering source");
             if !source.unregister(
-                &mut self.inner.poll.borrow_mut(),
+                &self.inner.poll,
                 &mut self
                     .inner
                     .sources_with_additional_lifecycle_events
@@ -265,7 +264,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
             if let Some(source) = source.take() {
                 trace!(source = entry_token.get_id(), "Removing source");
                 if let Err(e) = source.unregister(
-                    &mut self.inner.poll.borrow_mut(),
+                    &self.inner.poll,
                     &mut self
                         .inner
                         .sources_with_additional_lifecycle_events
@@ -328,7 +327,7 @@ impl<'l, Data> EventLoop<'l, Data> {
         let poller = poll.poller.clone();
         let handle = LoopHandle {
             inner: Rc::new(LoopInner {
-                poll: RefCell::new(poll),
+                poll,
                 sources: RefCell::new(SourceList::new()),
                 idles: RefCell::new(Vec::new()),
                 pending_action: Cell::new(PostAction::Continue),
@@ -382,11 +381,8 @@ impl<'l, Data> EventLoop<'l, Data> {
             }
         }
         let events = {
-            let poll = self.handle.inner.poll.borrow();
             loop {
-                let result = poll.poll(timeout);
-
-                match result {
+                match self.handle.inner.poll.poll(timeout) {
                     Ok(events) => break events,
                     Err(crate::Error::IoError(err)) if err.kind() == io::ErrorKind::Interrupted => {
                         // Interrupted by a signal. Update timeout and retry.
@@ -461,7 +457,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                             "Postaction reregister for source"
                         );
                         disp.reregister(
-                            &mut self.handle.inner.poll.borrow_mut(),
+                            &self.handle.inner.poll,
                             &mut self
                                 .handle
                                 .inner
@@ -476,7 +472,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                             "Postaction unregister for source"
                         );
                         disp.unregister(
-                            &mut self.handle.inner.poll.borrow_mut(),
+                            &self.handle.inner.poll,
                             &mut self
                                 .handle
                                 .inner
@@ -506,9 +502,8 @@ impl<'l, Data> EventLoop<'l, Data> {
                     .unwrap_or(true)
                 {
                     // the source has been removed from within its callback, unregister it
-                    let mut poll = self.handle.inner.poll.borrow_mut();
                     if let Err(e) = disp.unregister(
-                        &mut poll,
+                        &self.handle.inner.poll,
                         &mut self
                             .handle
                             .inner
@@ -559,7 +554,7 @@ impl<'l, Data> EventLoop<'l, Data> {
     pub fn get_signal(&self) -> LoopSignal {
         LoopSignal {
             signal: self.signals.clone(),
-            notifier: self.handle.inner.poll.borrow().notifier(),
+            notifier: self.handle.inner.poll.notifier(),
         }
     }
 
@@ -952,7 +947,7 @@ mod tests {
 
             fn register(
                 &mut self,
-                poll: &mut Poll,
+                poll: &Poll,
                 token_factory: &mut TokenFactory,
             ) -> crate::Result<()> {
                 self.channel.register(poll, token_factory)
@@ -960,13 +955,13 @@ mod tests {
 
             fn reregister(
                 &mut self,
-                poll: &mut Poll,
+                poll: &Poll,
                 token_factory: &mut TokenFactory,
             ) -> crate::Result<()> {
                 self.channel.reregister(poll, token_factory)
             }
 
-            fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
+            fn unregister(&mut self, poll: &Poll) -> crate::Result<()> {
                 self.channel.unregister(poll)
             }
 
@@ -1023,7 +1018,7 @@ mod tests {
 
             fn register(
                 &mut self,
-                poll: &mut Poll,
+                poll: &Poll,
                 token_factory: &mut TokenFactory,
             ) -> crate::Result<()> {
                 self.channel.register(poll, token_factory)
@@ -1031,13 +1026,13 @@ mod tests {
 
             fn reregister(
                 &mut self,
-                poll: &mut Poll,
+                poll: &Poll,
                 token_factory: &mut TokenFactory,
             ) -> crate::Result<()> {
                 self.channel.reregister(poll, token_factory)
             }
 
-            fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
+            fn unregister(&mut self, poll: &Poll) -> crate::Result<()> {
                 self.channel.unregister(poll)
             }
 
@@ -1114,18 +1109,18 @@ mod tests {
 
             fn register(
                 &mut self,
-                _: &mut Poll,
+                _: &Poll,
                 token_factory: &mut TokenFactory,
             ) -> crate::Result<()> {
                 self.token = Some(token_factory.token());
                 Ok(())
             }
 
-            fn reregister(&mut self, _: &mut Poll, _: &mut TokenFactory) -> crate::Result<()> {
+            fn reregister(&mut self, _: &Poll, _: &mut TokenFactory) -> crate::Result<()> {
                 unreachable!()
             }
 
-            fn unregister(&mut self, _: &mut Poll) -> crate::Result<()> {
+            fn unregister(&mut self, _: &Poll) -> crate::Result<()> {
                 unreachable!()
             }
 
@@ -1272,7 +1267,7 @@ mod tests {
 
             fn register(
                 &mut self,
-                poll: &mut Poll,
+                poll: &Poll,
                 token_factory: &mut TokenFactory,
             ) -> crate::Result<()> {
                 self.ping1.register(poll, token_factory)?;
@@ -1282,7 +1277,7 @@ mod tests {
 
             fn reregister(
                 &mut self,
-                poll: &mut Poll,
+                poll: &Poll,
                 token_factory: &mut TokenFactory,
             ) -> crate::Result<()> {
                 self.ping1.reregister(poll, token_factory)?;
@@ -1290,7 +1285,7 @@ mod tests {
                 Ok(())
             }
 
-            fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
+            fn unregister(&mut self, poll: &Poll) -> crate::Result<()> {
                 self.ping1.unregister(poll)?;
                 self.ping2.unregister(poll)?;
                 Ok(())
@@ -1607,7 +1602,7 @@ mod tests {
                 Ok(PostAction::Remove)
             }
 
-            fn register(&mut self, _: &mut Poll, fact: &mut TokenFactory) -> crate::Result<()> {
+            fn register(&mut self, _: &Poll, fact: &mut TokenFactory) -> crate::Result<()> {
                 // produce a few tokens to emulate a subsource
                 fact.token();
                 fact.token();
@@ -1615,11 +1610,11 @@ mod tests {
                 Ok(())
             }
 
-            fn reregister(&mut self, _: &mut Poll, _: &mut TokenFactory) -> crate::Result<()> {
+            fn reregister(&mut self, _: &Poll, _: &mut TokenFactory) -> crate::Result<()> {
                 Ok(())
             }
 
-            fn unregister(&mut self, _: &mut Poll) -> crate::Result<()> {
+            fn unregister(&mut self, _: &Poll) -> crate::Result<()> {
                 Ok(())
             }
 
@@ -1675,15 +1670,15 @@ mod tests {
             Ok(PostAction::Continue)
         }
 
-        fn register(&mut self, _: &mut Poll, _: &mut TokenFactory) -> crate::Result<()> {
+        fn register(&mut self, _: &Poll, _: &mut TokenFactory) -> crate::Result<()> {
             Ok(())
         }
 
-        fn reregister(&mut self, _: &mut Poll, _: &mut TokenFactory) -> crate::Result<()> {
+        fn reregister(&mut self, _: &Poll, _: &mut TokenFactory) -> crate::Result<()> {
             Ok(())
         }
 
-        fn unregister(&mut self, _: &mut Poll) -> crate::Result<()> {
+        fn unregister(&mut self, _: &Poll) -> crate::Result<()> {
             Ok(())
         }
     }

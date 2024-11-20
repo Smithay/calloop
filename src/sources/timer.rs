@@ -142,7 +142,7 @@ impl EventSource for Timer {
         Ok(PostAction::Continue)
     }
 
-    fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
+    fn register(&mut self, poll: &Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
         // Only register a deadline if we haven't overflowed.
         if let Some(deadline) = self.deadline {
             let wheel = poll.timers.clone();
@@ -160,14 +160,14 @@ impl EventSource for Timer {
 
     fn reregister(
         &mut self,
-        poll: &mut Poll,
+        poll: &Poll,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<()> {
         self.unregister(poll)?;
         self.register(poll, token_factory)
     }
 
-    fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
+    fn unregister(&mut self, poll: &Poll) -> crate::Result<()> {
         if let Some(registration) = self.registration.take() {
             poll.timers.borrow_mut().cancel(registration.counter);
         }

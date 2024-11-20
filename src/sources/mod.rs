@@ -148,7 +148,7 @@ pub trait EventSource {
     ///
     /// If you need to register more than one file descriptor, you can change the
     /// `sub_id` field of the [`Token`](crate::Token) to differentiate between them.
-    fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()>;
+    fn register(&mut self, poll: &Poll, token_factory: &mut TokenFactory) -> crate::Result<()>;
 
     /// Re-register your file descriptors
     ///
@@ -157,7 +157,7 @@ pub trait EventSource {
     /// if necessary.
     fn reregister(
         &mut self,
-        poll: &mut Poll,
+        poll: &Poll,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<()>;
 
@@ -165,7 +165,7 @@ pub trait EventSource {
     ///
     /// You should unregister all your file descriptors from this [`Poll`](crate::Poll) using its
     /// [`Poll::unregister`](crate::Poll#method.unregister) method.
-    fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()>;
+    fn unregister(&mut self, poll: &Poll) -> crate::Result<()>;
 
     /// Whether this source needs to be sent the [`EventSource::before_sleep`]
     /// and [`EventSource::before_handle_events`] notifications. These are opt-in because
@@ -221,19 +221,19 @@ impl<T: EventSource> EventSource for Box<T> {
         T::process_events(&mut **self, readiness, token, callback)
     }
 
-    fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
+    fn register(&mut self, poll: &Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
         T::register(&mut **self, poll, token_factory)
     }
 
     fn reregister(
         &mut self,
-        poll: &mut Poll,
+        poll: &Poll,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<()> {
         T::reregister(&mut **self, poll, token_factory)
     }
 
-    fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
+    fn unregister(&mut self, poll: &Poll) -> crate::Result<()> {
         T::unregister(&mut **self, poll)
     }
 
@@ -269,19 +269,19 @@ impl<T: EventSource> EventSource for &mut T {
         T::process_events(&mut **self, readiness, token, callback)
     }
 
-    fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
+    fn register(&mut self, poll: &Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
         T::register(&mut **self, poll, token_factory)
     }
 
     fn reregister(
         &mut self,
-        poll: &mut Poll,
+        poll: &Poll,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<()> {
         T::reregister(&mut **self, poll, token_factory)
     }
 
-    fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
+    fn unregister(&mut self, poll: &Poll) -> crate::Result<()> {
         T::unregister(&mut **self, poll)
     }
 
@@ -330,7 +330,7 @@ where
 
     fn register(
         &self,
-        poll: &mut Poll,
+        poll: &Poll,
         additional_lifecycle_register: &mut AdditionalLifecycleEventsSet,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<()> {
@@ -344,7 +344,7 @@ where
 
     fn reregister(
         &self,
-        poll: &mut Poll,
+        poll: &Poll,
         additional_lifecycle_register: &mut AdditionalLifecycleEventsSet,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<bool> {
@@ -361,7 +361,7 @@ where
 
     fn unregister(
         &self,
-        poll: &mut Poll,
+        poll: &Poll,
         additional_lifecycle_register: &mut AdditionalLifecycleEventsSet,
         registration_token: RegistrationToken,
     ) -> crate::Result<bool> {
@@ -399,21 +399,21 @@ pub(crate) trait EventDispatcher<Data> {
 
     fn register(
         &self,
-        poll: &mut Poll,
+        poll: &Poll,
         additional_lifecycle_register: &mut AdditionalLifecycleEventsSet,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<()>;
 
     fn reregister(
         &self,
-        poll: &mut Poll,
+        poll: &Poll,
         additional_lifecycle_register: &mut AdditionalLifecycleEventsSet,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<bool>;
 
     fn unregister(
         &self,
-        poll: &mut Poll,
+        poll: &Poll,
         additional_lifecycle_register: &mut AdditionalLifecycleEventsSet,
         registration_token: RegistrationToken,
     ) -> crate::Result<bool>;
