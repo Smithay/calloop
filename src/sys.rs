@@ -1,4 +1,10 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc, time::Duration};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    rc::Rc,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 #[cfg(unix)]
 use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd as Borrowed, RawFd as Raw};
@@ -215,17 +221,15 @@ impl Poll {
     }
 
     pub(crate) fn poll(&self, mut timeout: Option<Duration>) -> crate::Result<Vec<PollEvent>> {
-        let now = std::time::Instant::now();
-
         // Adjust the timeout for the timers.
-        if let Some(next_timeout) = self.timers.borrow().next_deadline() {
-            if next_timeout <= now {
-                timeout = Some(Duration::ZERO);
-            } else if let Some(deadline) = timeout {
-                timeout = Some(std::cmp::min(deadline, next_timeout - now));
-            } else {
-                timeout = Some(next_timeout - now);
-            }
+        let next_timeout = self
+            .timers
+            .borrow()
+            .next_deadline()
+            .map(|deadline| deadline.saturating_duration_since(Instant::now()));
+        timeout = match (timeout, next_timeout) {
+            (Some(timeout), Some(next_timeout)) => Some(timeout.min(next_timeout)),
+            _ => timeout.or(next_timeout),
         };
 
         let mut events = self.events.borrow_mut();
@@ -263,8 +267,7 @@ impl Poll {
 
         drop(events);
 
-        // Update 'now' as some time may have elapsed in poll()
-        let now = std::time::Instant::now();
+        let now = Instant::now();
         let mut timers = self.timers.borrow_mut();
         while let Some((_, token)) = timers.next_expired(now) {
             poll_events.push(PollEvent {
