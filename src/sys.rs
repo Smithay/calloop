@@ -222,14 +222,14 @@ impl Poll {
 
     pub(crate) fn poll(&self, mut timeout: Option<Duration>) -> crate::Result<Vec<PollEvent>> {
         // Adjust the timeout for the timers.
-        let timeout2 = self
+        let next_timeout = self
             .timers
             .borrow()
             .next_deadline()
             .map(|deadline| deadline.saturating_duration_since(Instant::now()));
-        timeout = match (timeout, timeout2) {
-            (Some(timeout), Some(timeout2)) => Some(timeout.min(timeout2)),
-            _ => timeout.or(timeout2),
+        timeout = match (timeout, next_timeout) {
+            (Some(timeout), Some(next_timeout)) => Some(timeout.min(next_timeout)),
+            _ => timeout.or(next_timeout),
         };
 
         let mut events = self.events.borrow_mut();
