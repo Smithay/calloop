@@ -290,7 +290,7 @@ where
         callback(readiness, self.file.as_mut().unwrap())
     }
 
-    fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
+    fn register(&mut self, poll: &Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
         let token = token_factory.token();
 
         // SAFETY: We ensure that we have a poller to deregister with (see below).
@@ -315,7 +315,7 @@ where
 
     fn reregister(
         &mut self,
-        poll: &mut Poll,
+        poll: &Poll,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<()> {
         let token = token_factory.token();
@@ -331,7 +331,7 @@ where
         Ok(())
     }
 
-    fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
+    fn unregister(&mut self, poll: &Poll) -> crate::Result<()> {
         poll.unregister(&self.file.as_ref().unwrap().0)?;
         self.poller = None;
         self.token = None;

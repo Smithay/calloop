@@ -202,7 +202,7 @@ where
 
     fn register(
         &mut self,
-        poll: &mut calloop::Poll,
+        poll: &calloop::Poll,
         token_factory: &mut calloop::TokenFactory,
     ) -> calloop::Result<()> {
         self.socket.register(poll, token_factory)?;
@@ -216,7 +216,7 @@ where
 
     fn reregister(
         &mut self,
-        poll: &mut calloop::Poll,
+        poll: &calloop::Poll,
         token_factory: &mut calloop::TokenFactory,
     ) -> calloop::Result<()> {
         self.socket.reregister(poll, token_factory)?;
@@ -228,7 +228,7 @@ where
         Ok(())
     }
 
-    fn unregister(&mut self, poll: &mut calloop::Poll) -> calloop::Result<()> {
+    fn unregister(&mut self, poll: &calloop::Poll) -> calloop::Result<()> {
         self.socket.unregister(poll)?;
         self.mpsc_receiver.unregister(poll)?;
         self.wake_ping_receiver.unregister(poll)?;
