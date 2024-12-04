@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.14.2 -- 2024-12-03
+
+#### Bugfixes
+
+- Simplify the way timeouts are calculated for `Poll`. (#214)
+
 ## 0.14.1 -- 2024-09-05
 
 #### Additions
