@@ -62,6 +62,9 @@ pub struct Interest {
 
     /// Wait for the FD to be writable
     pub writable: bool,
+
+    /// Wait for the FD to be interrupted
+    pub interrupted: bool,
 }
 
 impl Interest {
@@ -69,24 +72,35 @@ impl Interest {
     pub const EMPTY: Interest = Interest {
         readable: false,
         writable: false,
+        interrupted: false,
     };
 
     /// Shorthand for read interest
     pub const READ: Interest = Interest {
         readable: true,
         writable: false,
+        interrupted: false,
     };
 
     /// Shorthand for write interest
     pub const WRITE: Interest = Interest {
         readable: false,
         writable: true,
+        interrupted: false,
+    };
+
+    /// Shorthand for interrupt interest
+    pub const INTERRUPT: Interest = Interest {
+        readable: false,
+        writable: false,
+        interrupted: true,
     };
 
     /// Shorthand for read and write interest
-    pub const BOTH: Interest = Interest {
+    pub const ALL: Interest = Interest {
         readable: true,
         writable: true,
+        interrupted: true,
     };
 }
 
@@ -99,6 +113,9 @@ pub struct Readiness {
     /// Is the FD writable
     pub writable: bool,
 
+    /// Is the FD interrupted
+    pub interrupted: bool,
+
     /// Is the FD in an error state
     pub error: bool,
 }
@@ -108,6 +125,7 @@ impl Readiness {
     pub const EMPTY: Readiness = Readiness {
         readable: false,
         writable: false,
+        interrupted: false,
         error: false,
     };
 }
@@ -256,6 +274,7 @@ impl Poll {
                     readiness: Readiness {
                         readable: ev.readable,
                         writable: ev.writable,
+                        interrupted: ev.is_interrupt(),
                         error: false,
                     },
                     token: Token {
@@ -274,6 +293,7 @@ impl Poll {
                 readiness: Readiness {
                     readable: true,
                     writable: false,
+                    interrupted: false,
                     error: false,
                 },
                 token,
@@ -434,6 +454,7 @@ fn cvt_interest(interest: Interest, tok: Token) -> Event {
     let mut event = Event::none(tok.inner.into());
     event.readable = interest.readable;
     event.writable = interest.writable;
+    event.set_interrupt(interest.interrupted);
     event
 }
 
