@@ -294,7 +294,7 @@ impl<T: crate::EventSource> crate::EventSource for TransientSource<T> {
 
     fn register(
         &mut self,
-        poll: &mut crate::Poll,
+        poll: &crate::Poll,
         token_factory: &mut crate::TokenFactory,
     ) -> crate::Result<()> {
         match &mut self.state {
@@ -318,7 +318,7 @@ impl<T: crate::EventSource> crate::EventSource for TransientSource<T> {
 
     fn reregister(
         &mut self,
-        poll: &mut crate::Poll,
+        poll: &crate::Poll,
         token_factory: &mut crate::TokenFactory,
     ) -> crate::Result<()> {
         match &mut self.state {
@@ -345,7 +345,7 @@ impl<T: crate::EventSource> crate::EventSource for TransientSource<T> {
         Ok(())
     }
 
-    fn unregister(&mut self, poll: &mut crate::Poll) -> crate::Result<()> {
+    fn unregister(&mut self, poll: &crate::Poll) -> crate::Result<()> {
         match &mut self.state {
             TransientSourceState::Keep(source)
             | TransientSourceState::Register(source)
@@ -414,7 +414,7 @@ mod tests {
 
             fn register(
                 &mut self,
-                poll: &mut crate::Poll,
+                poll: &crate::Poll,
                 token_factory: &mut crate::TokenFactory,
             ) -> crate::Result<()> {
                 self.ping.register(poll, token_factory)
@@ -422,13 +422,13 @@ mod tests {
 
             fn reregister(
                 &mut self,
-                poll: &mut crate::Poll,
+                poll: &crate::Poll,
                 token_factory: &mut crate::TokenFactory,
             ) -> crate::Result<()> {
                 self.ping.reregister(poll, token_factory)
             }
 
-            fn unregister(&mut self, poll: &mut crate::Poll) -> crate::Result<()> {
+            fn unregister(&mut self, poll: &crate::Poll) -> crate::Result<()> {
                 self.ping.unregister(poll)
             }
         }
@@ -561,7 +561,7 @@ mod tests {
 
             fn register(
                 &mut self,
-                poll: &mut crate::Poll,
+                poll: &crate::Poll,
                 token_factory: &mut crate::TokenFactory,
             ) -> crate::Result<()> {
                 self.ping.register(poll, token_factory)
@@ -569,13 +569,13 @@ mod tests {
 
             fn reregister(
                 &mut self,
-                poll: &mut crate::Poll,
+                poll: &crate::Poll,
                 token_factory: &mut crate::TokenFactory,
             ) -> crate::Result<()> {
                 self.ping.reregister(poll, token_factory)
             }
 
-            fn unregister(&mut self, poll: &mut crate::Poll) -> crate::Result<()> {
+            fn unregister(&mut self, poll: &crate::Poll) -> crate::Result<()> {
                 self.ping.unregister(poll)
             }
         }
@@ -604,7 +604,7 @@ mod tests {
 
             fn register(
                 &mut self,
-                poll: &mut crate::Poll,
+                poll: &crate::Poll,
                 token_factory: &mut crate::TokenFactory,
             ) -> crate::Result<()> {
                 self.0.map(|inner| inner.id += 1);
@@ -613,14 +613,14 @@ mod tests {
 
             fn reregister(
                 &mut self,
-                poll: &mut crate::Poll,
+                poll: &crate::Poll,
                 token_factory: &mut crate::TokenFactory,
             ) -> crate::Result<()> {
                 self.0.map(|inner| inner.id += 1);
                 self.0.reregister(poll, token_factory)
             }
 
-            fn unregister(&mut self, poll: &mut crate::Poll) -> crate::Result<()> {
+            fn unregister(&mut self, poll: &crate::Poll) -> crate::Result<()> {
                 self.0.map(|inner| inner.id += 1);
                 self.0.unregister(poll)
             }
@@ -710,7 +710,7 @@ mod tests {
 
             fn register(
                 &mut self,
-                poll: &mut crate::Poll,
+                poll: &crate::Poll,
                 token_factory: &mut crate::TokenFactory,
             ) -> crate::Result<()> {
                 self.0.register(poll, token_factory)
@@ -718,13 +718,13 @@ mod tests {
 
             fn reregister(
                 &mut self,
-                poll: &mut crate::Poll,
+                poll: &crate::Poll,
                 token_factory: &mut crate::TokenFactory,
             ) -> crate::Result<()> {
                 self.0.reregister(poll, token_factory)
             }
 
-            fn unregister(&mut self, poll: &mut crate::Poll) -> crate::Result<()> {
+            fn unregister(&mut self, poll: &crate::Poll) -> crate::Result<()> {
                 self.0.unregister(poll)
             }
         }
@@ -837,7 +837,7 @@ mod tests {
 
             fn register(
                 &mut self,
-                poll: &mut crate::Poll,
+                poll: &crate::Poll,
                 token_factory: &mut crate::TokenFactory,
             ) -> crate::Result<()> {
                 self.registered = true;
@@ -846,13 +846,13 @@ mod tests {
 
             fn reregister(
                 &mut self,
-                poll: &mut crate::Poll,
+                poll: &crate::Poll,
                 token_factory: &mut crate::TokenFactory,
             ) -> crate::Result<()> {
                 self.source.reregister(poll, token_factory)
             }
 
-            fn unregister(&mut self, poll: &mut crate::Poll) -> crate::Result<()> {
+            fn unregister(&mut self, poll: &crate::Poll) -> crate::Result<()> {
                 self.registered = false;
                 self.source.unregister(poll)
             }
@@ -942,7 +942,7 @@ mod tests {
 
             fn register(
                 &mut self,
-                poll: &mut crate::Poll,
+                poll: &crate::Poll,
                 token_factory: &mut crate::TokenFactory,
             ) -> crate::Result<()> {
                 self.current.register(poll, token_factory)
@@ -950,13 +950,13 @@ mod tests {
 
             fn reregister(
                 &mut self,
-                poll: &mut crate::Poll,
+                poll: &crate::Poll,
                 token_factory: &mut crate::TokenFactory,
             ) -> crate::Result<()> {
                 self.current.reregister(poll, token_factory)
             }
 
-            fn unregister(&mut self, poll: &mut crate::Poll) -> crate::Result<()> {
+            fn unregister(&mut self, poll: &crate::Poll) -> crate::Result<()> {
                 self.current.unregister(poll)
             }
         }
@@ -1078,7 +1078,7 @@ mod tests {
 
             fn register(
                 &mut self,
-                poll: &mut crate::Poll,
+                poll: &crate::Poll,
                 token_factory: &mut crate::TokenFactory,
             ) -> crate::Result<()> {
                 self.inner.register(poll, token_factory)
@@ -1086,13 +1086,13 @@ mod tests {
 
             fn reregister(
                 &mut self,
-                poll: &mut crate::Poll,
+                poll: &crate::Poll,
                 token_factory: &mut crate::TokenFactory,
             ) -> crate::Result<()> {
                 self.inner.reregister(poll, token_factory)
             }
 
-            fn unregister(&mut self, poll: &mut crate::Poll) -> crate::Result<()> {
+            fn unregister(&mut self, poll: &crate::Poll) -> crate::Result<()> {
                 self.inner.unregister(poll)
             }
         }

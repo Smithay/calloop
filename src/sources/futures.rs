@@ -367,21 +367,21 @@ impl<T> EventSource for Executor<T> {
         }
     }
 
-    fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
+    fn register(&mut self, poll: &Poll, token_factory: &mut TokenFactory) -> crate::Result<()> {
         self.source.register(poll, token_factory)?;
         Ok(())
     }
 
     fn reregister(
         &mut self,
-        poll: &mut Poll,
+        poll: &Poll,
         token_factory: &mut TokenFactory,
     ) -> crate::Result<()> {
         self.source.reregister(poll, token_factory)?;
         Ok(())
     }
 
-    fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()> {
+    fn unregister(&mut self, poll: &Poll) -> crate::Result<()> {
         self.source.unregister(poll)?;
         Ok(())
     }
