@@ -483,7 +483,7 @@ where
 /// Use `into_source_inner` to get the event source back.
 pub struct Dispatcher<'a, S, Data>(Rc<dyn ErasedDispatcher<'a, S, Data> + 'a>);
 
-impl<'a, S, Data> std::fmt::Debug for Dispatcher<'a, S, Data> {
+impl<S, Data> std::fmt::Debug for Dispatcher<'_, S, Data> {
     #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("Dispatcher { ... }")
@@ -560,14 +560,14 @@ pub struct Idle<'i> {
     pub(crate) callback: Rc<RefCell<dyn CancellableIdle + 'i>>,
 }
 
-impl<'i> std::fmt::Debug for Idle<'i> {
+impl std::fmt::Debug for Idle<'_> {
     #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("Idle { ... }")
     }
 }
 
-impl<'i> Idle<'i> {
+impl Idle<'_> {
     /// Cancel the idle callback if it was not already run
     pub fn cancel(self) {
         self.callback.borrow_mut().cancel();

@@ -387,13 +387,13 @@ mod tests {
             ping: PingSource,
         }
 
-        impl<'a> Drop for TestSource<'a> {
+        impl Drop for TestSource<'_> {
             fn drop(&mut self) {
                 self.dropped.store(true, Ordering::Relaxed)
             }
         }
 
-        impl<'a> crate::EventSource for TestSource<'a> {
+        impl crate::EventSource for TestSource<'_> {
             type Event = ();
             type Metadata = ();
             type Ret = ();
