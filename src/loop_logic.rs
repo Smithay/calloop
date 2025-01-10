@@ -66,14 +66,14 @@ pub struct LoopHandle<'l, Data> {
     inner: Rc<LoopInner<'l, Data>>,
 }
 
-impl<'l, Data> std::fmt::Debug for LoopHandle<'l, Data> {
+impl<Data> std::fmt::Debug for LoopHandle<'_, Data> {
     #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("LoopHandle { ... }")
     }
 }
 
-impl<'l, Data> Clone for LoopHandle<'l, Data> {
+impl<Data> Clone for LoopHandle<'_, Data> {
     #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn clone(&self) -> Self {
         LoopHandle {
@@ -302,7 +302,7 @@ pub struct EventLoop<'l, Data> {
     synthetic_events: Vec<PollEvent>,
 }
 
-impl<'l, Data> std::fmt::Debug for EventLoop<'l, Data> {
+impl<Data> std::fmt::Debug for EventLoop<'_, Data> {
     #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("EventLoop { ... }")
@@ -661,7 +661,7 @@ impl<'l, Data> EventLoop<'l, Data> {
 }
 
 #[cfg(unix)]
-impl<'l, Data> AsRawFd for EventLoop<'l, Data> {
+impl<Data> AsRawFd for EventLoop<'_, Data> {
     /// Get the underlying raw-fd of the poller.
     ///
     /// This could be used to create [`Generic`] source out of the current loop
@@ -675,7 +675,7 @@ impl<'l, Data> AsRawFd for EventLoop<'l, Data> {
 }
 
 #[cfg(unix)]
-impl<'l, Data> AsFd for EventLoop<'l, Data> {
+impl<Data> AsFd for EventLoop<'_, Data> {
     /// Get the underlying fd of the poller.
     ///
     /// This could be used to create [`Generic`] source out of the current loop
@@ -714,7 +714,7 @@ pub struct EventIterator<'a> {
     registration_token: RegistrationToken,
 }
 
-impl<'a> Iterator for EventIterator<'a> {
+impl Iterator for EventIterator<'_> {
     type Item = (Readiness, Token);
 
     fn next(&mut self) -> Option<Self::Item> {
