@@ -383,7 +383,7 @@ mod tests {
 
     #[test]
     fn simple_timer() {
-        let mut event_loop = EventLoop::try_new().unwrap();
+        let mut event_loop = EventLoop::new().unwrap();
 
         let mut dispatched = false;
 
@@ -413,7 +413,7 @@ mod tests {
 
     #[test]
     fn simple_timer_instant() {
-        let mut event_loop = EventLoop::try_new().unwrap();
+        let mut event_loop = EventLoop::new().unwrap();
 
         let mut dispatched = false;
 
@@ -437,7 +437,7 @@ mod tests {
 
     #[test]
     fn immediate_timer() {
-        let mut event_loop = EventLoop::try_new().unwrap();
+        let mut event_loop = EventLoop::new().unwrap();
 
         let mut dispatched = false;
 
@@ -461,7 +461,7 @@ mod tests {
     // even if we cannot test if they are actually high precision
     #[test]
     fn high_precision_timer() {
-        let mut event_loop = EventLoop::try_new().unwrap();
+        let mut event_loop = EventLoop::new().unwrap();
 
         let mut dispatched = false;
 
@@ -497,7 +497,7 @@ mod tests {
 
     #[test]
     fn cancel_timer() {
-        let mut event_loop = EventLoop::try_new().unwrap();
+        let mut event_loop = EventLoop::new().unwrap();
 
         let mut dispatched = false;
 
@@ -529,7 +529,7 @@ mod tests {
 
     #[test]
     fn repeating_timer() {
-        let mut event_loop = EventLoop::try_new().unwrap();
+        let mut event_loop = EventLoop::new().unwrap();
 
         let mut dispatched = 0;
 
@@ -568,7 +568,7 @@ mod tests {
     #[cfg(feature = "executor")]
     #[test]
     fn timeout_future() {
-        let mut event_loop = EventLoop::try_new().unwrap();
+        let mut event_loop = EventLoop::new().unwrap();
 
         let mut dispatched = 0;
 
@@ -621,7 +621,7 @@ mod tests {
 
     #[test]
     fn no_overflow() {
-        let mut event_loop = EventLoop::try_new().unwrap();
+        let mut event_loop = EventLoop::new().unwrap();
 
         let mut dispatched = 0;
 

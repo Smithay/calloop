@@ -379,7 +379,7 @@ impl<'l, Data> EventLoop<'l, Data> {
     /// Create a new event loop
     ///
     /// Fails if the initialization of the polling system failed.
-    pub fn try_new() -> crate::Result<Self> {
+    pub fn new() -> crate::Result<Self> {
         let poll = Poll::new()?;
         let poller = poll.poller.clone();
         let handle = LoopHandle {
@@ -842,7 +842,7 @@ mod tests {
 
     #[test]
     fn dispatch_idle() {
-        let mut event_loop = EventLoop::try_new().unwrap();
+        let mut event_loop = EventLoop::new().unwrap();
 
         let mut dispatched = false;
 
@@ -859,7 +859,7 @@ mod tests {
 
     #[test]
     fn cancel_idle() {
-        let mut event_loop = EventLoop::try_new().unwrap();
+        let mut event_loop = EventLoop::new().unwrap();
 
         let mut dispatched = false;
 
@@ -879,7 +879,7 @@ mod tests {
 
     #[test]
     fn wakeup() {
-        let mut event_loop = EventLoop::try_new().unwrap();
+        let mut event_loop = EventLoop::new().unwrap();
 
         let signal = event_loop.get_signal();
 
@@ -894,7 +894,7 @@ mod tests {
 
     #[test]
     fn wakeup_stop() {
-        let mut event_loop = EventLoop::try_new().unwrap();
+        let mut event_loop = EventLoop::new().unwrap();
 
         let signal = event_loop.get_signal();
 
@@ -910,7 +910,7 @@ mod tests {
 
     #[test]
     fn additional_events() {
-        let mut event_loop: EventLoop<'_, Lock> = EventLoop::try_new().unwrap();
+        let mut event_loop: EventLoop<'_, Lock> = EventLoop::new().unwrap();
         let mut lock = Lock {
             lock: Rc::new((
                 // Whether the lock is locked
@@ -1045,7 +1045,7 @@ mod tests {
     fn default_additional_events() {
         let (sender, channel) = channel();
         let mut test_source = NoopWithDefaultHandlers { channel };
-        let mut event_loop = EventLoop::try_new().unwrap();
+        let mut event_loop = EventLoop::new().unwrap();
         event_loop
             .handle()
             .insert_source(Box::new(&mut test_source), |_, _, _| {})
@@ -1103,7 +1103,7 @@ mod tests {
 
     #[test]
     fn additional_events_synthetic() {
-        let mut event_loop: EventLoop<'_, Lock> = EventLoop::try_new().unwrap();
+        let mut event_loop: EventLoop<'_, Lock> = EventLoop::new().unwrap();
         let mut lock = Lock {
             lock: Rc::new(Cell::new(false)),
         };
@@ -1212,7 +1212,7 @@ mod tests {
             }
         }
 
-        let event_loop = EventLoop::<()>::try_new().unwrap();
+        let event_loop = EventLoop::<()>::new().unwrap();
         let fd = LeakedFd(ManuallyDrop::new(unsafe {
             std::os::unix::io::OwnedFd::from_raw_fd(420)
         }));
@@ -1227,7 +1227,7 @@ mod tests {
     fn invalid_token() {
         let (_ping, source) = crate::sources::ping::make_ping().unwrap();
 
-        let event_loop = EventLoop::<()>::try_new().unwrap();
+        let event_loop = EventLoop::<()>::new().unwrap();
         let handle = event_loop.handle();
         let reg_token = handle.insert_source(source, |_, _, _| {}).unwrap();
         handle.remove(reg_token);
@@ -1247,7 +1247,7 @@ mod tests {
         let source = crate::sources::generic::Generic::new(read, Interest::EMPTY, Mode::Level);
         let dispatcher = Dispatcher::new(source, |_, _, _| Ok(PostAction::Continue));
 
-        let event_loop = EventLoop::<()>::try_new().unwrap();
+        let event_loop = EventLoop::<()>::new().unwrap();
         let handle = event_loop.handle();
         let ret = handle.register_dispatcher(dispatcher.clone());
 
@@ -1262,7 +1262,7 @@ mod tests {
 
     #[test]
     fn disarm_rearm() {
-        let mut event_loop = EventLoop::<bool>::try_new().unwrap();
+        let mut event_loop = EventLoop::<bool>::new().unwrap();
         let (ping, ping_source) = make_ping().unwrap();
 
         let ping_token = event_loop
@@ -1353,7 +1353,7 @@ mod tests {
             }
         }
 
-        let mut event_loop = EventLoop::<u32>::try_new().unwrap();
+        let mut event_loop = EventLoop::<u32>::new().unwrap();
 
         let (ping1, source1) = make_ping().unwrap();
         let (ping2, source2) = make_ping().unwrap();
@@ -1399,7 +1399,7 @@ mod tests {
     fn change_interests() {
         use rustix::io::write;
         use rustix::net::{recv, socketpair, AddressFamily, RecvFlags, SocketFlags, SocketType};
-        let mut event_loop = EventLoop::<bool>::try_new().unwrap();
+        let mut event_loop = EventLoop::<bool>::new().unwrap();
 
         let (sock1, sock2) = socketpair(
             AddressFamily::UNIX,
@@ -1485,7 +1485,7 @@ mod tests {
 
     #[test]
     fn kill_source() {
-        let mut event_loop = EventLoop::<Option<RegistrationToken>>::try_new().unwrap();
+        let mut event_loop = EventLoop::<Option<RegistrationToken>>::new().unwrap();
 
         let handle = event_loop.handle();
         let (ping, ping_source) = make_ping().unwrap();
@@ -1517,7 +1517,7 @@ mod tests {
             struct RefSender<'a>(&'a mpsc::Sender<()>);
             let mut ref_sender = RefSender(&sender);
 
-            let mut event_loop = EventLoop::<RefSender<'_>>::try_new().unwrap();
+            let mut event_loop = EventLoop::<RefSender<'_>>::new().unwrap();
             let (ping, ping_source) = make_ping().unwrap();
             let _ping_token = event_loop
                 .handle()
@@ -1544,7 +1544,7 @@ mod tests {
         use crate::sources::timer::TimeoutFuture;
         use std::time::Duration;
 
-        let mut evl = EventLoop::<()>::try_new().unwrap();
+        let mut evl = EventLoop::<()>::new().unwrap();
 
         let mut data = 22;
         let timeout = {
@@ -1569,7 +1569,7 @@ mod tests {
         use crate::sources::timer;
         use std::time::Duration;
 
-        let mut evl = EventLoop::<()>::try_new().unwrap();
+        let mut evl = EventLoop::<()>::new().unwrap();
 
         let mut data = 22;
         let timeout = {
@@ -1604,7 +1604,7 @@ mod tests {
         use std::sync::{Arc, Mutex};
         use std::time::{Duration, Instant};
 
-        let mut evl = EventLoop::<RegistrationToken>::try_new().unwrap();
+        let mut evl = EventLoop::<RegistrationToken>::new().unwrap();
         let handle = evl.handle();
 
         let data = Arc::new(Mutex::new(1));
@@ -1695,7 +1695,7 @@ mod tests {
         }
 
         // Now the actual test
-        let mut evl = EventLoop::<bool>::try_new().unwrap();
+        let mut evl = EventLoop::<bool>::new().unwrap();
         evl.handle()
             .insert_source(WithSubSource { token: None }, |_, _, ran| {
                 *ran = true;
@@ -1746,7 +1746,7 @@ mod tests {
 
     #[test]
     fn weak_loop_handle() {
-        let mut event_loop: EventLoop<()> = EventLoop::try_new().unwrap();
+        let mut event_loop: EventLoop<()> = EventLoop::new().unwrap();
         let weak_handle1 = event_loop.handle().downgrade();
         let weak_handle2 = weak_handle1.clone();
         let weak_handle3 = weak_handle1.clone();

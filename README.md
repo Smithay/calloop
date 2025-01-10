@@ -36,7 +36,7 @@ fn main() {
     // just annotate the type here; the actual data is provided later in the
     // run() call.
     let mut event_loop: EventLoop<LoopSignal> =
-        EventLoop::try_new().expect("Failed to initialize the event loop!");
+        EventLoop::new().expect("Failed to initialize the event loop!");
 
     // Retrieve a handle. It is used to insert new sources into the event loop
     // It can be cloned, allowing you to insert sources from within source

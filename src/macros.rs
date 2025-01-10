@@ -173,7 +173,7 @@ mod tests {
             ping2,
         };
 
-        let mut event_loop = crate::EventLoop::<[bool; 3]>::try_new().unwrap();
+        let mut event_loop = crate::EventLoop::<[bool; 3]>::new().unwrap();
         let handle = event_loop.handle();
 
         let token = handle

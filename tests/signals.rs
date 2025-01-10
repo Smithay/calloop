@@ -33,7 +33,7 @@ mod test {
     }
 
     fn single_usr1() {
-        let mut event_loop = EventLoop::try_new().unwrap();
+        let mut event_loop = EventLoop::new().unwrap();
 
         let mut signal_received = false;
 
@@ -59,7 +59,7 @@ mod test {
     }
 
     fn usr2_added_afterwards() {
-        let mut event_loop = EventLoop::try_new().unwrap();
+        let mut event_loop = EventLoop::new().unwrap();
 
         let mut signal_received = None;
         let dispatcher = Dispatcher::new(
@@ -89,7 +89,7 @@ mod test {
     }
 
     fn usr2_signal_removed() {
-        let mut event_loop = EventLoop::try_new().unwrap();
+        let mut event_loop = EventLoop::new().unwrap();
 
         let mut signal_received = None;
         let dispatcher = Dispatcher::new(

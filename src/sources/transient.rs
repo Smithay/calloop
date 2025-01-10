@@ -453,7 +453,7 @@ mod tests {
         // The TransientSource wrapper.
         let outer: TransientSource<_> = inner.into();
 
-        let mut event_loop = crate::EventLoop::try_new().unwrap();
+        let mut event_loop = crate::EventLoop::new().unwrap();
         let handle = event_loop.handle();
 
         let _token = handle
@@ -489,7 +489,7 @@ mod tests {
         let (sender, receiver) = channel();
         let outer: TransientSource<_> = receiver.into();
 
-        let mut event_loop = crate::EventLoop::try_new().unwrap();
+        let mut event_loop = crate::EventLoop::new().unwrap();
         let handle = event_loop.handle();
 
         // Our callback puts the receied events in here for us to check later.
@@ -644,7 +644,7 @@ mod tests {
             *test_id = got_id;
         });
 
-        let mut event_loop = crate::EventLoop::try_new().unwrap();
+        let mut event_loop = crate::EventLoop::new().unwrap();
         let handle = event_loop.handle();
 
         let token = handle.register_dispatcher(dispatcher.clone()).unwrap();
@@ -740,7 +740,7 @@ mod tests {
         // The TransientSource wrapper.
         let outer: TransientSource<_> = inner.into();
 
-        let mut event_loop = crate::EventLoop::try_new().unwrap();
+        let mut event_loop = crate::EventLoop::new().unwrap();
         let handle = event_loop.handle();
         let token = handle
             .insert_source(outer, |_, _, fired| {
@@ -979,7 +979,7 @@ mod tests {
         // Now the actual test starts.
 
         let mut event_loop: crate::EventLoop<(Option<i32>, crate::LoopSignal)> =
-            crate::EventLoop::try_new().unwrap();
+            crate::EventLoop::new().unwrap();
         let handle = event_loop.handle();
         let signal = event_loop.get_signal();
 
@@ -1104,7 +1104,7 @@ mod tests {
             inner: receiver.into(),
         };
 
-        let mut event_loop = crate::EventLoop::try_new().unwrap();
+        let mut event_loop = crate::EventLoop::new().unwrap();
         let handle = event_loop.handle();
 
         handle

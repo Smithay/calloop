@@ -418,7 +418,7 @@ mod tests {
 
     #[test]
     fn ready() {
-        let mut event_loop = crate::EventLoop::<u32>::try_new().unwrap();
+        let mut event_loop = crate::EventLoop::<u32>::new().unwrap();
 
         let handle = event_loop.handle();
 
@@ -453,7 +453,7 @@ mod tests {
 
     #[test]
     fn more_than_1024() {
-        let mut event_loop = crate::EventLoop::<()>::try_new().unwrap();
+        let mut event_loop = crate::EventLoop::<()>::new().unwrap();
         let handle = event_loop.handle();
 
         let (exec, sched) = executor::<()>().unwrap();

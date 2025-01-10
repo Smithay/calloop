@@ -4,7 +4,7 @@ use calloop::timer::TimeoutAction;
 use criterion::{criterion_group, criterion_main, Criterion};
 
 fn single(c: &mut Criterion) {
-    let mut event_loop = calloop::EventLoop::<()>::try_new().unwrap();
+    let mut event_loop = calloop::EventLoop::<()>::new().unwrap();
     let loop_handle = event_loop.handle();
 
     let timer = calloop::timer::Timer::from_duration(Duration::from_secs(60 * 10));
@@ -27,7 +27,7 @@ fn single(c: &mut Criterion) {
 }
 
 fn mixed(c: &mut Criterion) {
-    let mut event_loop = calloop::EventLoop::<()>::try_new().unwrap();
+    let mut event_loop = calloop::EventLoop::<()>::new().unwrap();
     let loop_handle = event_loop.handle();
 
     let timer = calloop::timer::Timer::from_duration(Duration::from_secs(60 * 10 - 1));
@@ -60,7 +60,7 @@ fn mixed(c: &mut Criterion) {
 }
 
 fn mixed_multiple(c: &mut Criterion) {
-    let mut event_loop = calloop::EventLoop::<()>::try_new().unwrap();
+    let mut event_loop = calloop::EventLoop::<()>::new().unwrap();
     let loop_handle = event_loop.handle();
 
     for _ in 0..1000 {

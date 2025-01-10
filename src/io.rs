@@ -415,7 +415,7 @@ mod tests {
 
     #[test]
     fn read_write() {
-        let mut event_loop = crate::EventLoop::try_new().unwrap();
+        let mut event_loop = crate::EventLoop::new().unwrap();
         let handle = event_loop.handle();
         let (exec, sched) = executor().unwrap();
         handle
@@ -460,7 +460,7 @@ mod tests {
 
     #[test]
     fn read_write_vectored() {
-        let mut event_loop = crate::EventLoop::try_new().unwrap();
+        let mut event_loop = crate::EventLoop::new().unwrap();
         let handle = event_loop.handle();
         let (exec, sched) = executor().unwrap();
         handle
@@ -515,7 +515,7 @@ mod tests {
     fn readable() {
         use std::io::Write;
 
-        let mut event_loop = crate::EventLoop::try_new().unwrap();
+        let mut event_loop = crate::EventLoop::new().unwrap();
         let handle = event_loop.handle();
         let (exec, sched) = executor().unwrap();
         handle
@@ -554,7 +554,7 @@ mod tests {
     fn writable() {
         use std::io::{BufReader, BufWriter, Read, Write};
 
-        let mut event_loop = crate::EventLoop::try_new().unwrap();
+        let mut event_loop = crate::EventLoop::new().unwrap();
         let handle = event_loop.handle();
         let (exec, sched) = executor().unwrap();
         handle
