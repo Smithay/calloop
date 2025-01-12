@@ -1,6 +1,6 @@
 use std::cell::{Cell, RefCell};
 use std::fmt::Debug;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -49,15 +49,15 @@ impl RegistrationToken {
 
 pub(crate) struct LoopInner<'l, Data> {
     pub(crate) poll: RefCell<Poll>,
-    // The `Option` is used to keep slots of the slab occipied, to prevent id reuse
-    // while in-flight events might still referr to a recently destroyed event source.
+    // The `Option` is used to keep slots of the slab occupied, to prevent id reuse
+    // while in-flight events might still refer to a recently destroyed event source.
     pub(crate) sources: RefCell<SourceList<'l, Data>>,
     pub(crate) sources_with_additional_lifecycle_events: RefCell<AdditionalLifecycleEventsSet>,
     idles: RefCell<Vec<IdleCallback<'l, Data>>>,
     pending_action: Cell<PostAction>,
 }
 
-/// An handle to an event loop
+/// A handle to an event loop
 ///
 /// This handle allows you to insert new sources and idles in this event loop,
 /// it can be cloned, and it is possible to insert new sources from within a source
@@ -66,7 +66,13 @@ pub struct LoopHandle<'l, Data> {
     inner: Rc<LoopInner<'l, Data>>,
 }
 
-impl<Data> std::fmt::Debug for LoopHandle<'_, Data> {
+/// Weak variant of a [`LoopHandle`]
+#[derive(Clone, Default)]
+pub struct WeakLoopHandle<'l, Data> {
+    inner: Weak<LoopInner<'l, Data>>,
+}
+
+impl<Data> Debug for LoopHandle<'_, Data> {
     #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("LoopHandle { ... }")
@@ -288,6 +294,56 @@ impl<'l, Data> LoopHandle<'l, Data> {
     pub fn adapt_io<F: AsFd>(&self, fd: F) -> crate::Result<crate::io::Async<'l, F>> {
         crate::io::Async::new(self.inner.clone(), fd)
     }
+
+    /// Create a weak reference to this loop data.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use calloop::timer::{TimeoutAction, Timer};
+    /// use calloop::EventLoop;
+    ///
+    /// let event_loop: EventLoop<()> = EventLoop::try_new().unwrap();
+    /// let weak_handle = event_loop.handle().downgrade();
+    ///
+    /// event_loop
+    ///    .handle()
+    ///    .insert_source(Timer::immediate(), move |_, _, _| {
+    ///        // Hold its weak handle in the event loop's callback to break the reference cycle.
+    ///        let handle = weak_handle.upgrade().unwrap();
+    ///
+    ///        // Use the upgraded handle later...
+    ///
+    ///        TimeoutAction::Drop
+    ///    })
+    ///    .unwrap();
+    /// ```
+    pub fn downgrade(&self) -> WeakLoopHandle<'l, Data> {
+        WeakLoopHandle {
+            inner: Rc::downgrade(&self.inner),
+        }
+    }
+}
+
+impl<Data> Debug for WeakLoopHandle<'_, Data> {
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("WeakLoopHandle { ... }")
+    }
+}
+
+impl<'l, Data> WeakLoopHandle<'l, Data> {
+    /// Try to get a [`LoopHandle`] from this weak reference.
+    ///
+    /// Returns [`None`] if the loop data has been dropped.
+    pub fn upgrade(&self) -> Option<LoopHandle<'l, Data>> {
+        self.inner.upgrade().map(|inner| LoopHandle { inner })
+    }
+
+    /// Check if the loop data has been dropped.
+    pub fn expired(&self) -> bool {
+        self.inner.strong_count() == 0
+    }
 }
 
 /// An event loop
@@ -302,7 +358,7 @@ pub struct EventLoop<'l, Data> {
     synthetic_events: Vec<PollEvent>,
 }
 
-impl<Data> std::fmt::Debug for EventLoop<'_, Data> {
+impl<Data> Debug for EventLoop<'_, Data> {
     #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("EventLoop { ... }")
@@ -444,7 +500,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                 trace!(source = reg_token.get_id(), "Dispatching events for source");
                 let mut ret = disp.process_events(event.readiness, event.token, data)?;
 
-                // if the returned PostAction is Continue, it may be overwritten by an user-specified pending action
+                // if the returned PostAction is Continue, it may be overwritten by a user-specified pending action
                 let pending_action = self
                     .handle
                     .inner
@@ -536,8 +592,8 @@ impl<'l, Data> EventLoop<'l, Data> {
 
     /// Dispatch pending events to their callbacks
     ///
-    /// If some sources have events available, their callbacks will be immediatly called.
-    /// Otherwise this will wait until an event is receive or the provided `timeout`
+    /// If some sources have events available, their callbacks will be immediately called.
+    /// Otherwise, this will wait until an event is received or the provided `timeout`
     /// is reached. If `timeout` is `None`, it will wait without a duration limit.
     ///
     /// Once pending events have been processed or the timeout is reached, all pending
@@ -739,7 +795,7 @@ pub struct LoopSignal {
     notifier: Notifier,
 }
 
-impl std::fmt::Debug for LoopSignal {
+impl Debug for LoopSignal {
     #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("LoopSignal { ... }")
@@ -775,7 +831,7 @@ mod tests {
     use crate::{
         channel::{channel, Channel},
         ping::*,
-        EventIterator, EventSource, Poll, PostAction, Readiness, RegistrationToken, Token,
+        timer, EventIterator, EventSource, Poll, PostAction, Readiness, RegistrationToken, Token,
         TokenFactory,
     };
 
@@ -1686,5 +1742,34 @@ mod tests {
         fn unregister(&mut self, _: &mut Poll) -> crate::Result<()> {
             Ok(())
         }
+    }
+
+    #[test]
+    fn weak_loop_handle() {
+        let mut event_loop: EventLoop<()> = EventLoop::try_new().unwrap();
+        let weak_handle1 = event_loop.handle().downgrade();
+        let weak_handle2 = weak_handle1.clone();
+        let weak_handle3 = weak_handle1.clone();
+
+        event_loop
+            .handle()
+            .insert_source(timer::Timer::immediate(), move |_, _, _| {
+                // Hold and use its weak handle in the event loop's callback
+                assert!(weak_handle1.upgrade().is_some());
+                timer::TimeoutAction::Drop
+            })
+            .unwrap();
+
+        event_loop.handle().insert_idle(move |_| {
+            // Hold and use its weak handle in the event loop's idle callback
+            assert!(weak_handle2.upgrade().is_some());
+        });
+
+        event_loop.dispatch(None, &mut ()).unwrap();
+
+        drop(event_loop);
+
+        // Test if memory is freed
+        assert!(weak_handle3.expired());
     }
 }
