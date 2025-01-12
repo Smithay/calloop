@@ -11,7 +11,7 @@ fn main() -> std::io::Result<()> {
     // ANCHOR_END: decl_executor
 
     // ANCHOR: decl_loop
-    let mut event_loop = EventLoop::try_new()?;
+    let mut event_loop = EventLoop::new()?;
     let handle = event_loop.handle();
 
     handle

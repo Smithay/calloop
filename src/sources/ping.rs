@@ -84,7 +84,7 @@ mod tests {
 
     #[test]
     fn ping() {
-        let mut event_loop = crate::EventLoop::<bool>::try_new().unwrap();
+        let mut event_loop = crate::EventLoop::<bool>::new().unwrap();
 
         let (ping, source) = make_ping().unwrap();
 
@@ -111,7 +111,7 @@ mod tests {
 
     #[test]
     fn ping_closed() {
-        let mut event_loop = crate::EventLoop::<bool>::try_new().unwrap();
+        let mut event_loop = crate::EventLoop::<bool>::new().unwrap();
 
         let (_, source) = make_ping().unwrap();
         event_loop
@@ -141,7 +141,7 @@ mod tests {
         // This keeps track of whether the event fired.
         let mut dispatched = false;
 
-        let mut event_loop = crate::EventLoop::<bool>::try_new().unwrap();
+        let mut event_loop = crate::EventLoop::<bool>::new().unwrap();
 
         let (sender, source) = make_ping().unwrap();
         let wrapper = TransientSource::from(source);
@@ -186,7 +186,7 @@ mod tests {
         // This keeps track of whether the event fired.
         let mut dispatched = false;
 
-        let mut event_loop = crate::EventLoop::<bool>::try_new().unwrap();
+        let mut event_loop = crate::EventLoop::<bool>::new().unwrap();
 
         let (sender, source) = make_ping().unwrap();
         let wrapper = TransientSource::from(source);
@@ -232,7 +232,7 @@ mod tests {
         // This keeps track of whether the event fired.
         let mut dispatched = false;
 
-        let mut event_loop = crate::EventLoop::<bool>::try_new().unwrap();
+        let mut event_loop = crate::EventLoop::<bool>::new().unwrap();
 
         let (sender0, source) = make_ping().unwrap();
         let wrapper = TransientSource::from(source);

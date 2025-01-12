@@ -13,7 +13,7 @@
 //! use calloop::{generic::Generic, Interest, Mode, PostAction};
 //!
 //! # fn main() {
-//! # let mut event_loop = calloop::EventLoop::<()>::try_new()
+//! # let mut event_loop = calloop::EventLoop::<()>::new()
 //! #                .expect("Failed to initialize the event loop!");
 //! # let handle = event_loop.handle();
 //! # #[cfg(unix)]
@@ -350,7 +350,7 @@ mod tests {
     fn dispatch_unix() {
         use std::os::unix::net::UnixStream;
 
-        let mut event_loop = crate::EventLoop::try_new().unwrap();
+        let mut event_loop = crate::EventLoop::new().unwrap();
 
         let handle = event_loop.handle();
 
@@ -396,7 +396,7 @@ mod tests {
     fn register_deregister_unix() {
         use std::os::unix::net::UnixStream;
 
-        let mut event_loop = crate::EventLoop::try_new().unwrap();
+        let mut event_loop = crate::EventLoop::new().unwrap();
 
         let handle = event_loop.handle();
 
@@ -466,7 +466,7 @@ mod tests {
             io::{AsFd, BorrowedFd},
             net::UnixStream,
         };
-        let event_loop = crate::EventLoop::<()>::try_new().unwrap();
+        let event_loop = crate::EventLoop::<()>::new().unwrap();
 
         let handle = event_loop.handle();
 

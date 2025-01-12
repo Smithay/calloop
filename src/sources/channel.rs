@@ -287,7 +287,7 @@ mod tests {
 
     #[test]
     fn basic_channel() {
-        let mut event_loop = crate::EventLoop::try_new().unwrap();
+        let mut event_loop = crate::EventLoop::new().unwrap();
 
         let handle = event_loop.handle();
 
@@ -333,7 +333,7 @@ mod tests {
 
     #[test]
     fn basic_sync_channel() {
-        let mut event_loop = crate::EventLoop::try_new().unwrap();
+        let mut event_loop = crate::EventLoop::new().unwrap();
 
         let handle = event_loop.handle();
 
@@ -391,7 +391,7 @@ mod tests {
 
     #[test]
     fn test_more_than_1024() {
-        let mut event_loop = crate::EventLoop::try_new().unwrap();
+        let mut event_loop = crate::EventLoop::new().unwrap();
         let handle = event_loop.handle();
 
         let (tx, rx) = channel::<()>();

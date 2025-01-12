@@ -613,7 +613,7 @@ mod tests {
         let (pinger, source) = make_ping().unwrap();
         let boxed = Box::new(source);
 
-        let mut event_loop = EventLoop::try_new().unwrap();
+        let mut event_loop = EventLoop::new().unwrap();
         let handle = event_loop.handle();
 
         let token = handle
@@ -657,7 +657,7 @@ mod tests {
         let (pinger, mut source) = make_ping().unwrap();
         let source_ref = &mut source;
 
-        let mut event_loop = EventLoop::try_new().unwrap();
+        let mut event_loop = EventLoop::new().unwrap();
         let handle = event_loop.handle();
 
         let token = handle

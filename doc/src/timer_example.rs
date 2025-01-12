@@ -7,7 +7,7 @@ use calloop::{
 };
 
 fn main() {
-    let mut event_loop = EventLoop::try_new().expect("Failed to initialize the event loop!");
+    let mut event_loop = EventLoop::new().expect("Failed to initialize the event loop!");
 
     // ANCHOR: decl_source
     let timer = Timer::from_duration(Duration::from_secs(5));
