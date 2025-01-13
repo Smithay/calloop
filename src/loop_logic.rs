@@ -67,7 +67,6 @@ pub struct LoopHandle<'l, Data> {
 }
 
 /// Weak variant of a [`LoopHandle`]
-#[derive(Clone, Default)]
 pub struct WeakLoopHandle<'l, Data> {
     inner: Weak<LoopInner<'l, Data>>,
 }
@@ -79,6 +78,9 @@ impl<Data> Debug for LoopHandle<'_, Data> {
     }
 }
 
+/// Manually implemented `Clone`.
+///
+/// The derived implementation adds a `Clone` bound on the generic parameter `Data`.
 impl<Data> Clone for LoopHandle<'_, Data> {
     #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn clone(&self) -> Self {
@@ -329,6 +331,30 @@ impl<Data> Debug for WeakLoopHandle<'_, Data> {
     #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("WeakLoopHandle { ... }")
+    }
+}
+
+/// Manually implemented `Clone`.
+///
+/// The derived implementation adds a `Clone` bound on the generic parameter `Data`.
+impl<Data> Clone for WeakLoopHandle<'_, Data> {
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    fn clone(&self) -> Self {
+        WeakLoopHandle {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+/// Manually implemented `Default`.
+///
+/// The derived implementation adds a `Default` bound on the generic parameter `Data`.
+impl<Data> Default for WeakLoopHandle<'_, Data> {
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    fn default() -> Self {
+        WeakLoopHandle {
+            inner: Weak::default(),
+        }
     }
 }
 
