@@ -602,7 +602,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                     }
                 }
             } else {
-                warn!(?reg_token, "Received an event for non-existence source");
+                warn!(?reg_token, "Received an event for non-existent source");
             }
         }
 
