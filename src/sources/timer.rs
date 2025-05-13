@@ -278,7 +278,8 @@ impl TimerWheel {
 impl std::cmp::Ord for TimeoutData {
     #[inline]
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        // earlier values have priority, on same deadline items queued first have priority
+        // Earlier values have priority.
+        // For items with the same deadline, those queued first have priority.
         self.deadline
             .cmp(&other.deadline)
             .then_with(|| self.counter.cmp(&other.counter))
