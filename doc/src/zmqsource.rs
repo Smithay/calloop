@@ -40,7 +40,6 @@ use anyhow::Context;
 /// messages over the same writeable ZeroMQ socket (usually PUB or PUSH).
 /// Messages should be sent over the Calloop MPSC channel sending end. This end
 /// can be cloned and used by multiple senders.
-
 pub struct ZeroMQSource<T>
 where
     T: IntoIterator,

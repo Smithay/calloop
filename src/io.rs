@@ -51,7 +51,7 @@ pub struct Async<'l, F: AsFd> {
     was_nonblocking: bool,
 }
 
-impl<'l, F: AsFd + std::fmt::Debug> std::fmt::Debug for Async<'l, F> {
+impl<F: AsFd + std::fmt::Debug> std::fmt::Debug for Async<'_, F> {
     #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Async").field("fd", &self.fd).finish()
@@ -146,7 +146,7 @@ pub struct Readable<'s, 'l, F: AsFd> {
     io: &'s mut Async<'l, F>,
 }
 
-impl<'s, 'l, F: AsFd> std::future::Future for Readable<'s, 'l, F> {
+impl<F: AsFd> std::future::Future for Readable<'_, '_, F> {
     type Output = ();
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> TaskPoll<()> {
         let io = &mut self.as_mut().io;
@@ -166,7 +166,7 @@ pub struct Writable<'s, 'l, F: AsFd> {
     io: &'s mut Async<'l, F>,
 }
 
-impl<'s, 'l, F: AsFd> std::future::Future for Writable<'s, 'l, F> {
+impl<F: AsFd> std::future::Future for Writable<'_, '_, F> {
     type Output = ();
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> TaskPoll<()> {
         let io = &mut self.as_mut().io;
@@ -180,7 +180,7 @@ impl<'s, 'l, F: AsFd> std::future::Future for Writable<'s, 'l, F> {
     }
 }
 
-impl<'l, F: AsFd> Drop for Async<'l, F> {
+impl<F: AsFd> Drop for Async<'_, F> {
     fn drop(&mut self) {
         self.inner.kill(&self.dispatcher);
         // restore flags
@@ -191,7 +191,7 @@ impl<'l, F: AsFd> Drop for Async<'l, F> {
     }
 }
 
-impl<'l, F: AsFd> Unpin for Async<'l, F> {}
+impl<F: AsFd> Unpin for Async<'_, F> {}
 
 trait IoLoopInner {
     unsafe fn register(&self, dispatcher: &RefCell<IoDispatcher>) -> crate::Result<()>;
@@ -199,7 +199,7 @@ trait IoLoopInner {
     fn kill(&self, dispatcher: &RefCell<IoDispatcher>);
 }
 
-impl<'l, Data> IoLoopInner for LoopInner<'l, Data> {
+impl<Data> IoLoopInner for LoopInner<'_, Data> {
     unsafe fn register(&self, dispatcher: &RefCell<IoDispatcher>) -> crate::Result<()> {
         let disp = dispatcher.borrow();
         self.poll.borrow_mut().register(
@@ -306,7 +306,7 @@ impl<Data> EventDispatcher<Data> for RefCell<IoDispatcher> {
 
 #[cfg(feature = "futures-io")]
 #[cfg_attr(docsrs, doc(cfg(feature = "futures-io")))]
-impl<'l, F: AsFd + std::io::Read> AsyncRead for Async<'l, F> {
+impl<F: AsFd + std::io::Read> AsyncRead for Async<'_, F> {
     fn poll_read(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -336,7 +336,7 @@ impl<'l, F: AsFd + std::io::Read> AsyncRead for Async<'l, F> {
 
 #[cfg(feature = "futures-io")]
 #[cfg_attr(docsrs, doc(cfg(feature = "futures-io")))]
-impl<'l, F: AsFd + std::io::Write> AsyncWrite for Async<'l, F> {
+impl<F: AsFd + std::io::Write> AsyncWrite for Async<'_, F> {
     fn poll_write(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
