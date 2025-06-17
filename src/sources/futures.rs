@@ -309,15 +309,15 @@ impl<T> EventSource for Executor<T> {
     {
         let state = &self.state;
 
-        // Set to the unnotified state.
-        state.sender.notified.store(false, Ordering::SeqCst);
-
         let (clear_readiness, action) = {
             let mut clear_readiness = false;
 
             let action = self
                 .source
                 .process_events(readiness, token, |(), &mut ()| {
+                    // Set to the unnotified state.
+                    state.sender.notified.store(false, Ordering::SeqCst);
+
                     // Process runnables, but not too many at a time; better to move onto the next event quickly!
                     for _ in 0..1024 {
                         let runnable = match state.incoming.try_recv() {
