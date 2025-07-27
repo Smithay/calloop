@@ -141,7 +141,7 @@
 //! tested platforms, but some subtle bugs might still occur.
 
 #![warn(missing_docs, missing_debug_implementations)]
-#![allow(clippy::needless_doctest_main)]
+#![allow(clippy::needless_doctest_main, clippy::uninlined_format_args)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(feature = "nightly_coverage", feature(coverage_attribute))]
 
