@@ -1,3 +1,5 @@
+#![allow(clippy::uninlined_format_args)]
+
 //! A Calloop event source implementation for ZeroMQ sockets.
 
 use std::{collections, io};

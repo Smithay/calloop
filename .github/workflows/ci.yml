@@ -15,6 +15,8 @@ jobs:
       - name: Checkout sources
         uses: taiki-e/checkout-action@v1
 
+      - uses: taiki-e/install-action@cargo-binstall
+
       - name: Get date for registry cache
         id: date
         run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
@@ -48,7 +50,7 @@ jobs:
           key: ${{ runner.os }}-cargo-binaries-${{ steps.cargocacheversion.outputs.version }}
 
       - name: Install cargo-cache
-        run: cargo install cargo-cache --version ${{ steps.cargocacheversion.outputs.version }}
+        run: cargo binstall cargo-cache --version ${{ steps.cargocacheversion.outputs.version }}
 
       - name: Clean cargo cache of old items
         run: cargo cache clean-unref
@@ -113,6 +115,14 @@ jobs:
           path: target
           key: ${{ runner.os }}-test-${{ steps.rustcversion.outputs.version }}-${{ hashFiles('**/Cargo.toml') }}
 
+      - name: Downgrade tracing
+        if: ${{ matrix.rust == '1.63.0' }}
+        run: cargo update --package tracing --precise 0.1.40
+
+      - name: Downgrade tracing-core
+        if: ${{ matrix.rust == '1.63.0' }}
+        run: cargo update --package tracing-core --precise 0.1.32
+
       - name: Downgrade regex
         if: ${{ matrix.rust == '1.63.0' }}
         run: cargo update --package regex --precise 1.9.6
@@ -120,6 +130,10 @@ jobs:
       - name: Downgrade half
         if: ${{ matrix.rust == '1.63.0' || matrix.rust == '1.69.0' }}
         run: cargo update --package half --precise 2.2.1
+
+      - name: Downgrade textwrap
+        if: ${{ matrix.rust == '1.63.0' || matrix.rust == '1.69.0' }}
+        run: cargo update --package textwrap --precise 0.16.0
 
       - name: Run tests
         run: cargo test --features "block_on executor"
@@ -152,6 +166,14 @@ jobs:
       - name: Rust toolchain
         run: rustup default ${{ matrix.rust }}
 
+      - name: Downgrade tracing
+        if: ${{ matrix.rust == '1.63.0' }}
+        run: cargo update --package tracing --precise 0.1.40
+
+      - name: Downgrade tracing-core
+        if: ${{ matrix.rust == '1.63.0' }}
+        run: cargo update --package tracing-core --precise 0.1.32
+
       - name: Downgrade regex
         if: ${{ matrix.rust == '1.63.0' }}
         run: cargo update --package regex --precise 1.9.6
@@ -159,6 +181,10 @@ jobs:
       - name: Downgrade half
         if: ${{ matrix.rust == '1.63.0' }}
         run: cargo update --package half --precise 2.2.1
+
+      - name: Downgrade textwrap
+        if: ${{ matrix.rust == '1.63.0' }}
+        run: cargo update --package textwrap --precise 0.16.0
 
       - name: Run tests
         run: cargo test --features "block_on executor"
