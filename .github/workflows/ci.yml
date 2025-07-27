@@ -113,6 +113,18 @@ jobs:
           path: target
           key: ${{ runner.os }}-test-${{ steps.rustcversion.outputs.version }}-${{ hashFiles('**/Cargo.toml') }}
 
+      - name: Downgrade tracing-core
+        if: ${{ matrix.rust == '1.63.0' }}
+        run: cargo update --package tracing-core --precise 0.1.32
+
+      - name: Downgrade tracing
+        if: ${{ matrix.rust == '1.63.0' }}
+        run: cargo update --package tracing --precise 0.1.40
+
+      - name: Downgrade regex-automata
+        if: ${{ matrix.rust == '1.63.0' }}
+        run: cargo update --package regex-automata --precise 0.3.9
+
       - name: Downgrade regex
         if: ${{ matrix.rust == '1.63.0' }}
         run: cargo update --package regex --precise 1.9.6
@@ -120,6 +132,10 @@ jobs:
       - name: Downgrade half
         if: ${{ matrix.rust == '1.63.0' || matrix.rust == '1.69.0' }}
         run: cargo update --package half --precise 2.2.1
+
+      - name: Downgrade textwrap
+        if: ${{ matrix.rust == '1.63.0' || matrix.rust == '1.69.0' }}
+        run: cargo update --package textwrap --precise 0.16.0
 
       - name: Run tests
         run: cargo test --features "block_on executor"
