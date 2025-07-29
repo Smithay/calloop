@@ -27,6 +27,7 @@ impl Wake for PingWaker {
         self.0.ping();
     }
 
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn wake_by_ref(self: &Arc<Self>) {
         self.0.ping();
     }
@@ -136,7 +137,47 @@ impl std::error::Error for StreamError {
 }
 
 impl From<PingError> for StreamError {
+    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn from(err: PingError) -> Self {
         Self(err)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use futures::channel::mpsc;
+    use std::{thread, time::Duration};
+
+    use super::*;
+
+    #[test]
+    fn channel_stream() {
+        let mut event_loop = crate::EventLoop::<usize>::try_new().unwrap();
+
+        let (mut sender, receiver) = mpsc::channel(5);
+
+        let source = StreamSource::new(receiver).unwrap();
+        let token = event_loop
+            .handle()
+            .insert_source(source, |evt, (), count| {
+                if let Some(()) = evt {
+                    *count += 1;
+                }
+            })
+            .unwrap();
+
+        thread::spawn(move || {
+            thread::sleep(Duration::from_millis(100));
+            sender.try_send(()).unwrap();
+            thread::sleep(Duration::from_millis(100));
+            sender.try_send(()).unwrap();
+        });
+
+        let mut count = 0;
+        event_loop.dispatch(Duration::ZERO, &mut count).unwrap();
+        event_loop.handle().update(&token);
+        while count < 2 {
+            event_loop.dispatch(Duration::ZERO, &mut count).unwrap();
+        }
     }
 }
