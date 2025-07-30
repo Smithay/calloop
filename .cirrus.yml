@@ -6,9 +6,6 @@ task:
     - name: FreeBSD 14.2
       freebsd_instance:
         image_family: freebsd-14-2
-    - name: FreeBSD 15.0
-      freebsd_instance:
-        image_family: freebsd-15-0-snap
  # Install Rust
   setup_script:
     - fetch https://sh.rustup.rs -o rustup.sh
