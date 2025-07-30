@@ -1442,7 +1442,7 @@ mod tests {
             let mut buf = [0u8; 32];
             loop {
                 match recv(&*fd, &mut buf, RecvFlags::DONTWAIT) {
-                    Ok(0) => break, // closed pipe, we are now inert
+                    Ok((0, _)) => break, // closed pipe, we are now inert
                     Ok(_) => {}
                     Err(e) => {
                         let e: std::io::Error = e.into();
