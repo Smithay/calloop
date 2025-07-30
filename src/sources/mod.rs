@@ -18,6 +18,8 @@ pub mod ping;
 #[cfg(all(target_os = "linux", feature = "signals"))]
 #[cfg_attr(docsrs, doc(cfg(target_os = "linux")))]
 pub mod signals;
+#[cfg(feature = "stream")]
+pub mod stream;
 pub mod timer;
 pub mod transient;
 
