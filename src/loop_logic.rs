@@ -1712,6 +1712,7 @@ mod tests {
                         Readiness {
                             readable: true,
                             writable: false,
+                            interrupted: false,
                             error: false,
                         },
                         token,
