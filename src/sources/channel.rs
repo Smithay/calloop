@@ -10,6 +10,7 @@
 
 use std::cmp;
 use std::fmt;
+use std::ops;
 use std::sync::mpsc;
 
 use crate::{EventSource, Poll, PostAction, Readiness, Token, TokenFactory};
@@ -30,13 +31,32 @@ pub enum Event<T> {
     Closed,
 }
 
+#[derive(Debug)]
+struct PingOnDrop(Ping);
+
+impl ops::Deref for PingOnDrop {
+    type Target = Ping;
+
+    fn deref(&self) -> &Ping {
+        &self.0
+    }
+}
+
+impl Drop for PingOnDrop {
+    fn drop(&mut self) {
+        self.0.ping();
+    }
+}
+
 /// The sender end of a channel
 ///
 /// It can be cloned and sent accross threads (if `T` is).
 #[derive(Debug)]
 pub struct Sender<T> {
     sender: mpsc::Sender<T>,
-    ping: Ping,
+    // Dropped after `sender` so receiver is guaranteed to get `Disconnected`
+    // after ping.
+    ping: PingOnDrop,
 }
 
 impl<T> Clone for Sender<T> {
@@ -44,7 +64,7 @@ impl<T> Clone for Sender<T> {
     fn clone(&self) -> Sender<T> {
         Sender {
             sender: self.sender.clone(),
-            ping: self.ping.clone(),
+            ping: PingOnDrop(self.ping.clone()),
         }
     }
 }
@@ -56,13 +76,6 @@ impl<T> Sender<T> {
     /// it containing the provided value.
     pub fn send(&self, t: T) -> Result<(), mpsc::SendError<T>> {
         self.sender.send(t).map(|()| self.ping.ping())
-    }
-}
-
-impl<T> Drop for Sender<T> {
-    fn drop(&mut self) {
-        // ping on drop, to notify about channel closure
-        self.ping.ping();
     }
 }
 
@@ -164,7 +177,7 @@ pub fn channel<T>() -> (Sender<T>, Channel<T>) {
     (
         Sender {
             sender,
-            ping: ping.clone(),
+            ping: PingOnDrop(ping.clone()),
         },
         Channel {
             receiver,
