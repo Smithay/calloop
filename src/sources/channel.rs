@@ -11,7 +11,7 @@
 use std::cmp;
 use std::fmt;
 use std::ops;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
 
 use crate::{EventSource, Poll, PostAction, Readiness, Token, TokenFactory};
 
@@ -85,7 +85,9 @@ impl<T> Sender<T> {
 #[derive(Debug)]
 pub struct SyncSender<T> {
     sender: mpsc::SyncSender<T>,
-    ping: Ping,
+    // Dropped after `sender` so receiver is guaranteed to get `Disconnected`
+    // after ping.
+    ping: Arc<PingOnDrop>,
 }
 
 impl<T> Clone for SyncSender<T> {
@@ -195,7 +197,7 @@ pub fn sync_channel<T>(bound: usize) -> (SyncSender<T>, Channel<T>) {
     (
         SyncSender {
             sender,
-            ping: ping.clone(),
+            ping: Arc::new(PingOnDrop(ping.clone())),
         },
         Channel {
             receiver,
