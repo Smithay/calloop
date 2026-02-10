@@ -90,7 +90,7 @@ impl<T: AsRawFd> AsFd for FdWrapper<T> {
     }
 
     #[cfg(windows)]
-    fn as_socket(&self) -> BorrowedFd {
+    fn as_socket(&self) -> BorrowedFd<'_> {
         unsafe { BorrowedFd::borrow_raw(self.0.as_raw_socket()) }
     }
 }
