@@ -190,7 +190,7 @@ pub enum TimeoutAction {
 #[derive(Debug)]
 struct TimeoutData {
     deadline: Instant,
-    token: RefCell<Option<Token>>,
+    token: Token,
     counter: u32,
 }
 
@@ -212,7 +212,7 @@ impl TimerWheel {
     pub(crate) fn insert(&mut self, deadline: Instant, token: Token) -> u32 {
         self.heap.push(TimeoutData {
             deadline,
-            token: RefCell::new(Some(token)),
+            token,
             counter: self.counter,
         });
         let ret = self.counter;
@@ -223,7 +223,7 @@ impl TimerWheel {
     pub(crate) fn insert_reuse(&mut self, counter: u32, deadline: Instant, token: Token) {
         self.heap.push(TimeoutData {
             deadline,
-            token: RefCell::new(Some(token)),
+            token,
             counter,
         });
     }
@@ -243,25 +243,12 @@ impl TimerWheel {
     }
 
     pub(crate) fn next_expired(&mut self, now: Instant) -> Option<(u32, Token)> {
-        loop {
-            // check if there is an expired item
-            if let Some(data) = self.heap.peek() {
-                if data.deadline > now {
-                    return None;
-                }
-                // there is an expired timeout, continue the
-                // loop body
-            } else {
-                return None;
-            }
+        // check if there is an expired item
+        self.heap.peek().filter(|data| now >= data.deadline)?;
 
-            // There is an item in the heap, this unwrap cannot blow
-            let data = self.heap.pop().unwrap();
-            if let Some(token) = data.token.into_inner() {
-                return Some((data.counter, token));
-            }
-            // otherwise this timeout was cancelled, continue looping
-        }
+        // There is an item in the heap, this unwrap cannot blow
+        let data = self.heap.pop().unwrap();
+        Some((data.counter, data.token))
     }
 
     pub(crate) fn next_deadline(&self) -> Option<std::time::Instant> {
