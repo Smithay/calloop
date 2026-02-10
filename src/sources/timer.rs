@@ -239,11 +239,7 @@ impl TimerWheel {
             return;
         };
 
-        self.heap
-            .iter()
-            .rev()
-            .find(|data| data.counter == counter)
-            .map(|data| data.token.take());
+        self.heap.retain(|data| data.counter != counter);
     }
 
     pub(crate) fn next_expired(&mut self, now: Instant) -> Option<(u32, Token)> {
