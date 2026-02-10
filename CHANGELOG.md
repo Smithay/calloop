@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+#### Bugfixes
+
+- Prevent timers from growing indefinitely
+
 ## 0.14.3 - 2025-03-08
 
 - Add `WeakLoopHandle`. (#216)
