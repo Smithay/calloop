@@ -47,9 +47,17 @@ jobs:
             - name: Rust toolchain
               run: rustup default ${{ matrix.rust }}
 
-            - name: Downgrade tracing
+            - name: Downgrade rayon
               if: ${{ matrix.rust == '1.71.1' }}
               run: cargo update --package rayon --precise 1.10.0
+
+            - name: Downgrade half
+              if: ${{ matrix.rust == '1.71.1' }}
+              run: cargo update --package half --precise 2.4.0
+
+            - name: Downgrade rayon-core
+              if: ${{ matrix.rust == '1.71.1' }}
+              run: cargo update --package rayon-core --precise 1.12.1
 
             - name: Run tests
               run: cargo test --features "block_on executor"
@@ -81,9 +89,17 @@ jobs:
             - name: Rust toolchain
               run: rustup default ${{ matrix.rust }}
 
-            - name: Downgrade tracing
+            - name: Downgrade rayon
               if: ${{ matrix.rust == '1.71.1' }}
               run: cargo update --package rayon --precise 1.10.0
+
+            - name: Downgrade half
+              if: ${{ matrix.rust == '1.71.1' }}
+              run: cargo update --package half --precise 2.4.0
+
+            - name: Downgrade rayon-core
+              if: ${{ matrix.rust == '1.71.1' }}
+              run: cargo update --package rayon-core --precise 1.12.1
 
             - name: Run tests
               run: cargo test --features "block_on executor"
