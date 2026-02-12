@@ -99,7 +99,7 @@ fn drain_ping(fd: BorrowedFd<'_>) -> std::io::Result<u64> {
 struct ArcAsFd(Arc<OwnedFd>);
 
 impl AsFd for ArcAsFd {
-    fn as_fd(&self) -> BorrowedFd {
+    fn as_fd(&self) -> BorrowedFd<'_> {
         self.0.as_fd()
     }
 }
