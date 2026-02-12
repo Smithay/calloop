@@ -152,6 +152,7 @@ enum TransientSourceState<T> {
     None,
 }
 
+#[allow(clippy::derivable_impls)]
 impl<T> Default for TransientSourceState<T> {
     fn default() -> Self {
         Self::None
