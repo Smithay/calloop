@@ -1736,6 +1736,7 @@ mod tests {
     }
 
     // A dummy EventSource to test insertion and removal of sources
+    #[allow(dead_code)]
     struct DummySource;
 
     impl crate::EventSource for DummySource {
