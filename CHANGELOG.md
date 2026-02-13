@@ -2,9 +2,19 @@
 
 ## Unreleased
 
+## 0.14.4 - 2025-02-13
+
+#### Additions
+
+- Add `StreamSource` to adapt an async `Stream` to an `EventSource`. (#228)
+- Bump MSRV to 1.71.1 in accordance with dependencies.
+
 #### Bugfixes
 
-- Prevent timers from growing indefinitely
+- Fix handling of `notified` atomic in futures source. (#227)
+- Prevent timers from growing indefinitely. (#238)
+- Bump `nix` to v0.31. (#237) 
+- Ping on drop of last instance of `SyncSender`. (#236)
 
 ## 0.14.3 - 2025-03-08
 
