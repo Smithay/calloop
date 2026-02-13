@@ -1,0 +1,1903 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>A Guide to Calloop</title>
+        
+        <meta name="robots" content="noindex" />
+        
+        
+
+
+        <!-- Custom HTML head -->
+        
+
+
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        
+        <link rel="icon" href="favicon.svg">
+        
+        
+        <link rel="shortcut icon" href="favicon.png">
+        
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        
+        <link rel="stylesheet" href="css/print.css" media="print">
+        
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        
+        <link rel="stylesheet" href="fonts/fonts.css">
+        
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        
+
+        
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="ch00-00-where-to-start.html">Where to start</a></li><li class="chapter-item expanded "><a href="ch01-00-how-an-event-loop-works.html"><strong aria-hidden="true">1.</strong> How an event loop works</a></li><li class="chapter-item expanded "><a href="ch02-00-event-sources.html"><strong aria-hidden="true">2.</strong> Using event sources</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="ch02-01-generic.html"><strong aria-hidden="true">2.1.</strong> Monitoring a file descriptor</a></li><li class="chapter-item expanded "><a href="ch02-02-timers.html"><strong aria-hidden="true">2.2.</strong> Timers</a></li><li class="chapter-item expanded "><a href="ch02-03-ping.html"><strong aria-hidden="true">2.3.</strong> Ping</a></li><li class="chapter-item expanded "><a href="ch02-04-channels.html"><strong aria-hidden="true">2.4.</strong> Channels</a></li><li class="chapter-item expanded "><a href="ch02-05-signals.html"><strong aria-hidden="true">2.5.</strong> Unix Signals</a></li><li class="chapter-item expanded "><a href="ch02-06-errors.html"><strong aria-hidden="true">2.6.</strong> Error handling</a></li></ol></li><li class="chapter-item expanded "><a href="ch03-00-async-await.html"><strong aria-hidden="true">3.</strong> I need async/await!</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="ch03-01-run-async-code.html"><strong aria-hidden="true">3.1.</strong> Run async code</a></li><li class="chapter-item expanded "><a href="ch03-02-async-io-types.html"><strong aria-hidden="true">3.2.</strong> Async IO types</a></li></ol></li><li class="chapter-item expanded "><a href="ch04-00-a-full-example-zeromq.html"><strong aria-hidden="true">4.</strong> A full example: ZeroMQ</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="ch04-01-composition.html"><strong aria-hidden="true">4.1.</strong> Composition</a></li><li class="chapter-item expanded "><a href="ch04-02-creating-our-source-part-1-our-types.html"><strong aria-hidden="true">4.2.</strong> Creating our source, part I: our types</a></li><li class="chapter-item expanded "><a href="ch04-03-creating-our-source-part-2-setup-methods.html"><strong aria-hidden="true">4.3.</strong> Creating our source, part II: setup methods</a></li><li class="chapter-item expanded "><a href="ch04-04-creating-our-source-part-3-processing-events-almost.html"><strong aria-hidden="true">4.4.</strong> Creating our source, part III: processing events (almost)</a></li><li class="chapter-item expanded "><a href="ch04-05-creating-our-source-part-4-processing-events-really.html"><strong aria-hidden="true">4.5.</strong> Creating our source, part IV: processing events (really)</a></li><li class="chapter-item expanded "><a href="ch04-06-the-full-zeromq-event-source-code.html"><strong aria-hidden="true">4.6.</strong> The full ZeroMQ event source code</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                        
+                    </div>
+
+                    <h1 class="menu-title">A Guide to Calloop</h1>
+
+                    <div class="right-buttons">
+                        
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        
+                        
+                        <a href="https://github.com/detly/calloop/" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        
+                        
+
+                    </div>
+                </div>
+
+                
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+                
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="calloops-documentation"><a class="header" href="#calloops-documentation">Calloop's Documentation</a></h1>
+<h2 id="api"><a class="header" href="#api">API</a></h2>
+<p>If you're looking for calloop's API documentation, they are available <a href="https://docs.rs/calloop/">on <code>docs.rs</code></a> for the released versions. There are also <a href="api">the docs of the current development version</a>.</p>
+<h2 id="tutorial"><a class="header" href="#tutorial">Tutorial</a></h2>
+<p>This book presents a step-by-step tutorial to get yourself familiar with calloop and how it is used:</p>
+<ul>
+<li><a href="ch01-00-how-an-event-loop-works.html">Chapter 1</a> presents the general principles of an event loop that are important to have in mind when working with calloop.</li>
+<li><a href="ch02-00-event-sources.html">Chapter 2</a> goes through the different kind of event sources that are provided in calloop, and provides examples of how to use them</li>
+<li><a href="ch03-00-async-await.html">Chapter 3</a> presents the integration with Rust's Async/Await ecosystem provided by calloop</li>
+<li><a href="ch04-00-a-full-example-zeromq.html">Chapter 4</a> gives a detailed example of building a custom event source in calloop, by combining other sources</li>
+</ul>
+<div id="chapter_begin" style="break-before: page; page-break-before: always;"></div><h1 id="how-an-event-loop-works"><a class="header" href="#how-an-event-loop-works">How an event loop works</a></h1>
+<p>An event loop is one way to write <em>concurrent</em> code. Other ways include threading (sort of), or asynchronous syntax.</p>
+<p>When you write concurrent code, you need to know two things:</p>
+<ul>
+<li>where in your program it could potentially <em>block</em>, and</li>
+<li>how to let other parts of your program run while waiting for those operations to stop blocking</li>
+</ul>
+<p>This chapter covers what the first thing means, and how Calloop accomplishes the second thing.</p>
+<h2 id="terminology"><a class="header" href="#terminology">Terminology</a></h2>
+<p>A <em>blocking</em> operation is one that waits for an event to happen, and doesn't do anything else while it's waiting. For example, if you try to read from a network socket, and there is no data available, the read operation could wait for some indefinite amount of time. Your program will be in a state where it does not need to use any CPU cycles, or indeed do anything at all, and it won't proceed until there is data to read.</p>
+<p>Examples of blocking operations are:</p>
+<ul>
+<li>waiting for a certain time to elapse</li>
+<li>reading or writing to a file</li>
+<li>reading or writing to a network socket</li>
+<li>waiting for a thread to finish</li>
+</ul>
+<p>When any of these operations are ready to go, we call it an <em>event</em>. We call the underlying things (files, network sockets, timers, etc.) <em>sources</em> for events. So, for example, you can create an event source that corresponds to a file, and it will generate events when it is ready for reading, or writing, or encounters an error.</p>
+<h2 id="events-and-callbacks"><a class="header" href="#events-and-callbacks">Events and callbacks</a></h2>
+<p>An event loop like Calloop, as the name suggests, runs in a loop.  At the start of the loop, Calloop checks all the sources you've added to see if any events have happened for those sources. If they have, Calloop will call a function that you provide (known as a <em>callback</em>).</p>
+<p>This function will (possibly) be given some data for the event itself (eg. the bytes received), some state for the event source (eg. the socket, or a type that wraps it in a neater API), and some state for the whole program.</p>
+<p>Calloop will do this one by one for each source that has a new event. If a file is ready for reading, your file-event-source callback will be called. If a timer has elapsed, your timer-event-source callback will be called.</p>
+<p>It is up to you to write the code to do things when events happen. For example, your callback might read data from a file &quot;ready for reading&quot; event into a queue. When the queue contains a valid message, the same callback could send that message over an internal channel to another event source. That second event source could have its own callback that processes entire messages and updates the program's state. And so on.</p>
+<h2 id="concurrency-vs-parallelism"><a class="header" href="#concurrency-vs-parallelism">Concurrency vs parallelism</a></h2>
+<p>This &quot;one by one&quot; nature of event loops is important. When you approach concurrency using threads, operations in any thread can be interleaved with operations in any other thread. This is typically made robust by either passing messages or using shared memory with synchronisation.</p>
+<p>Callbacks in an event loop do not run in parallel, they run one after the other. Unless you (or your dependencies) have introduced threading, you can (and should) write your callbacks as single-threaded code.</p>
+<h2 id="event-loops-vs-async-code"><a class="header" href="#event-loops-vs-async-code">Event loops vs async code</a></h2>
+<p>This single-threaded nature makes event loops much more similar to code that uses <code>async</code>/<code>await</code> than to multithreaded code. There are benefits and tradeoffs to either approach.</p>
+<p>Calloop will take care of a lot of integration and error handling boilerplate for you. It also makes it clearer what parts of your code are the non-blocking actions to perform as a result of events. If you like to think of your program in terms of taking action in reaction to events, this can be a great advantage!</p>
+<p>However, this comes at the expense of needing to make your program's state much more explicit. For example, take this async code:</p>
+<pre><code class="language-rust noplayground no_run">do_thing_one().await;
+do_thing_two().await;
+do_thing_three().await;
+</code></pre>
+<p>The state of the program is simply given by: what line is it up to? You know if it's done &quot;thing one&quot; because execution has proceeded to line two. No other state is required. In Calloop, however, you will need extra variables and code so that when your callback is called, it knows whether to run <code>do_thing_one()</code>, <code>do_thing_two()</code>, or <code>do_thing_three()</code>.</p>
+<h2 id="never-block-the-loop"><a class="header" href="#never-block-the-loop">Never block the loop!</a></h2>
+<p>All of this leads us to the most important rule of event loop code: <strong>never block the loop!</strong> This means: never use blocking calls inside one of your event callbacks. Do not use synchronous file <code>write()</code> calls in a callback. Do not <code>sleep()</code> in a callback. Do not <code>join()</code> a thread in a callback. Don't you do it!</p>
+<p>If you do, the event loop will have no way to proceed, and just... wait for your blocking operation to complete. Nothing is going to run in a parallel thread. Nothing is going to stop your callback and move on to the next one. If your callback needs to wait for a blocking operation, your code must allow it to keep track of where it's up to, return from the callback, and wait for the event like any other.</p>
+<h2 id="calloop-and-composition"><a class="header" href="#calloop-and-composition">Calloop and composition</a></h2>
+<p>Calloop is designed to work by <em>composition</em>. This means that you build up more complex logic in your program by combining simpler event sources into more complex ones. Want a network socket with custom backoff/timeout logic? Create a type containing a network socket using the <a href="api/calloop/generic/">Generic file descriptor adapter</a>, a <a href="api/calloop/timer">timer</a>, and tie them together with your backoff logic and state. There is a much more detailed example of composition in our <a href="ch03-00-a-full-example-zeromq.html">ZeroMQ example</a>.</p>
+<div id="chapter_begin" style="break-before: page; page-break-before: always;"></div><h1 id="using-event-sources"><a class="header" href="#using-event-sources">Using event sources</a></h1>
+<p>Calloop's structure is entirely built around the <code>EventSource</code> trait, which represents something that is capable of generating events. To receive those events, you need to give ownership of the event source to calloop, along with a closure that will be invoked whenever said source generated an event. This is thus a push-based model, that is most suited for contexts where your program needs to react to (unpredictable) outside events, rather than wait efficiently for the completion of some operation it initiated.</p>
+<div id="chapter_begin" style="break-before: page; page-break-before: always;"></div><h1 id="monitoring-a-file-descriptor"><a class="header" href="#monitoring-a-file-descriptor">Monitoring a file descriptor</a></h1>
+<p>The <code>Generic</code> event source wraps a file descriptor (&quot;fd&quot;) and fires its callback any time there are events on it ie. becoming readable or writable, or encountering an error. It's pretty simple, but it's what every other event source is based around. And since the platforms that calloop runs on expose many different kinds of events via fds, it's usually the key to using those events in calloop.</p>
+<p>For example on Linux, fd-based interfaces are available for GPIO, I2C, USB, UART, network interfaces, timers and many other systems. Integrating these into calloop starts with obtaining the appropriate fd, creating a <code>Generic</code> event source from it, and building up a more useful, abstracted event source around that. A detailed example of this is <a href="ch04-00-a-full-example-zeromq.html">given for ZeroMQ</a>.</p>
+<p>You do not have to use a low-level fd either: any type that implements <a href="https://doc.rust-lang.org/stable/std/os/fd/trait.AsFd.html"><code>AsFd</code></a> can be provided. This means that you can use a wrapper type that handles allocation and disposal itself, and implement <code>AsRawFd</code> on it so that <code>Generic</code> can manage it in the event loop.</p>
+<h2 id="creating-a-generic-source"><a class="header" href="#creating-a-generic-source">Creating a Generic source</a></h2>
+<p>Creating a <code>Generic</code> event source requires three things:</p>
+<ul>
+<li>An <code>OwnedFd</code> or a wrapper type that implements <code>AsFd</code></li>
+<li>The <a href="api/calloop/struct.Interest.html">&quot;interest&quot;</a> you have in this descriptor — this means, whether you want to generate events when the fd becomes readable, writeable, or both</li>
+<li>The <a href="api/calloop/enum.Mode.html">&quot;mode&quot;</a> of event generation - level triggered or edge triggered</li>
+</ul>
+<p>The easiest constructor to use is the <a href="api/calloop/generic/struct.Generic.html#method.new"><code>new()</code></a> method, but if you need control over the <a href="ch02-06-errors.html">associated error type</a> there is also <a href="api/calloop/generic/struct.Generic.html#method.new_with_error"><code>new_with_error()</code></a>.</p>
+<h2 id="ownership-and-asfd-wrappers"><a class="header" href="#ownership-and-asfd-wrappers">Ownership and AsFd wrappers</a></h2>
+<p>Rust 1.63 introduced a concept of file descriptor ownership and borrowing through the <code>OwnedFd</code> and <code>BorrowedFd</code> types. The <code>AsFd</code> trait provides a way to get a <code>BorrowedFd</code> corresponding to a file, socket, etc. while guaranteeing the fd will be valid for the lifetime of the <code>BorrowedFd</code>.</p>
+<p>Not all third party crates use <code>AsFd</code> yet, and may instead provide types implementing <code>AsRawFd</code>. <a href="api/calloop/generic/struct.AsFdWrapper.html">'AsFdWrapper'</a> provides a way to adapt these types. To use this safely, ensure the <code>AsRawFd</code> implementation of the type it wraps returns a valid fd as long as the type exists. And to avoid an fd leak, it should ultimately be <code>close</code>d properly.</p>
+<p>Safe types like <code>OwnedFd</code> and <code>BorrowedFd</code> should be preferred over <code>RawFd</code>s, and the use of <code>RawFd</code>s outside of implementing FFI shouldn't be necessary as libraries move to using the IO safe types and traits.</p>
+<div id="chapter_begin" style="break-before: page; page-break-before: always;"></div><h1 id="working-with-timers"><a class="header" href="#working-with-timers">Working with timers</a></h1>
+<p>Timer event sources are used to manipulate time-related actions. Those are provided under the <a href="api/calloop/timer/index.html"><code>calloop::timer</code></a> module, with the <code>Timer</code> type at its core.</p>
+<p>A <code>Timer</code> source has a simple behavior: it is programmed to wait for some duration, or until a certain point in time. Once that deadline is reached, the source generates an event.</p>
+<p>So with <code>use calloop::timer::Timer</code> at the top of our <code>.rs</code> file, we can create a timer that will wait for 5 seconds:</p>
+<pre><code class="language-rust noplayground"><span class="boring">#![allow(clippy::uninlined_format_args)]
+</span><span class="boring">
+</span><span class="boring">use std::time::Duration;
+</span><span class="boring">
+</span><span class="boring">use calloop::{
+</span><span class="boring">    timer::{TimeoutAction, Timer},
+</span><span class="boring">    EventLoop,
+</span><span class="boring">};
+</span><span class="boring">
+</span><span class="boring">fn main() {
+</span><span class="boring">    let mut event_loop = EventLoop::try_new().expect(&quot;Failed to initialize the event loop!&quot;);
+</span><span class="boring">
+</span>    let timer = Timer::from_duration(Duration::from_secs(5));
+<span class="boring">
+</span><span class="boring">    event_loop
+</span><span class="boring">        .handle()
+</span><span class="boring">        .insert_source(timer, |deadline, _: &amp;mut (), _shared_data| {
+</span><span class="boring">            println!(&quot;Event fired for: {:?}&quot;, deadline);
+</span><span class="boring">            TimeoutAction::Drop
+</span><span class="boring">        })
+</span><span class="boring">        .expect(&quot;Failed to insert event source!&quot;);
+</span><span class="boring">
+</span><span class="boring">    event_loop
+</span><span class="boring">        .dispatch(None, &amp;mut ())
+</span><span class="boring">        .expect(&quot;Error during event loop!&quot;);
+</span><span class="boring">}
+</span></code></pre>
+<h2 id="adding-sources-to-the-loop"><a class="header" href="#adding-sources-to-the-loop">Adding sources to the loop</a></h2>
+<p>We have an event source, we have our shared data, and we know how to start our loop running. All that is left is to learn how to combine these things:</p>
+<pre><code class="language-rust noplayground"><span class="boring">#![allow(clippy::uninlined_format_args)]
+</span><span class="boring">
+</span><span class="boring">use std::time::Duration;
+</span><span class="boring">
+</span><span class="boring">use calloop::{
+</span><span class="boring">    timer::{TimeoutAction, Timer},
+</span><span class="boring">    EventLoop,
+</span><span class="boring">};
+</span><span class="boring">
+</span><span class="boring">fn main() {
+</span><span class="boring">    let mut event_loop = EventLoop::try_new().expect(&quot;Failed to initialize the event loop!&quot;);
+</span><span class="boring">
+</span><span class="boring">    let timer = Timer::from_duration(Duration::from_secs(5));
+</span><span class="boring">
+</span>    event_loop
+        .handle()
+        .insert_source(timer, |deadline, _: &amp;mut (), _shared_data| {
+            println!(&quot;Event fired for: {:?}&quot;, deadline);
+            TimeoutAction::Drop
+        })
+        .expect(&quot;Failed to insert event source!&quot;);
+<span class="boring">
+</span><span class="boring">    event_loop
+</span><span class="boring">        .dispatch(None, &amp;mut ())
+</span><span class="boring">        .expect(&quot;Error during event loop!&quot;);
+</span><span class="boring">}
+</span></code></pre>
+<p>Breaking this down, the callback we provide receives 3 arguments:</p>
+<ul>
+<li>The first one is an <a href="https://doc.rust-lang.org/stable/std/time/struct.Instant.html"><code>Instant</code></a> representing the time at which this timer was scheduled to expire. Due to how the event loop works, it might be that your callback is not invoked at the exact time where the timer expired (if an other callback was being processed at the time for example), so the original deadline is given if you need precise time tracking.</li>
+<li>The second argument is just <code>&amp;mut ()</code>, as the timers don't use the <code>EventSource</code> functionality.</li>
+<li>The third argumument is the shared data passed to your event loop.</li>
+</ul>
+<p>In addition your callback is expected to return a <a href="api/calloop/timer/enum.TimeoutAction.html"><code>TimeoutAction</code></a>, that will instruct calloop what to do next. This enum has 3 values:</p>
+<ul>
+<li><code>Drop</code> will disable the timer and destroy it, freeing the callback.</li>
+<li><code>ToInstant</code> will reschedule the callback to fire again at given <code>Instant</code>, invoking the same callback again. This is useful if you need to create a timer that fires events at regular intervals, for example to encode key repetition in a graphical app. You would compute the next instant by adding the duration to the previous instant. It is not a problem if that duration is in the past, it'll simply cause the timer to fire again instantly. This way, even if some other part of your app lags, you'll still have on average the correct amount of events per second.</li>
+<li><code>ToDuration</code> will reschedule the callback to fire again after a given <code>Duration</code>. This is useful if you need to schedule some background task to execute again after some time after it was last completed, when there is no point in catching up some previous lag.</li>
+</ul>
+<h2 id="the-whole-program"><a class="header" href="#the-whole-program">The whole program</a></h2>
+<p>Putting it all together, we have:</p>
+<pre><code class="language-rust noplayground"><span class="boring">#![allow(clippy::uninlined_format_args)]
+</span><span class="boring">
+</span>use std::time::Duration;
+
+use calloop::{
+    timer::{TimeoutAction, Timer},
+    EventLoop,
+};
+
+fn main() {
+    let mut event_loop = EventLoop::try_new().expect(&quot;Failed to initialize the event loop!&quot;);
+
+    let timer = Timer::from_duration(Duration::from_secs(5));
+
+    event_loop
+        .handle()
+        .insert_source(timer, |deadline, _: &amp;mut (), _shared_data| {
+            println!(&quot;Event fired for: {:?}&quot;, deadline);
+            TimeoutAction::Drop
+        })
+        .expect(&quot;Failed to insert event source!&quot;);
+
+    event_loop
+        .dispatch(None, &amp;mut ())
+        .expect(&quot;Error during event loop!&quot;);
+}
+</code></pre>
+<div id="chapter_begin" style="break-before: page; page-break-before: always;"></div><h1 id="pinging-the-event-loop"><a class="header" href="#pinging-the-event-loop">&quot;Pinging&quot; the event loop</a></h1>
+<p>The <a href="api/calloop/ping/struct.Ping.html"><code>Ping</code></a> event source has one very simple job — wake up the event loop. Use this when you know there are events for your event source to process, but those events aren't going to wake the event loop up themselves.</p>
+<p>For example, calloop's own <a href="api/calloop/channel/struct.Channel.html"><code>message channel</code></a> uses Rust's native MPSC channel internally. Because there's no way for the internal message queue to wake up the event loop, it's coupled with a <code>Ping</code> source that wakes the loop up when there are new messages.</p>
+<h2 id="how-to-use-the-ping-source"><a class="header" href="#how-to-use-the-ping-source">How to use the Ping source</a></h2>
+<p>The <code>Ping</code> has two ends — the event source part (<a href="api/calloop/ping/struct.PingSource.html"><code>PingSource</code></a>), that goes in the event loop, and the sending end (<code>Ping</code>) you use to &quot;send&quot; the ping. To wake the event loop up, call <a href="api/calloop/ping/struct.Ping.html#method.ping"><code>ping()</code></a> on the sending end.</p>
+<blockquote>
+<p>Do not forget to process the events of the <code>PingSource</code> if you are using it as part of a larger event source! Even though the events carry no information (they are just <code>()</code> values), the <code>process_events()</code> method must be called in order to &quot;reset&quot; the <code>PingSource</code>. Otherwise the event loop will be continually woken up until you do, effectively becoming a busy-loop.</p>
+</blockquote>
+<div id="chapter_begin" style="break-before: page; page-break-before: always;"></div><h1 id="channels"><a class="header" href="#channels">Channels</a></h1>
+<div id="chapter_begin" style="break-before: page; page-break-before: always;"></div><h1 id="unix-signals"><a class="header" href="#unix-signals">Unix Signals</a></h1>
+<div id="chapter_begin" style="break-before: page; page-break-before: always;"></div><h1 id="error-handling-in-calloop"><a class="header" href="#error-handling-in-calloop">Error handling in Calloop</a></h1>
+<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
+<p>Most error handling crates/guides/documentation for Rust focus on one of two situations:</p>
+<ul>
+<li>Creating errors that an API can propagate out to a user of the API, or</li>
+<li>Making your library deal nicely with the <code>Result</code>s from closure or trait methods that it might call</li>
+</ul>
+<p>Calloop has to do both of these things. It needs to provide a library user with errors that work well with <code>?</code> and common error-handling idioms in their own code, and it needs to handle errors from the callbacks you give to <code>process_events()</code> or <code>insert_source()</code>. It <em>also</em> needs to provide some flexibility in the <code>EventSource</code> trait, which is used both for internal event sources and by users of the library.</p>
+<p>Because of this, error handling in Calloop leans more towards having separate error types for different concerns. This may mean that there is some extra conversion code in places like returning results from <code>process_events()</code>, or in callbacks that use other libraries. However, we try to make it smoother to do these conversions, and to make sure information isn't lost in doing so.</p>
+<p>If your crate already has some form of structured error handling, Calloop's error types should pose no problem to integrate into this. All of Calloop's errors implement <code>std::error::Error</code> and can be manipulated the same as any other error types.</p>
+<p>The place where this becomes the most complex is in the <code>process_events()</code> method on the <code>EventSource</code> trait.</p>
+<h2 id="the-error-type-on-the-eventsource-trait"><a class="header" href="#the-error-type-on-the-eventsource-trait">The Error type on the EventSource trait</a></h2>
+<p>The <code>EventSource</code> trait contains an associated type named <code>Error</code>, which forms part of the return type from <code>process_events()</code>. This type must be convertible into <code>Box&lt;dyn std::error::Error + Sync + Send&gt;</code>, which means you can use:</p>
+<ul>
+<li>Your own error type that implements <code>std::error::Error</code></li>
+<li>A structured error type created with <a href="https://crates.io/crates/thiserror"><em>Thiserror</em></a></li>
+<li><code>Box&lt;dyn std::error::Error + Sync + Send&gt;</code></li>
+<li>A flexible string-based error type such as <a href="https://crates.io/crates/anyhow"><em>Anyhow's</em></a> <code>anyhow::Error</code></li>
+</ul>
+<p>As a rule, if you implement <code>EventSource</code> you should try to split your errors into two different categories:</p>
+<ul>
+<li>Errors that make sense as a kind of event. These should be a part of the <code>Event</code> associated type eg. as an enum or <code>Result</code>.</li>
+<li>Errors that mean your event source simply cannot process more events. These should form the <code>Error</code> associated type.</li>
+</ul>
+<p>For an example, take Calloop's channel type, <a href="api/calloop/channel/struct.Channel.html"><code>calloop::channel::Channel</code></a>. When the sending end is dropped, no more messages can be received after that point. But this is not returned as an error when calling <code>process_events()</code>, because you still want to (and can!) receive messages sent before that point that might still be in the queue. Hence the events received by the callback for this source can be <code>Msg(e)</code> or <code>Closed</code>.</p>
+<p>However, if the internal ping source produces an error, there is no way for the sending end of the channel to notify the receiver. It is impossible to process more events on this event source, and the caller needs to decide how to recover from this situation. Hence this is returned as a <code>ChannelError</code> from <code>process_events()</code>.</p>
+<p>Another example might be an event source that represents a running subprocess. If the subprocess exits with a non-zero status code, or the executable can't be found, those don't mean that events can no longer be processed. They can be provided to the caller through the callback. But if the lower level sources being used to run (eg. an asynchronous executor or subprocess file descriptor) fail to work as expected, <code>process_events()</code> should return an error.</p>
+<div id="chapter_begin" style="break-before: page; page-break-before: always;"></div><h1 id="asyncawait-in-calloop"><a class="header" href="#asyncawait-in-calloop">Async/await in calloop</a></h1>
+<p>While it is centered on event sources and callbacks, calloop also provides adapters to integrate with Rust's async ecosystem. These adapters come in two parts: <a href="ch03-01-run-async-code.html">a futures executor</a> and <a href="ch03-02-async-io-types.html">an async adapter for IO type</a>.</p>
+<div id="chapter_begin" style="break-before: page; page-break-before: always;"></div><h1 id="run-async-code"><a class="header" href="#run-async-code">Run async code</a></h1>
+<blockquote>
+<h2 id="enable-the-executor-feature"><a class="header" href="#enable-the-executor-feature">Enable the <code>executor</code> feature!</a></h2>
+<p>To use <code>calloop::futures</code> you need to enable the <code>executor</code> feature in your <code>Cargo.toml</code> like so:</p>
+<pre><code class="language-toml">[dependencies.calloop]
+features = [ &quot;executor&quot; ]
+version = ...
+</code></pre>
+</blockquote>
+<p>Let's say you have some async code that looks like this:</p>
+<pre><code class="language-rust noplayground">sender.send(&quot;Hello,&quot;).await.ok();
+receiver.next().await.map(|m| println!(&quot;Received: {}&quot;, m));
+sender.send(&quot;world!&quot;).await.ok();
+receiver.next().await.map(|m| println!(&quot;Received: {}&quot;, m));
+&quot;So long!&quot;
+</code></pre>
+<p>...and a corresponding block that receives and sends to this one. I will call one of these blocks &quot;friendly&quot; and the other one &quot;aloof&quot;.</p>
+<p>To run async code in Calloop, you use the components in <a href="api/calloop/futures/"><code>calloop::futures</code></a>. First, obtain both an executor and a scheduler with <a href="api/calloop/futures/fn.executor.html"><code>calloop::futures::executor()</code></a>:</p>
+<pre><pre class="playground"><code class="language-rust edition2018"><span class="boring">#![allow(clippy::uninlined_format_args)]
+</span><span class="boring">
+</span><span class="boring">use calloop::EventLoop;
+</span><span class="boring">
+</span><span class="boring">// futures = &quot;0.3&quot;
+</span><span class="boring">use futures::sink::SinkExt;
+</span><span class="boring">use futures::stream::StreamExt;
+</span><span class="boring">
+</span><span class="boring">fn main() -&gt; std::io::Result&lt;()&gt; {
+</span>    let (exec, sched) = calloop::futures::executor()?;
+<span class="boring">
+</span><span class="boring">    let mut event_loop = EventLoop::try_new()?;
+</span><span class="boring">    let handle = event_loop.handle();
+</span><span class="boring">
+</span><span class="boring">    handle
+</span><span class="boring">        .insert_source(exec, |evt, _metadata, _shared| {
+</span><span class="boring">            // Print the value of the async block ie. the return value.
+</span><span class="boring">            println!(&quot;Async block ended with: {}&quot;, evt);
+</span><span class="boring">        })
+</span><span class="boring">        .map_err(|e| e.error)?;
+</span><span class="boring">
+</span><span class="boring">    // Let's create two channels for our async blocks below. The blocks will
+</span><span class="boring">    // exchange messages via these channels.
+</span><span class="boring">    let (mut sender_friendly, mut receiver_friendly) = futures::channel::mpsc::unbounded();
+</span><span class="boring">    let (mut sender_aloof, mut receiver_aloof) = futures::channel::mpsc::unbounded();
+</span><span class="boring">
+</span><span class="boring">    // Our toy async code.
+</span><span class="boring">    let async_friendly_task = async move {
+</span><span class="boring">        sender_friendly.send(&quot;Hello,&quot;).await.ok();
+</span><span class="boring">        if let Some(msg) = receiver_aloof.next().await {
+</span><span class="boring">            println!(&quot;Aloof said: {}&quot;, msg);
+</span><span class="boring">        }
+</span><span class="boring">        sender_friendly.send(&quot;world!&quot;).await.ok();
+</span><span class="boring">        if let Some(msg) = receiver_aloof.next().await {
+</span><span class="boring">            println!(&quot;Aloof said: {}&quot;, msg);
+</span><span class="boring">        }
+</span><span class="boring">        &quot;Bye!&quot;
+</span><span class="boring">    };
+</span><span class="boring">
+</span><span class="boring">    let async_aloof_task = async move {
+</span><span class="boring">        if let Some(msg) = receiver_friendly.next().await {
+</span><span class="boring">            println!(&quot;Friendly said: {}&quot;, msg);
+</span><span class="boring">        }
+</span><span class="boring">        sender_aloof.send(&quot;Oh,&quot;).await.ok();
+</span><span class="boring">        if let Some(msg) = receiver_friendly.next().await {
+</span><span class="boring">            println!(&quot;Friendly said: {}&quot;, msg);
+</span><span class="boring">        }
+</span><span class="boring">        sender_aloof.send(&quot;it's you.&quot;).await.ok();
+</span><span class="boring">        &quot;Regards.&quot;
+</span><span class="boring">    };
+</span><span class="boring">
+</span><span class="boring">    // Schedule the async block to be run in the event loop.
+</span><span class="boring">    sched.schedule(async_friendly_task).unwrap();
+</span><span class="boring">    sched.schedule(async_aloof_task).unwrap();
+</span><span class="boring">
+</span><span class="boring">    // Run the event loop.
+</span><span class="boring">    println!(&quot;Starting event loop. Use Ctrl-C to exit.&quot;);
+</span><span class="boring">    event_loop.run(None, &amp;mut (), |_| {})?;
+</span><span class="boring">    println!(&quot;Event loop ended.&quot;);
+</span><span class="boring">
+</span><span class="boring">    Ok(())
+</span><span class="boring">}
+</span></code></pre></pre>
+<p>The <em>executor</em>, the part that <em>executes</em> the future, goes in the event loop:</p>
+<pre><pre class="playground"><code class="language-rust edition2018"><span class="boring">#![allow(clippy::uninlined_format_args)]
+</span><span class="boring">
+</span><span class="boring">use calloop::EventLoop;
+</span><span class="boring">
+</span><span class="boring">// futures = &quot;0.3&quot;
+</span><span class="boring">use futures::sink::SinkExt;
+</span><span class="boring">use futures::stream::StreamExt;
+</span><span class="boring">
+</span><span class="boring">fn main() -&gt; std::io::Result&lt;()&gt; {
+</span><span class="boring">    let (exec, sched) = calloop::futures::executor()?;
+</span><span class="boring">
+</span>    let mut event_loop = EventLoop::try_new()?;
+    let handle = event_loop.handle();
+
+    handle
+        .insert_source(exec, |evt, _metadata, _shared| {
+            // Print the value of the async block ie. the return value.
+            println!(&quot;Async block ended with: {}&quot;, evt);
+        })
+        .map_err(|e| e.error)?;
+<span class="boring">
+</span><span class="boring">    // Let's create two channels for our async blocks below. The blocks will
+</span><span class="boring">    // exchange messages via these channels.
+</span><span class="boring">    let (mut sender_friendly, mut receiver_friendly) = futures::channel::mpsc::unbounded();
+</span><span class="boring">    let (mut sender_aloof, mut receiver_aloof) = futures::channel::mpsc::unbounded();
+</span><span class="boring">
+</span><span class="boring">    // Our toy async code.
+</span><span class="boring">    let async_friendly_task = async move {
+</span><span class="boring">        sender_friendly.send(&quot;Hello,&quot;).await.ok();
+</span><span class="boring">        if let Some(msg) = receiver_aloof.next().await {
+</span><span class="boring">            println!(&quot;Aloof said: {}&quot;, msg);
+</span><span class="boring">        }
+</span><span class="boring">        sender_friendly.send(&quot;world!&quot;).await.ok();
+</span><span class="boring">        if let Some(msg) = receiver_aloof.next().await {
+</span><span class="boring">            println!(&quot;Aloof said: {}&quot;, msg);
+</span><span class="boring">        }
+</span><span class="boring">        &quot;Bye!&quot;
+</span><span class="boring">    };
+</span><span class="boring">
+</span><span class="boring">    let async_aloof_task = async move {
+</span><span class="boring">        if let Some(msg) = receiver_friendly.next().await {
+</span><span class="boring">            println!(&quot;Friendly said: {}&quot;, msg);
+</span><span class="boring">        }
+</span><span class="boring">        sender_aloof.send(&quot;Oh,&quot;).await.ok();
+</span><span class="boring">        if let Some(msg) = receiver_friendly.next().await {
+</span><span class="boring">            println!(&quot;Friendly said: {}&quot;, msg);
+</span><span class="boring">        }
+</span><span class="boring">        sender_aloof.send(&quot;it's you.&quot;).await.ok();
+</span><span class="boring">        &quot;Regards.&quot;
+</span><span class="boring">    };
+</span><span class="boring">
+</span><span class="boring">    // Schedule the async block to be run in the event loop.
+</span><span class="boring">    sched.schedule(async_friendly_task).unwrap();
+</span><span class="boring">    sched.schedule(async_aloof_task).unwrap();
+</span><span class="boring">
+</span><span class="boring">    // Run the event loop.
+</span><span class="boring">    println!(&quot;Starting event loop. Use Ctrl-C to exit.&quot;);
+</span><span class="boring">    event_loop.run(None, &amp;mut (), |_| {})?;
+</span><span class="boring">    println!(&quot;Event loop ended.&quot;);
+</span><span class="boring">
+</span><span class="boring">    Ok(())
+</span><span class="boring">}
+</span></code></pre></pre>
+<p>Now let's write our async code in full:</p>
+<pre><pre class="playground"><code class="language-rust edition2018"><span class="boring">#![allow(clippy::uninlined_format_args)]
+</span><span class="boring">
+</span><span class="boring">use calloop::EventLoop;
+</span><span class="boring">
+</span><span class="boring">// futures = &quot;0.3&quot;
+</span><span class="boring">use futures::sink::SinkExt;
+</span><span class="boring">use futures::stream::StreamExt;
+</span><span class="boring">
+</span><span class="boring">fn main() -&gt; std::io::Result&lt;()&gt; {
+</span><span class="boring">    let (exec, sched) = calloop::futures::executor()?;
+</span><span class="boring">
+</span><span class="boring">    let mut event_loop = EventLoop::try_new()?;
+</span><span class="boring">    let handle = event_loop.handle();
+</span><span class="boring">
+</span><span class="boring">    handle
+</span><span class="boring">        .insert_source(exec, |evt, _metadata, _shared| {
+</span><span class="boring">            // Print the value of the async block ie. the return value.
+</span><span class="boring">            println!(&quot;Async block ended with: {}&quot;, evt);
+</span><span class="boring">        })
+</span><span class="boring">        .map_err(|e| e.error)?;
+</span><span class="boring">
+</span>    // Let's create two channels for our async blocks below. The blocks will
+    // exchange messages via these channels.
+    let (mut sender_friendly, mut receiver_friendly) = futures::channel::mpsc::unbounded();
+    let (mut sender_aloof, mut receiver_aloof) = futures::channel::mpsc::unbounded();
+
+    // Our toy async code.
+    let async_friendly_task = async move {
+        sender_friendly.send(&quot;Hello,&quot;).await.ok();
+        if let Some(msg) = receiver_aloof.next().await {
+            println!(&quot;Aloof said: {}&quot;, msg);
+        }
+        sender_friendly.send(&quot;world!&quot;).await.ok();
+        if let Some(msg) = receiver_aloof.next().await {
+            println!(&quot;Aloof said: {}&quot;, msg);
+        }
+        &quot;Bye!&quot;
+    };
+
+    let async_aloof_task = async move {
+        if let Some(msg) = receiver_friendly.next().await {
+            println!(&quot;Friendly said: {}&quot;, msg);
+        }
+        sender_aloof.send(&quot;Oh,&quot;).await.ok();
+        if let Some(msg) = receiver_friendly.next().await {
+            println!(&quot;Friendly said: {}&quot;, msg);
+        }
+        sender_aloof.send(&quot;it's you.&quot;).await.ok();
+        &quot;Regards.&quot;
+    };
+<span class="boring">
+</span><span class="boring">    // Schedule the async block to be run in the event loop.
+</span><span class="boring">    sched.schedule(async_friendly_task).unwrap();
+</span><span class="boring">    sched.schedule(async_aloof_task).unwrap();
+</span><span class="boring">
+</span><span class="boring">    // Run the event loop.
+</span><span class="boring">    println!(&quot;Starting event loop. Use Ctrl-C to exit.&quot;);
+</span><span class="boring">    event_loop.run(None, &amp;mut (), |_| {})?;
+</span><span class="boring">    println!(&quot;Event loop ended.&quot;);
+</span><span class="boring">
+</span><span class="boring">    Ok(())
+</span><span class="boring">}
+</span></code></pre></pre>
+<p>Like any block in Rust, the value of your async block is the last expression ie. it is effectively &quot;returned&quot; from the block, which means it will be provided to your executor's callback as the first argument (the &quot;event&quot;). You'll see this in the output with the <code>Async block ended with: ...</code> lines.</p>
+<p>Finally, we run the loop:</p>
+<pre><pre class="playground"><code class="language-rust edition2018"><span class="boring">#![allow(clippy::uninlined_format_args)]
+</span><span class="boring">
+</span><span class="boring">use calloop::EventLoop;
+</span><span class="boring">
+</span><span class="boring">// futures = &quot;0.3&quot;
+</span><span class="boring">use futures::sink::SinkExt;
+</span><span class="boring">use futures::stream::StreamExt;
+</span><span class="boring">
+</span><span class="boring">fn main() -&gt; std::io::Result&lt;()&gt; {
+</span><span class="boring">    let (exec, sched) = calloop::futures::executor()?;
+</span><span class="boring">
+</span><span class="boring">    let mut event_loop = EventLoop::try_new()?;
+</span><span class="boring">    let handle = event_loop.handle();
+</span><span class="boring">
+</span><span class="boring">    handle
+</span><span class="boring">        .insert_source(exec, |evt, _metadata, _shared| {
+</span><span class="boring">            // Print the value of the async block ie. the return value.
+</span><span class="boring">            println!(&quot;Async block ended with: {}&quot;, evt);
+</span><span class="boring">        })
+</span><span class="boring">        .map_err(|e| e.error)?;
+</span><span class="boring">
+</span><span class="boring">    // Let's create two channels for our async blocks below. The blocks will
+</span><span class="boring">    // exchange messages via these channels.
+</span><span class="boring">    let (mut sender_friendly, mut receiver_friendly) = futures::channel::mpsc::unbounded();
+</span><span class="boring">    let (mut sender_aloof, mut receiver_aloof) = futures::channel::mpsc::unbounded();
+</span><span class="boring">
+</span><span class="boring">    // Our toy async code.
+</span><span class="boring">    let async_friendly_task = async move {
+</span><span class="boring">        sender_friendly.send(&quot;Hello,&quot;).await.ok();
+</span><span class="boring">        if let Some(msg) = receiver_aloof.next().await {
+</span><span class="boring">            println!(&quot;Aloof said: {}&quot;, msg);
+</span><span class="boring">        }
+</span><span class="boring">        sender_friendly.send(&quot;world!&quot;).await.ok();
+</span><span class="boring">        if let Some(msg) = receiver_aloof.next().await {
+</span><span class="boring">            println!(&quot;Aloof said: {}&quot;, msg);
+</span><span class="boring">        }
+</span><span class="boring">        &quot;Bye!&quot;
+</span><span class="boring">    };
+</span><span class="boring">
+</span><span class="boring">    let async_aloof_task = async move {
+</span><span class="boring">        if let Some(msg) = receiver_friendly.next().await {
+</span><span class="boring">            println!(&quot;Friendly said: {}&quot;, msg);
+</span><span class="boring">        }
+</span><span class="boring">        sender_aloof.send(&quot;Oh,&quot;).await.ok();
+</span><span class="boring">        if let Some(msg) = receiver_friendly.next().await {
+</span><span class="boring">            println!(&quot;Friendly said: {}&quot;, msg);
+</span><span class="boring">        }
+</span><span class="boring">        sender_aloof.send(&quot;it's you.&quot;).await.ok();
+</span><span class="boring">        &quot;Regards.&quot;
+</span><span class="boring">    };
+</span><span class="boring">
+</span>    // Schedule the async block to be run in the event loop.
+    sched.schedule(async_friendly_task).unwrap();
+    sched.schedule(async_aloof_task).unwrap();
+
+    // Run the event loop.
+    println!(&quot;Starting event loop. Use Ctrl-C to exit.&quot;);
+    event_loop.run(None, &amp;mut (), |_| {})?;
+    println!(&quot;Event loop ended.&quot;);
+<span class="boring">
+</span><span class="boring">    Ok(())
+</span><span class="boring">}
+</span></code></pre></pre>
+<p>And our output looks like:</p>
+<pre><code class="language-text">Starting event loop.
+Friendly said: Hello,
+Aloof said: Oh,
+Friendly said: world!
+Async block ended with: Regards.
+Aloof said: it's you.
+Async block ended with: Bye!
+Event loop ended.
+</code></pre>
+<p>Note that for the sake of keeping this example short, I've written the async code before running the loop. But async code can be scheduled from callbacks, or other sources within the loop too.</p>
+<blockquote>
+<h2 id="note-about-threads"><a class="header" href="#note-about-threads">Note about threads</a></h2>
+<p>One of Calloop's strengths is that it is completely single threaded as written. However, many async crates are implemented using threads eg. <code>async-std</code> and <code>async-process</code>. This is not an inherent problem! Calloop will work perfectly well with such implementations in general. However, if you have selected Calloop because of your own constraints around threading, be aware of this.</p>
+</blockquote>
+<div id="chapter_begin" style="break-before: page; page-break-before: always;"></div><h1 id="async-io-types"><a class="header" href="#async-io-types">Async IO types</a></h1>
+<blockquote>
+<p>This section is about adapting blocking IO types for use with <code>async</code> Rust code, and powering that <code>async</code> code with Calloop. If you just want to add blocking IO types to your event loop and use Calloop's callback/composition-based design, you only need to wrap your blocking IO type in a <a href="api/calloop/generic/struct.Generic.html">generic event source</a>.</p>
+</blockquote>
+<p>You may find that you need to write ordinary Rust <code>async</code> code around blocking IO types. Calloop provides the ability to wrap blocking types — anything that implements the <a href="https://doc.rust-lang.org/stable/std/os/unix/io/trait.AsFd.html"><code>AsFd</code></a> trait — in its own async type. This can be polled in any executor you may have chosen for your async code, but if you're using Calloop you'll probably be using <a href="api/calloop/futures/fn.executor.html">Calloop's executor</a>.</p>
+<blockquote>
+<h2 id="enable-the-futures-io-feature"><a class="header" href="#enable-the-futures-io-feature">Enable the <code>futures-io</code> feature!</a></h2>
+<p>To use <code>calloop::io</code> you need to enable the <code>futures-io</code> feature in your <code>Cargo.toml</code> like so:</p>
+<pre><code class="language-toml">[dependencies.calloop]
+features = [ &quot;futures-io&quot; ]
+version = ...
+</code></pre>
+<p>Realistically you will probably also want to use this with async code, so you should also enable the <code>executor</code> feature too.</p>
+</blockquote>
+<p>Just like in the async example, we will use the components in <a href="api/calloop/futures/"><code>calloop::futures</code></a>. First, obtain both an executor and a scheduler with <a href="api/calloop/futures/fn.executor.html"><code>calloop::futures::executor()</code></a>:</p>
+<pre><pre class="playground"><code class="language-rust edition2018"><span class="boring">#![allow(clippy::uninlined_format_args)]
+</span><span class="boring">
+</span><span class="boring">use calloop::EventLoop;
+</span><span class="boring">
+</span><span class="boring">use futures::io::{AsyncReadExt, AsyncWriteExt};
+</span><span class="boring">
+</span><span class="boring">fn main() -&gt; std::io::Result&lt;()&gt; {
+</span>    let (exec, sched) = calloop::futures::executor()?;
+<span class="boring">
+</span><span class="boring">    let mut event_loop = EventLoop::try_new()?;
+</span><span class="boring">    let handle = event_loop.handle();
+</span><span class="boring">
+</span><span class="boring">    handle
+</span><span class="boring">        .insert_source(exec, |evt, _metadata, _shared| {
+</span><span class="boring">            // Print the value of the async block ie. the return value.
+</span><span class="boring">            println!(&quot;Async block ended with: {}&quot;, evt);
+</span><span class="boring">        })
+</span><span class="boring">        .map_err(|e| e.error)?;
+</span><span class="boring">
+</span><span class="boring">    let (sender, receiver) = std::os::unix::net::UnixStream::pair().unwrap();
+</span><span class="boring">    let mut sender = handle.adapt_io(sender).unwrap();
+</span><span class="boring">    let mut receiver = handle.adapt_io(receiver).unwrap();
+</span><span class="boring">
+</span><span class="boring">    let async_receive = async move {
+</span><span class="boring">        let mut buf = [0u8; 12];
+</span><span class="boring">        // Here's our async-ified Unix domain socket.
+</span><span class="boring">        receiver.read_exact(&amp;mut buf).await.unwrap();
+</span><span class="boring">        std::str::from_utf8(&amp;buf).unwrap().to_owned()
+</span><span class="boring">    };
+</span><span class="boring">
+</span><span class="boring">    // Schedule the async block to be run in the event loop.
+</span><span class="boring">    sched.schedule(async_receive).unwrap();
+</span><span class="boring">
+</span><span class="boring">    let async_send = async move {
+</span><span class="boring">        // Here's our async-ified Unix domain socket.
+</span><span class="boring">        sender.write_all(b&quot;Hello, world!&quot;).await.unwrap();
+</span><span class="boring">        &quot;Sent data...&quot;.to_owned()
+</span><span class="boring">    };
+</span><span class="boring">
+</span><span class="boring">    // Schedule the async block to be run in the event loop.
+</span><span class="boring">    sched.schedule(async_send).unwrap();
+</span><span class="boring">
+</span><span class="boring">    // Run the event loop.
+</span><span class="boring">    println!(&quot;Starting event loop. Use Ctrl-C to exit.&quot;);
+</span><span class="boring">    event_loop.run(None, &amp;mut event_loop.get_signal(), |_| {})?;
+</span><span class="boring">    println!(&quot;Event loop ended.&quot;);
+</span><span class="boring">
+</span><span class="boring">    Ok(())
+</span><span class="boring">}
+</span></code></pre></pre>
+<p>The <em>executor</em> goes in the event loop:</p>
+<pre><pre class="playground"><code class="language-rust edition2018"><span class="boring">#![allow(clippy::uninlined_format_args)]
+</span><span class="boring">
+</span><span class="boring">use calloop::EventLoop;
+</span><span class="boring">
+</span><span class="boring">use futures::io::{AsyncReadExt, AsyncWriteExt};
+</span><span class="boring">
+</span><span class="boring">fn main() -&gt; std::io::Result&lt;()&gt; {
+</span><span class="boring">    let (exec, sched) = calloop::futures::executor()?;
+</span><span class="boring">
+</span>    let mut event_loop = EventLoop::try_new()?;
+    let handle = event_loop.handle();
+
+    handle
+        .insert_source(exec, |evt, _metadata, _shared| {
+            // Print the value of the async block ie. the return value.
+            println!(&quot;Async block ended with: {}&quot;, evt);
+        })
+        .map_err(|e| e.error)?;
+<span class="boring">
+</span><span class="boring">    let (sender, receiver) = std::os::unix::net::UnixStream::pair().unwrap();
+</span><span class="boring">    let mut sender = handle.adapt_io(sender).unwrap();
+</span><span class="boring">    let mut receiver = handle.adapt_io(receiver).unwrap();
+</span><span class="boring">
+</span><span class="boring">    let async_receive = async move {
+</span><span class="boring">        let mut buf = [0u8; 12];
+</span><span class="boring">        // Here's our async-ified Unix domain socket.
+</span><span class="boring">        receiver.read_exact(&amp;mut buf).await.unwrap();
+</span><span class="boring">        std::str::from_utf8(&amp;buf).unwrap().to_owned()
+</span><span class="boring">    };
+</span><span class="boring">
+</span><span class="boring">    // Schedule the async block to be run in the event loop.
+</span><span class="boring">    sched.schedule(async_receive).unwrap();
+</span><span class="boring">
+</span><span class="boring">    let async_send = async move {
+</span><span class="boring">        // Here's our async-ified Unix domain socket.
+</span><span class="boring">        sender.write_all(b&quot;Hello, world!&quot;).await.unwrap();
+</span><span class="boring">        &quot;Sent data...&quot;.to_owned()
+</span><span class="boring">    };
+</span><span class="boring">
+</span><span class="boring">    // Schedule the async block to be run in the event loop.
+</span><span class="boring">    sched.schedule(async_send).unwrap();
+</span><span class="boring">
+</span><span class="boring">    // Run the event loop.
+</span><span class="boring">    println!(&quot;Starting event loop. Use Ctrl-C to exit.&quot;);
+</span><span class="boring">    event_loop.run(None, &amp;mut event_loop.get_signal(), |_| {})?;
+</span><span class="boring">    println!(&quot;Event loop ended.&quot;);
+</span><span class="boring">
+</span><span class="boring">    Ok(())
+</span><span class="boring">}
+</span></code></pre></pre>
+<p>For our blocking IO types, let's use an unnamed pair of <a href="https://doc.rust-lang.org/stable/std/os/unix/net/struct.UnixStream.html">Unix domain stream sockets</a>. To convert them to async types, we simply call <a href="api/calloop/struct.LoopHandle.html"><code>calloop::LoopHandle::adapt_io()</code></a>:</p>
+<pre><pre class="playground"><code class="language-rust edition2018"><span class="boring">#![allow(clippy::uninlined_format_args)]
+</span><span class="boring">
+</span><span class="boring">use calloop::EventLoop;
+</span><span class="boring">
+</span><span class="boring">use futures::io::{AsyncReadExt, AsyncWriteExt};
+</span><span class="boring">
+</span><span class="boring">fn main() -&gt; std::io::Result&lt;()&gt; {
+</span><span class="boring">    let (exec, sched) = calloop::futures::executor()?;
+</span><span class="boring">
+</span><span class="boring">    let mut event_loop = EventLoop::try_new()?;
+</span><span class="boring">    let handle = event_loop.handle();
+</span><span class="boring">
+</span><span class="boring">    handle
+</span><span class="boring">        .insert_source(exec, |evt, _metadata, _shared| {
+</span><span class="boring">            // Print the value of the async block ie. the return value.
+</span><span class="boring">            println!(&quot;Async block ended with: {}&quot;, evt);
+</span><span class="boring">        })
+</span><span class="boring">        .map_err(|e| e.error)?;
+</span><span class="boring">
+</span>    let (sender, receiver) = std::os::unix::net::UnixStream::pair().unwrap();
+    let mut sender = handle.adapt_io(sender).unwrap();
+    let mut receiver = handle.adapt_io(receiver).unwrap();
+<span class="boring">
+</span><span class="boring">    let async_receive = async move {
+</span><span class="boring">        let mut buf = [0u8; 12];
+</span><span class="boring">        // Here's our async-ified Unix domain socket.
+</span><span class="boring">        receiver.read_exact(&amp;mut buf).await.unwrap();
+</span><span class="boring">        std::str::from_utf8(&amp;buf).unwrap().to_owned()
+</span><span class="boring">    };
+</span><span class="boring">
+</span><span class="boring">    // Schedule the async block to be run in the event loop.
+</span><span class="boring">    sched.schedule(async_receive).unwrap();
+</span><span class="boring">
+</span><span class="boring">    let async_send = async move {
+</span><span class="boring">        // Here's our async-ified Unix domain socket.
+</span><span class="boring">        sender.write_all(b&quot;Hello, world!&quot;).await.unwrap();
+</span><span class="boring">        &quot;Sent data...&quot;.to_owned()
+</span><span class="boring">    };
+</span><span class="boring">
+</span><span class="boring">    // Schedule the async block to be run in the event loop.
+</span><span class="boring">    sched.schedule(async_send).unwrap();
+</span><span class="boring">
+</span><span class="boring">    // Run the event loop.
+</span><span class="boring">    println!(&quot;Starting event loop. Use Ctrl-C to exit.&quot;);
+</span><span class="boring">    event_loop.run(None, &amp;mut event_loop.get_signal(), |_| {})?;
+</span><span class="boring">    println!(&quot;Event loop ended.&quot;);
+</span><span class="boring">
+</span><span class="boring">    Ok(())
+</span><span class="boring">}
+</span></code></pre></pre>
+<p>Note that most of the useful async functionality for the returned type is expressed through various traits in <a href="https://docs.rs/futures/0.3/futures/io/"><code>futures::io</code></a>. So we need to explicitly <code>use</code> these:</p>
+<pre><pre class="playground"><code class="language-rust edition2018"><span class="boring">#![allow(clippy::uninlined_format_args)]
+</span><span class="boring">
+</span><span class="boring">use calloop::EventLoop;
+</span><span class="boring">
+</span>use futures::io::{AsyncReadExt, AsyncWriteExt};
+<span class="boring">
+</span><span class="boring">fn main() -&gt; std::io::Result&lt;()&gt; {
+</span><span class="boring">    let (exec, sched) = calloop::futures::executor()?;
+</span><span class="boring">
+</span><span class="boring">    let mut event_loop = EventLoop::try_new()?;
+</span><span class="boring">    let handle = event_loop.handle();
+</span><span class="boring">
+</span><span class="boring">    handle
+</span><span class="boring">        .insert_source(exec, |evt, _metadata, _shared| {
+</span><span class="boring">            // Print the value of the async block ie. the return value.
+</span><span class="boring">            println!(&quot;Async block ended with: {}&quot;, evt);
+</span><span class="boring">        })
+</span><span class="boring">        .map_err(|e| e.error)?;
+</span><span class="boring">
+</span><span class="boring">    let (sender, receiver) = std::os::unix::net::UnixStream::pair().unwrap();
+</span><span class="boring">    let mut sender = handle.adapt_io(sender).unwrap();
+</span><span class="boring">    let mut receiver = handle.adapt_io(receiver).unwrap();
+</span><span class="boring">
+</span><span class="boring">    let async_receive = async move {
+</span><span class="boring">        let mut buf = [0u8; 12];
+</span><span class="boring">        // Here's our async-ified Unix domain socket.
+</span><span class="boring">        receiver.read_exact(&amp;mut buf).await.unwrap();
+</span><span class="boring">        std::str::from_utf8(&amp;buf).unwrap().to_owned()
+</span><span class="boring">    };
+</span><span class="boring">
+</span><span class="boring">    // Schedule the async block to be run in the event loop.
+</span><span class="boring">    sched.schedule(async_receive).unwrap();
+</span><span class="boring">
+</span><span class="boring">    let async_send = async move {
+</span><span class="boring">        // Here's our async-ified Unix domain socket.
+</span><span class="boring">        sender.write_all(b&quot;Hello, world!&quot;).await.unwrap();
+</span><span class="boring">        &quot;Sent data...&quot;.to_owned()
+</span><span class="boring">    };
+</span><span class="boring">
+</span><span class="boring">    // Schedule the async block to be run in the event loop.
+</span><span class="boring">    sched.schedule(async_send).unwrap();
+</span><span class="boring">
+</span><span class="boring">    // Run the event loop.
+</span><span class="boring">    println!(&quot;Starting event loop. Use Ctrl-C to exit.&quot;);
+</span><span class="boring">    event_loop.run(None, &amp;mut event_loop.get_signal(), |_| {})?;
+</span><span class="boring">    println!(&quot;Event loop ended.&quot;);
+</span><span class="boring">
+</span><span class="boring">    Ok(())
+</span><span class="boring">}
+</span></code></pre></pre>
+<p>We can now write async code around these types. Here's the receiving code:</p>
+<pre><pre class="playground"><code class="language-rust edition2018"><span class="boring">#![allow(clippy::uninlined_format_args)]
+</span><span class="boring">
+</span><span class="boring">use calloop::EventLoop;
+</span><span class="boring">
+</span><span class="boring">use futures::io::{AsyncReadExt, AsyncWriteExt};
+</span><span class="boring">
+</span><span class="boring">fn main() -&gt; std::io::Result&lt;()&gt; {
+</span><span class="boring">    let (exec, sched) = calloop::futures::executor()?;
+</span><span class="boring">
+</span><span class="boring">    let mut event_loop = EventLoop::try_new()?;
+</span><span class="boring">    let handle = event_loop.handle();
+</span><span class="boring">
+</span><span class="boring">    handle
+</span><span class="boring">        .insert_source(exec, |evt, _metadata, _shared| {
+</span><span class="boring">            // Print the value of the async block ie. the return value.
+</span><span class="boring">            println!(&quot;Async block ended with: {}&quot;, evt);
+</span><span class="boring">        })
+</span><span class="boring">        .map_err(|e| e.error)?;
+</span><span class="boring">
+</span><span class="boring">    let (sender, receiver) = std::os::unix::net::UnixStream::pair().unwrap();
+</span><span class="boring">    let mut sender = handle.adapt_io(sender).unwrap();
+</span><span class="boring">    let mut receiver = handle.adapt_io(receiver).unwrap();
+</span><span class="boring">
+</span>    let async_receive = async move {
+        let mut buf = [0u8; 12];
+        // Here's our async-ified Unix domain socket.
+        receiver.read_exact(&amp;mut buf).await.unwrap();
+        std::str::from_utf8(&amp;buf).unwrap().to_owned()
+    };
+
+    // Schedule the async block to be run in the event loop.
+    sched.schedule(async_receive).unwrap();
+<span class="boring">
+</span><span class="boring">    let async_send = async move {
+</span><span class="boring">        // Here's our async-ified Unix domain socket.
+</span><span class="boring">        sender.write_all(b&quot;Hello, world!&quot;).await.unwrap();
+</span><span class="boring">        &quot;Sent data...&quot;.to_owned()
+</span><span class="boring">    };
+</span><span class="boring">
+</span><span class="boring">    // Schedule the async block to be run in the event loop.
+</span><span class="boring">    sched.schedule(async_send).unwrap();
+</span><span class="boring">
+</span><span class="boring">    // Run the event loop.
+</span><span class="boring">    println!(&quot;Starting event loop. Use Ctrl-C to exit.&quot;);
+</span><span class="boring">    event_loop.run(None, &amp;mut event_loop.get_signal(), |_| {})?;
+</span><span class="boring">    println!(&quot;Event loop ended.&quot;);
+</span><span class="boring">
+</span><span class="boring">    Ok(())
+</span><span class="boring">}
+</span></code></pre></pre>
+<p>And here's the sending code. The receiving and sending code can be created and added to the executor in either order.</p>
+<pre><pre class="playground"><code class="language-rust edition2018"><span class="boring">#![allow(clippy::uninlined_format_args)]
+</span><span class="boring">
+</span><span class="boring">use calloop::EventLoop;
+</span><span class="boring">
+</span><span class="boring">use futures::io::{AsyncReadExt, AsyncWriteExt};
+</span><span class="boring">
+</span><span class="boring">fn main() -&gt; std::io::Result&lt;()&gt; {
+</span><span class="boring">    let (exec, sched) = calloop::futures::executor()?;
+</span><span class="boring">
+</span><span class="boring">    let mut event_loop = EventLoop::try_new()?;
+</span><span class="boring">    let handle = event_loop.handle();
+</span><span class="boring">
+</span><span class="boring">    handle
+</span><span class="boring">        .insert_source(exec, |evt, _metadata, _shared| {
+</span><span class="boring">            // Print the value of the async block ie. the return value.
+</span><span class="boring">            println!(&quot;Async block ended with: {}&quot;, evt);
+</span><span class="boring">        })
+</span><span class="boring">        .map_err(|e| e.error)?;
+</span><span class="boring">
+</span><span class="boring">    let (sender, receiver) = std::os::unix::net::UnixStream::pair().unwrap();
+</span><span class="boring">    let mut sender = handle.adapt_io(sender).unwrap();
+</span><span class="boring">    let mut receiver = handle.adapt_io(receiver).unwrap();
+</span><span class="boring">
+</span><span class="boring">    let async_receive = async move {
+</span><span class="boring">        let mut buf = [0u8; 12];
+</span><span class="boring">        // Here's our async-ified Unix domain socket.
+</span><span class="boring">        receiver.read_exact(&amp;mut buf).await.unwrap();
+</span><span class="boring">        std::str::from_utf8(&amp;buf).unwrap().to_owned()
+</span><span class="boring">    };
+</span><span class="boring">
+</span><span class="boring">    // Schedule the async block to be run in the event loop.
+</span><span class="boring">    sched.schedule(async_receive).unwrap();
+</span><span class="boring">
+</span>    let async_send = async move {
+        // Here's our async-ified Unix domain socket.
+        sender.write_all(b&quot;Hello, world!&quot;).await.unwrap();
+        &quot;Sent data...&quot;.to_owned()
+    };
+
+    // Schedule the async block to be run in the event loop.
+    sched.schedule(async_send).unwrap();
+<span class="boring">
+</span><span class="boring">    // Run the event loop.
+</span><span class="boring">    println!(&quot;Starting event loop. Use Ctrl-C to exit.&quot;);
+</span><span class="boring">    event_loop.run(None, &amp;mut event_loop.get_signal(), |_| {})?;
+</span><span class="boring">    println!(&quot;Event loop ended.&quot;);
+</span><span class="boring">
+</span><span class="boring">    Ok(())
+</span><span class="boring">}
+</span></code></pre></pre>
+<p>All that's left is to run the loop:</p>
+<pre><pre class="playground"><code class="language-rust edition2018"><span class="boring">#![allow(clippy::uninlined_format_args)]
+</span><span class="boring">
+</span><span class="boring">use calloop::EventLoop;
+</span><span class="boring">
+</span><span class="boring">use futures::io::{AsyncReadExt, AsyncWriteExt};
+</span><span class="boring">
+</span><span class="boring">fn main() -&gt; std::io::Result&lt;()&gt; {
+</span><span class="boring">    let (exec, sched) = calloop::futures::executor()?;
+</span><span class="boring">
+</span><span class="boring">    let mut event_loop = EventLoop::try_new()?;
+</span><span class="boring">    let handle = event_loop.handle();
+</span><span class="boring">
+</span><span class="boring">    handle
+</span><span class="boring">        .insert_source(exec, |evt, _metadata, _shared| {
+</span><span class="boring">            // Print the value of the async block ie. the return value.
+</span><span class="boring">            println!(&quot;Async block ended with: {}&quot;, evt);
+</span><span class="boring">        })
+</span><span class="boring">        .map_err(|e| e.error)?;
+</span><span class="boring">
+</span><span class="boring">    let (sender, receiver) = std::os::unix::net::UnixStream::pair().unwrap();
+</span><span class="boring">    let mut sender = handle.adapt_io(sender).unwrap();
+</span><span class="boring">    let mut receiver = handle.adapt_io(receiver).unwrap();
+</span><span class="boring">
+</span><span class="boring">    let async_receive = async move {
+</span><span class="boring">        let mut buf = [0u8; 12];
+</span><span class="boring">        // Here's our async-ified Unix domain socket.
+</span><span class="boring">        receiver.read_exact(&amp;mut buf).await.unwrap();
+</span><span class="boring">        std::str::from_utf8(&amp;buf).unwrap().to_owned()
+</span><span class="boring">    };
+</span><span class="boring">
+</span><span class="boring">    // Schedule the async block to be run in the event loop.
+</span><span class="boring">    sched.schedule(async_receive).unwrap();
+</span><span class="boring">
+</span><span class="boring">    let async_send = async move {
+</span><span class="boring">        // Here's our async-ified Unix domain socket.
+</span><span class="boring">        sender.write_all(b&quot;Hello, world!&quot;).await.unwrap();
+</span><span class="boring">        &quot;Sent data...&quot;.to_owned()
+</span><span class="boring">    };
+</span><span class="boring">
+</span><span class="boring">    // Schedule the async block to be run in the event loop.
+</span><span class="boring">    sched.schedule(async_send).unwrap();
+</span><span class="boring">
+</span>    // Run the event loop.
+    println!(&quot;Starting event loop. Use Ctrl-C to exit.&quot;);
+    event_loop.run(None, &amp;mut event_loop.get_signal(), |_| {})?;
+    println!(&quot;Event loop ended.&quot;);
+<span class="boring">
+</span><span class="boring">    Ok(())
+</span><span class="boring">}
+</span></code></pre></pre>
+<p>And the output we get is:</p>
+<pre><code class="language-text">Starting event loop. Use Ctrl-C to exit.
+Async block ended with: Sent data...
+Async block ended with: Hello, world
+^C
+</code></pre>
+<div id="chapter_begin" style="break-before: page; page-break-before: always;"></div><h1 id="a-full-example-zeromq"><a class="header" href="#a-full-example-zeromq">A full example: ZeroMQ</a></h1>
+<p>The previous chapter showed how to use callbacks, event data and shared data to control our program. However, more complex programs will require more complex shared data, and more complex interactions between events. Eventually this will run up against ownership issues and just the basic mental load of the poor programmer.</p>
+<p>In this chapter we're going to build something more complex: an event source based on <a href="https://zeromq.org/">ZeroMQ sockets</a>.</p>
+<p>ZeroMQ is (very) basically a highly abstracted socket library. You can create ZeroMQ sockets over TCP, PGM, IPC, in-process and more, and generally not worry about the transport mechanics. It guarantees atomic message transfer, and handles queuing, retries, reconnection and balancing under the hood. It <strong>also</strong> lets you integrate it with event loops and reactors by exposing a file descriptor that you can wait on.</p>
+<p>But we can't just wrap this file descriptor in Calloop's <code>generic::Generic</code> source and be done — there are a few subtleties we need to take care of for it to work right and be useful.</p>
+<blockquote>
+<h2 id="disclaimer"><a class="header" href="#disclaimer">Disclaimer</a></h2>
+<p>It might be tempting, at the end of this chapter, to think that the code we've written is <em>the</em> definitive ZeroMQ wrapper, able to address any use case or higher level pattern you like. Certainly it will be a lot more suited to Calloop than using ZeroMQ sockets by themselves, but it is not the only way to use them with Calloop. Here are some things I have not addressed, for the sake of simplicity:</p>
+<ul>
+<li>We will not handle fairness — our code will totally monopolise the event loop if we receive many messages at once.</li>
+<li>We do not consider <a href="https://lucumr.pocoo.org/2020/1/1/async-pressure/">back pressure</a> beyond whatever built-in zsocket settings the caller might use.</li>
+<li>We just drop pending messages in the zsocket's internal queue (in and out) on shutdown. In a real application, you might want to make more specific decisions about the timeout and linger periods before dropping the zsocket, depending on your application's requirements.</li>
+<li>We don't deal with zsocket errors much. In fact, the overall error handling of event sources is usually highly specific to your application, so what we end up writing here is almost certainly not going to survive contact with your own code base. Here we just use <code>?</code> everywhere, which will eventually cause the event loop to exit with an error.</li>
+</ul>
+<p>So by all means, take the code we write here and use and adapt it, but please <em>please</em> note the caveats above and think carefully about your own program.</p>
+</blockquote>
+<div id="chapter_begin" style="break-before: page; page-break-before: always;"></div><h1 id="composing-event-sources"><a class="header" href="#composing-event-sources">Composing event sources</a></h1>
+<p>Calloop is designed to work by <em>composition</em>. It provides you with some single-responsibility sources (timers, message channels, file descriptors), and you can combine these together, bit by bit, to make more complex event sources. These new sources can express more and more of your program's internal logic and the relationships between them, always in terms of events and how you process them.</p>
+<p>You can greatly simplify even a highly complex program if you identify and expose the &quot;real&quot; events you care about and use composition to tidy the other events away in internal details of event sources.</p>
+<p>So what do we need to compose?</p>
+<h2 id="the-generic-source"><a class="header" href="#the-generic-source">The generic source</a></h2>
+<p>Most obviously, ZeroMQ exposes a file descriptor for us to use. (This is a common thing for event-related libraries to do, so if you're wondering how to integrate, say, I²C or GPIO on Linux with Calloop, that's your answer.)</p>
+<p>Calloop can use file descriptors via the <code>calloop::generic::Generic</code> source. So that's one.</p>
+<h2 id="the-mpsc-channel-source"><a class="header" href="#the-mpsc-channel-source">The MPSC channel source</a></h2>
+<p>Secondly, we might want to send messages on the socket. This means our event source needs to react when we send it a message. Calloop has a message channel for precisely this purpose: <code>calloop::channel::Channel</code>. That's another one.</p>
+<h2 id="the-wakeup-call"><a class="header" href="#the-wakeup-call">The wakeup call</a></h2>
+<p>The third event source we need is a bit subtle, but since this isn't a mystery novel I can save you hours of debugging and spoil the ending now: we need a &quot;ping&quot; event source because ZeroMQ's FD is edge triggered.</p>
+<p><a href="http://api.zeromq.org/master:zmq-getsockopt#toc11">ZeroMQ's file descriptor</a> is not the FD of an actual file or socket — you do not actually read data from it. It exists as an interface, with three important details:</p>
+<ul>
+<li>
+<p>It is only ever readable. Even if the underlying socket can be written to, the FD that ZeroMQ gives you signals this by becoming readable. In fact, this FD will become readable under three circumstances: the ZeroMQ socket (henceforth called a &quot;zsocket&quot;) is readable, writeable, or has an error. There is a separate function call, <code>zmq::Socket::get_events()</code> that will tell you which.</p>
+</li>
+<li>
+<p><strong>It is edge triggered.</strong> It will only ever change from not-readable to readable when the socket's state changes. So if a zsocket receives two messages, and you only read one, <strong>the file descriptor will not wake up the event loop again</strong>. Why not? Because it hasn't changed state! After you read one message, the zsocket still has events waiting. If it receives yet another message... it still has events waiting. No change in internal state = no external event.</p>
+</li>
+<li>
+<p>This edge triggering <strong>also covers user actions.</strong> If a zsocket becomes writeable, and then you write to the zsocket, it might immediately (and atomically) change from writeable to readable. In this case <strong>you will not get another event on the FD</strong>.</p>
+</li>
+</ul>
+<p>(The docs make this quite explicit, but there's a lot of docs to read so I'm spelling it out here.)</p>
+<p>What this adds up to is this: when we create our zsocket, it might already be readable or writeable. So when we add it to our event loop, it won't fire any events. Our entire source will just sit there until we wake it up by sending a message (which we might never do if it's eg. a pull socket).</p>
+<p>So the last event source we need is something that doesn't really convey any kind of message except &quot;please wake up the event loop on the next iteration&quot;, and that is exactly what a <code>calloop::ping::PingSource</code> does. And that's three.</p>
+<div id="chapter_begin" style="break-before: page; page-break-before: always;"></div><h1 id="creating-our-source-part-i-our-types"><a class="header" href="#creating-our-source-part-i-our-types">Creating our source, part I: our types</a></h1>
+<p>In the last chapter we worked out a list of the event sources we need to compose into a new type:</p>
+<ol>
+<li><code>calloop::generic::Generic</code></li>
+<li><code>calloop::channel::Channel</code></li>
+<li><code>calloop::ping::Ping</code></li>
+</ol>
+<p>So at a minimum, our type needs to contain these:</p>
+<pre><code class="language-rust noplayground">pub struct ZeroMQSource
+{
+    // Calloop components.
+    socket: calloop::generic::Generic&lt;calloop::generic::FdWrapper&lt;zmq::Socket&gt;&gt;,
+    mpsc_receiver: calloop::channel::Channel&lt;?&gt;,
+    wake_ping_receiver: calloop::ping::PingSource,
+}
+</code></pre>
+<p>Note that I've left the type for the channel as <code>?</code> — we'll get to that a bit later.</p>
+<p>What else do we need? If the <code>PingSource</code> is there to wake up the loop manually, we need to keep the other end of it. The ping is an internal detail — users of our type don't need to know it's there. We also need the zsocket itself, so we can actually detect and process events on it. That gives us:</p>
+<pre><code class="language-rust noplayground">pub struct ZeroMQSource
+{
+    // Calloop components.
+    socket: calloop::generic::Generic&lt;calloop::generic::FdWrapper&lt;zmq::Socket&gt;&gt;,
+    mpsc_receiver: calloop::channel::Channel&lt;?&gt;,
+    wake_ping_receiver: calloop::ping::PingSource,
+
+    /// Sending end of the ping source.
+    wake_ping_sender: calloop::ping::Ping,
+}
+</code></pre>
+<h2 id="the-message-type"><a class="header" href="#the-message-type">The message type</a></h2>
+<p>The most obvious candidate for the type of the message queue would be <code>zmq::Message</code>. But ZeroMQ sockets are capable of sending multipart messages, and this is even mandatory for eg. the <code>PUB</code> zsocket type, where the first part of the message is the topic.</p>
+<p>Therefore it makes more sense to accept a sequence of messages to cover the most general case, and that sequence can have a length of one for single-part messages. But with one more tweak: we can accept a sequence of things that <em>can be transformed</em> into <code>zmq::Message</code> values. The exact type we'll use will be a generic type like so:</p>
+<pre><code class="language-rust noplayground">pub struct ZeroMQSource&lt;T&gt;
+where
+    T: IntoIterator,
+    T::Item: Into&lt;zmq::Message&gt;,
+{
+    mpsc_receiver: calloop::channel::Channel&lt;T&gt;,
+	// ...
+}
+</code></pre>
+<blockquote>
+<h3 id="enforcing-single-messages"><a class="header" href="#enforcing-single-messages">Enforcing single messages</a></h3>
+<p>Remember that it's not just <code>Vec&lt;T&gt;</code> and other sequence types that implement <code>IntoIterator</code> — <code>Option&lt;T&gt;</code> implements it too! There is also <code>std::iter::Once&lt;T&gt;</code>. So if a user of our API wants to enforce that all &quot;multi&quot;-part messages actually contain exactly one part, they can use this API with <code>T</code> being, say, <code>std::iter::Once&lt;zmq::Message&gt;</code> (or even just <code>[zmq::Message; 1]</code> in Rust 2021 edition).</p>
+</blockquote>
+<h2 id="associated-types"><a class="header" href="#associated-types">Associated types</a></h2>
+<p>The <code>EventSource</code> trait has four associated types:</p>
+<ul>
+<li>
+<p><code>Event</code> - when an event is generated that our caller cares about (ie. not some internal thing), this is the data we provide to their callback. This will be another sequence of messages, but because we're constructing it we can be more opinionated about the type and use the return type of <code>zmq::Socket::recv_multipart()</code> which is <code>Vec&lt;Vec&lt;u8&gt;&gt;</code>.</p>
+</li>
+<li>
+<p><code>Metadata</code> - this is a more persistent kind of data, perhaps the underlying file descriptor or socket, or maybe some stateful object that the callback can manipulate. It is passed by exclusive reference to the <code>Metadata</code> type. In our case we don't use this, so it's <code>()</code>.</p>
+</li>
+<li>
+<p><code>Ret</code> - this is the return type of the callback that's called on an event. Usually this will be a <code>Result</code> of some sort; in our case it's <code>std::io::Result&lt;()&gt;</code> just to signal whether some underlying operation failed or not.</p>
+</li>
+<li>
+<p><code>Error</code> - this is the error type returned by <code>process_events()</code> (not the user callback!). Having this as an associated type allows you to have more control over error propagation in nested event sources. We will use <a href="https://crates.io/crates/anyhow">Anyhow</a>, which is like a more fully-features <code>Box&lt;dyn Error&gt;</code>. It allows you to add context to any other error with a <code>context()</code> method.</p>
+</li>
+</ul>
+<p>So together these are:</p>
+<pre><code class="language-rust noplayground">impl&lt;T&gt; calloop::EventSource for ZeroMQSource&lt;T&gt;
+where
+    T: IntoIterator,
+    T::Item: Into&lt;zmq::Message&gt;,
+{
+    type Event = Vec&lt;Vec&lt;u8&gt;&gt;;
+    type Metadata = ();
+    type Ret = io::Result&lt;()&gt;;
+    type Error = anyhow::Error;
+    // ...
+}
+</code></pre>
+<hr />
+<p>I have saved one surprise for later to emphasise some important principles, but for now, let's move on to defining some methods!</p>
+<div id="chapter_begin" style="break-before: page; page-break-before: always;"></div><h1 id="creating-our-source-part-ii-setup-methods"><a class="header" href="#creating-our-source-part-ii-setup-methods">Creating our source, part II: setup methods</a></h1>
+<p>Now that we've figured out the types we need, we can get to work writing some methods. We'll need to implement the methods defined in the <code>calloop::EventSource</code> trait, and a constructor function to create the source.</p>
+<h2 id="our-constructor"><a class="header" href="#our-constructor">Our constructor</a></h2>
+<p>Creating our source is fairly straightforward. We can let the caller set up the zsocket the way they need, and take ownership of it when it's initialised. Our caller needs not only the source itself, but the sending end of the MPSC channel so they can send messages, so we need to return that too.</p>
+<p>A common pattern in Calloop's own constructor functions is to return a tuple containing (a) the source and (b) a type to use the source. So that's what we'll do:</p>
+<pre><code class="language-rust noplayground">// Converts a `zmq::Socket` into a `ZeroMQSource` plus the sending end of an
+// MPSC channel to enqueue outgoing messages.
+pub fn from_socket(socket: zmq::Socket) -&gt; io::Result&lt;(Self, calloop::channel::Sender&lt;T&gt;)&gt; {
+    let (mpsc_sender, mpsc_receiver) = calloop::channel::channel();
+    let (wake_ping_sender, wake_ping_receiver) = calloop::ping::make_ping()?;
+
+    let fd = socket.get_fd()?;
+
+    let socket_source =
+        calloop::generic::Generic::from_fd(fd, calloop::Interest::READ, calloop::Mode::Edge);
+
+    Ok((
+        Self {
+            socket,
+            socket_source,
+            mpsc_receiver,
+            wake_ping_receiver,
+            wake_ping_sender,
+        },
+        mpsc_sender,
+    ))
+}
+</code></pre>
+<h2 id="trait-methods-registering-sources"><a class="header" href="#trait-methods-registering-sources">Trait methods: registering sources</a></h2>
+<p>Calloop's event sources have a kind of life cycle, starting with <em>registration</em>. When you add an event source to the event loop, under the hood the source will <em>register</em> itself with the loop. Under certain circumstances a source will need to re-register itself. And finally there is the <em>unregister</em> action when an event source is removed from the loop. These are expressed via the <code>calloop::EventSource</code> methods:</p>
+<ul>
+<li><code>fn register(&amp;mut self, poll: &amp;mut calloop::Poll, token_factory: &amp;mut calloop::TokenFactory) -&gt; calloop::Result&lt;()&gt;</code></li>
+<li><code>fn reregister(&amp;mut self, poll: &amp;mut calloop::Poll, token_factory: &amp;mut calloop::TokenFactory) -&gt; calloop::Result&lt;()&gt;</code></li>
+<li><code>fn unregister(&amp;mut self, poll: &amp;mut calloop::Poll) -&gt; calloop::Result&lt;()&gt;</code></li>
+</ul>
+<p>The first two methods take a <em>token factory</em>, which is a way for Calloop to keep track of why your source was woken up. When we get to actually processing events, you'll see how this works. But for now, all you need to do is recursively pass the token factory into whatever sources your own event source is composed of. This includes other composed sources, which will pass the token factory into <em>their</em> sources, and so on.</p>
+<p>In practise this looks like:</p>
+<pre><code class="language-rust noplayground">fn register(
+    &amp;mut self,
+    poll: &amp;mut calloop::Poll,
+    token_factory: &amp;mut calloop::TokenFactory
+) -&gt; calloop::Result&lt;()&gt;
+{
+    self.socket_source.register(poll, token_factory)?;
+    self.mpsc_receiver.register(poll, token_factory)?;
+    self.wake_ping_receiver.register(poll, token_factory)?;
+    self.wake_ping_sender.ping();
+
+    Ok(())
+}
+
+fn reregister(
+    &amp;mut self,
+    poll: &amp;mut calloop::Poll,
+    token_factory: &amp;mut calloop::TokenFactory
+) -&gt; calloop::Result&lt;()&gt;
+{
+    self.socket_source.reregister(poll, token_factory)?;
+    self.mpsc_receiver.reregister(poll, token_factory)?;
+    self.wake_ping_receiver.reregister(poll, token_factory)?;
+
+    self.wake_ping_sender.ping();
+
+    Ok(())
+}
+
+
+fn unregister(&amp;mut self, poll: &amp;mut calloop::Poll)-&gt; calloop::Result&lt;()&gt; {
+    self.socket_source.unregister(poll)?;
+    self.mpsc_receiver.unregister(poll)?;
+    self.wake_ping_receiver.unregister(poll)?;
+    Ok(())
+}
+</code></pre>
+<blockquote>
+<p><strong>Note the <code>self.wake_ping_sender.ping()</code> call in the first two functions!</strong> This is how we manually prompt the event loop to wake up and run our source on the next iteration, to properly account for the <a href="ch03-01-composition.html#the-wakeup-call">zsocket's edge-triggering</a>.</p>
+</blockquote>
+<h2 id="our-drop-handler"><a class="header" href="#our-drop-handler">Our drop handler</a></h2>
+<p>ZeroMQ sockets have their own internal queues and state, and therefore need a bit of care when shutting down. Depending on zsocket type and settings, when the ZeroMQ context is dropped, it could block waiting for certain operations to complete. We can write a drop handler to avoid this, but again <em>note that it's only one of many ways</em> to handle zsocket shutdown.</p>
+<pre><code class="language-rust noplayground">impl&lt;T&gt; Drop for ZeroMQSource&lt;T&gt;
+where
+    T: IntoIterator,
+    T::Item: Into&lt;zmq::Message&gt;,
+{
+    fn drop(&amp;mut self) {
+        // This is one way to stop socket code (especially PUSH sockets) hanging
+        // at the end of any blocking functions.
+        //
+        // - https://stackoverflow.com/a/38338578/188535
+        // - http://api.zeromq.org/4-0:zmq-ctx-term
+        self.socket.set_linger(0).ok();
+        self.socket.set_rcvtimeo(0).ok();
+        self.socket.set_sndtimeo(0).ok();
+
+        // Double result because (a) possible failure on call and (b) possible
+        // failure decoding.
+        if let Ok(Ok(last_endpoint)) = self.socket.get_last_endpoint() {
+            self.socket.disconnect(&amp;last_endpoint).ok();
+        }
+    }
+}
+</code></pre>
+<div id="chapter_begin" style="break-before: page; page-break-before: always;"></div><h1 id="creating-our-source-part-iii-processing-events-almost"><a class="header" href="#creating-our-source-part-iii-processing-events-almost">Creating our source, part III: processing events (almost)</a></h1>
+<p>Finally, the real functionality we care about! Processing events! This is also a method in the <code>calloop::EventSource</code> trait:</p>
+<pre><code class="language-rust noplayground">fn process_events&lt;F&gt;(
+    &amp;mut self,
+    readiness: calloop::Readiness,
+    token: calloop::Token,
+    mut callback: F,
+) -&gt; Result&lt;calloop::PostAction, Self::Error&gt;
+where
+    F: FnMut(Self::Event, &amp;mut Self::Metadata) -&gt; Self::Ret,
+</code></pre>
+<p>What a mouthful! But when you break it down, it's not so complicated:</p>
+<ul>
+<li>
+<p>We take our own state, of course, as <code>&amp;mut self</code>.</p>
+</li>
+<li>
+<p>We take a <code>Readiness</code> value - this is mainly useful for &quot;real&quot; file descriptors, and tells you whether the event source was woken up for a read or write event. We ignore it though, because our internal sources are always only readable (remember that even if the zsocket is writeable, the FD it exposes is only ever readable).</p>
+</li>
+<li>
+<p>We take a token. This gives us a way to process events that arise from our internal sources. In general, composed sources should not actually need to use this directly; sub-sources will check their own tokens against this and run if necessary.</p>
+</li>
+<li>
+<p>We take a callback. We call this callback with any &quot;real&quot; events that our caller will care about; in our case, that means messages we receive on the zsocket. It is closely related to <a href="ch03-02-creating-our-source-part-1-our-types.html#associated-types">the <code>EventSource</code> trait's associated types</a>. Note that the callback our caller supplies when adding our source to the loop actually takes an extra argument, which is some data that we won't know about in our source. Calloop's internals take care of combining our arguments here with this extra data.</p>
+</li>
+<li>
+<p>Finally we return a <code>PostAction</code>, which tells the loop whether it needs to change the state of our event source, perhaps as a result of actions we took. For example, you might require that your source be removed from the loop (with <code>PostAction::Remove</code>) if it only has a certain thing to do. Ordinarily though, you'd return <code>PostAction::Continue</code> for your source to keep waiting for events.</p>
+</li>
+</ul>
+<p>Note that these <code>PostAction</code> values correspond to various methods on the <code>LoopHandle</code> type (eg. <code>PostAction::Disable</code> does the same as <code>LoopHandle::disable()</code>). Whether you control your event source by returning a <code>PostAction</code> or using the <code>LoopHandle</code> methods depends on whether it makes more sense for these actions to be taken from within your event source or by something else in your code.</p>
+<p>Implementing <code>process_events()</code> for a type that contains various Calloop sources composed together, like we have, is done recursively by calling our internal sources' <code>process_events()</code> method. The <code>token</code> that Calloop gives us is how each event source determines whether it was responsible for the wakeup and has events to process.</p>
+<p>If we were woken up because of the ping source, then the ping source's <code>process_events()</code> will see that the token matches its own, and call the callback (possibly multiple times). If we were woken up because a message was sent through the MPSC channel, then the channel's <code>process_events()</code> will match on the token instead and call the callback for every message waiting. The zsocket is a little different, and we'll go over that in detail.</p>
+<p>For error handling we're using <a href="https://crates.io/crates/anyhow">Anyhow</a>, hence the <code>context()</code> calls on each fallible operation. These just add a message to any error that might appear in a traceback.</p>
+<p>So a first draft of our code might look like:</p>
+<pre><code class="language-rust noplayground">fn process_events&lt;F&gt;(
+    &amp;mut self,
+    readiness: calloop::Readiness,
+    token: calloop::Token,
+    mut callback: F,
+) -&gt; Result&lt;calloop::PostAction, Self::Error&gt;
+where
+    F: FnMut(Self::Event, &amp;mut Self::Metadata) -&gt; Self::Ret,
+{
+    // Runs if we were woken up on startup/registration.
+    self.wake_ping_receiver
+        .process_events(readiness, token, |_, _| {})
+        .context(&quot;Failed after registration&quot;)?;
+
+    // Runs if we received a message over the MPSC channel.
+    self.mpsc_receiver
+        .process_events(readiness, token, |evt, _| {
+            // 'evt' could be a message or a &quot;sending end closed&quot;
+            // notification. We don't care about the latter.
+            if let calloop::channel::Event::Msg(msg) = evt {
+                self.socket
+                    .send_multipart(msg, 0)
+                    .context(&quot;Failed to send message&quot;)?;
+            }
+        })?;
+
+	// Runs if the zsocket became read/write-able.
+    self.socket
+        .process_events(readiness, token, |_, _| {
+            let events =
+                self.socket
+                    .get_events()
+                    .context(&quot;Failed to read ZeroMQ events&quot;)?;
+        
+            if events.contains(zmq::POLLOUT) {
+                // Wait, what do we do here?
+            }
+
+            if events.contains(zmq::POLLIN) {
+                let messages =
+                    self.socket
+                        .recv_multipart(0)
+                        .context(&quot;Failed to receive message&quot;)?;
+
+                callback(messages, &amp;mut ())
+                    .context(&quot;Error in event callback&quot;)?;
+            }
+        })?;
+
+    Ok(calloop::PostAction::Continue)
+}
+</code></pre>
+<p>We process the events from whichever source woke up our composed source, and if we woke up because the zsocket became readable, we call the callback with the message we received. Finally we return <code>PostAction::Continue</code> to remain in the event loop.</p>
+<p>Don't worry about getting this to compile, it is a good start but it's wrong in a few ways.</p>
+<p>Firstly, we've gone to all the trouble of using a ping to wake up the source, and then we just... drain its internal events and return. Which achieves nothing.</p>
+<p>Secondly, we don't seem to know what to do when our zsocket becomes writeable (the actual zsocket, not the &quot;interface&quot; file descriptor).</p>
+<p>Thirdly, we commit one of the worst sins you can commit in an event-loop-based system. Can you see it? It's this part:</p>
+<pre><code class="language-rust noplayground">self.mpsc_receiver
+    .process_events(readiness, token, |evt, _| {
+        if let calloop::channel::Event::Msg(msg) = evt {
+            self.socket
+                .file
+                .send_multipart(msg, 0)
+                .context(&quot;Failed to send message&quot;)?;
+        }
+    })?;
+</code></pre>
+<p>We block the event loop! In the middle of processing events from the MPSC channel, we call <code>zmq::Socket::send_multipart()</code> which <em>could</em>, under certain circumstances, block! <a href="ch01-00-how-an-event-loop-works.html#never-block-the-loop"><strong>We shouldn't do that.</strong></a></p>
+<p>Let's deal with this badness first then. We want to decouple &quot;receiving messages over the MPSC channel&quot; from &quot;sending messages on the zsocket&quot;. There are different ways to do this, but they boil down to: buffer messages or drop messages (or maybe a combination of both). We'll use the first approach, with an internal FIFO queue. When we receive messages, we push them onto the back of the queue. When the zsocket is writeable, we pop messages from the front of the queue.</p>
+<p>The standard library has <code>collections::VecDeque&lt;T&gt;</code> which provides efficient double-ended queuing, so let's use that. This is some extra internal state, so we need to add it to our type, which becomes:</p>
+<pre><code class="language-rust noplayground">pub struct ZeroMQSource&lt;T&gt;
+where
+    T: IntoIterator,
+    T::Item: Into&lt;zmq::Message&gt;,
+{
+    // Calloop components.
+    socket: calloop::generic::Generic&lt;calloop::generic::FdWrapper&lt;zmq::Socket&gt;&gt;,
+    mpsc_receiver: calloop::channel::Channel&lt;T&gt;,
+    wake_ping_receiver: calloop::ping::PingSource,
+
+    /// Sending end of the ping source.
+    wake_ping_sender: calloop::ping::Ping,
+
+    /// FIFO queue for the messages to be published.
+    outbox: std::collections::VecDeque&lt;T&gt;,
+}
+</code></pre>
+<p>Our MPSC receiving code becomes:</p>
+<pre><code class="language-rust noplayground">let outbox = &amp;mut self.outbox;
+
+self.mpsc_receiver
+    .process_events(readiness, token, |evt, _| {
+        if let calloop::channel::Event::Msg(msg) = evt {
+            outbox.push_back(msg);
+        }
+    })?;
+</code></pre>
+<p>And our &quot;zsocket is writeable&quot; code becomes:</p>
+<pre><code class="language-rust noplayground">self.socket
+    .file
+    .process_events(readiness, token, |_, _| {
+        let events = self
+            .socket
+            .file
+            .get_events()
+            .context(&quot;Failed to read ZeroMQ events&quot;)?;
+    
+        if events.contains(zmq::POLLOUT) {
+            if let Some(parts) = self.outbox.pop_front() {
+                self.socket
+                    .file
+                    .send_multipart(parts, 0)
+                    .context(&quot;Failed to send message&quot;)?;
+            }
+       }
+
+        if events.contains(zmq::POLLIN) {
+            let messages =
+                self.socket
+                    .file
+                    .recv_multipart(0)
+                    .context(&quot;Failed to receive message&quot;)?;
+            callback(messages, &amp;mut ())
+                .context(&quot;Error in event callback&quot;)?;
+        }
+    })?;
+
+</code></pre>
+<p>So we've not only solved problem #3, we've also figured out #2, which suggests we're on the right track. But we still have (at least) that first issue to sort out.</p>
+<div id="chapter_begin" style="break-before: page; page-break-before: always;"></div><h1 id="creating-our-source-part-iv-processing-events-really"><a class="header" href="#creating-our-source-part-iv-processing-events-really">Creating our source, part IV: processing events (really)</a></h1>
+<p>We have three events that could wake up our event source: the ping, the channel, and the zsocket itself becoming ready to use. <em>All three of these reasons</em> potentially mean doing something on the zsocket: if the ping fired, we need to check for any pending events. If the channel received a message, we want to check if the zsocket is already readable and send it. If the zsocket becomes readable or writeable, we want to read from or write to it. In other words... We want to run it every time!</p>
+<p>Also notice that in the zsocket <code>process_events()</code> call, we don't use any of the arguments, including the event itself. That file descriptor is merely a signalling mechanism! Sending and receiving messages is what will actually clear any pending events on it, and reset it to a state where it will wake the event loop later.</p>
+<pre><code class="language-rust noplayground">let events = self
+    .socket
+    .get_events()
+    .context(&quot;Failed to read ZeroMQ events&quot;)?;
+
+if events.contains(zmq::POLLOUT) {
+    if let Some(parts) = self.outbox.pop_front() {
+        self.socket
+            .send_multipart(parts, 0)
+            .context(&quot;Failed to send message&quot;)?;
+    }
+}
+
+if events.contains(zmq::POLLIN) {
+    let messages =
+        self.socket
+            .recv_multipart(0)
+            .context(&quot;Failed to receive message&quot;)?;
+    callback(messages, &amp;mut ())
+        .context(&quot;Error in event callback&quot;)?;
+}
+</code></pre>
+<p>So the second draft of our <code>process_events()</code> function is now:</p>
+<pre><code class="language-rust noplayground">fn process_events&lt;F&gt;(
+    &amp;mut self,
+    readiness: calloop::Readiness,
+    token: calloop::Token,
+    mut callback: F,
+) -&gt; Result&lt;calloop::PostAction, Self::Error&gt;
+where
+    F: FnMut(Self::Event, &amp;mut Self::Metadata) -&gt; Self::Ret,
+{
+    // Runs if we were woken up on startup/registration.
+    self.wake_ping_receiver
+        .process_events(readiness, token, |_, _| {})?;
+
+    // Runs if we were woken up because a message was sent on the channel.
+    let outbox = &amp;mut self.outbox;
+
+    self.mpsc_receiver
+        .process_events(readiness, token, |evt, _| {
+            if let calloop::channel::Event::Msg(msg) = evt {
+                outbox.push_back(msg);
+            }
+        })?;
+
+	// Always process any pending zsocket events.
+
+    let events = self
+        .socket
+        .get_events()
+        .context(&quot;Failed to read ZeroMQ events&quot;)?;
+
+    if events.contains(zmq::POLLOUT) {
+        if let Some(parts) = self.outbox.pop_front() {
+            self.socket
+                .send_multipart(parts, 0)
+                .context(&quot;Failed to send message&quot;)?;
+        }
+    }
+
+    if events.contains(zmq::POLLIN) {
+        let messages =
+            self.socket
+                .recv_multipart(0)
+                .context(&quot;Failed to receive message&quot;)?;
+        callback(messages, &amp;mut ())
+            .context(&quot;Error in event callback&quot;)?;
+    }
+
+    Ok(calloop::PostAction::Continue)
+}
+</code></pre>
+<p>There is one more issue to take care of, and it's got nothing to do with Calloop. We still haven't fully dealt with ZeroMQ's edge-triggered nature.</p>
+<p>Consider this situation:</p>
+<ul>
+<li>We create a REQ zsocket. These are intended to be used in strict send/receive/send/receive/etc. sequence.</li>
+<li>We wrap it in our <code>ZeroMQSource</code> and add that to our loop.</li>
+<li>We send a message.</li>
+</ul>
+<p>If we do this, it's possible we'll never actually <em>receive</em> any replies that are sent to our zsocket! Why? Because:</p>
+<ul>
+<li>we read the events on the socket into <code>events</code></li>
+<li>then we send a message on the socket</li>
+<li>another process sends a reply so quickly, it arrives more or less immediately</li>
+<li>then we use the same <code>events</code> to check if the socket is readable</li>
+<li>then we exit</li>
+</ul>
+<p>The zsocket will change from writeable to readable before we leave <code>process_events()</code>. So the &quot;interface&quot; file descriptor will become readable again. But because it is edge triggered, it will not wake up our event source after we leave <code>process_events()</code>. So our source will not wake up again (at least, not due to the <code>self.socket</code> event source).</p>
+<p>For <em>this specific example</em>, it will suffice to re-read the zsocket events in between the <code>if</code> statements. Then when we get to the second <code>events</code> check, it will indeed contain <code>zmq::POLLIN</code> and receive the pending message. But this is not good enough for the general case! If we replace REQ with REP above, we'll get the opposite problem: our first check (for <code>POLLOUT</code>) will be false. Our second check (<code>POLLIN</code>) will be true. We'll receive a message, leave <code>process_events()</code>, and never wake up again.</p>
+<p>The full solution is to recognise that any user action on a ZeroMQ socket can cause the pending events to change, or just to remain active, without re-triggering the &quot;interface&quot; file descriptor. So we need to (a) do this repeatedly and (b) keep track of when we have or haven't performed an action on the zsocket. Here's one way to do it:</p>
+<pre><code class="language-rust noplayground">loop {
+    let events = self
+        .socket
+        .get_events()
+        .context(&quot;Failed to read ZeroMQ events&quot;)?;
+
+    let mut used_socket = false;
+
+    if events.contains(zmq::POLLOUT) {
+        if let Some(parts) = self.outbox.pop_front() {
+            self.socket
+                .as_ref()
+                .send_multipart(parts, 0)
+                .context(&quot;Failed to send message&quot;)?;
+            used_socket = true;
+        }
+    }
+
+    if events.contains(zmq::POLLIN) {
+        let messages =
+            self.socket
+                .recv_multipart(0)
+                .context(&quot;Failed to receive message&quot;)?;
+        used_socket = true;
+
+        callback(messages, &amp;mut ())
+            .context(&quot;Error in event callback&quot;)?;
+    }
+
+    if !used_socket {
+        break;
+    }
+}
+</code></pre>
+<p>Now we have a flag that we set if, and only if, we call a send or receive method on the zsocket. If that flag is set at the end of the loop, we go around again.</p>
+<blockquote>
+<h2 id="greediness"><a class="header" href="#greediness">Greediness</a></h2>
+<p>Remember my disclaimer at the start of the chapter, about this code being &quot;greedy&quot;? This is what I mean. This loop will run until the entire message queue is empty, so if it has a lot of messages in it, any other sources in our event loop will not be run until this loop is finished.</p>
+<p>An alternative approach is to use more state to determine whether we want to run again on the next loop iteration (perhaps using the ping source), so that Calloop can run any other sources in between individual messages being received.</p>
+</blockquote>
+<div id="chapter_begin" style="break-before: page; page-break-before: always;"></div><h1 id="the-full-zeromq-event-source-code"><a class="header" href="#the-full-zeromq-event-source-code">The full ZeroMQ event source code</a></h1>
+<p>This is the full source code for a Calloop event source based on a ZeroMQ socket. You might find it useful as a kind of reference. Please read the <a href="ch03-00-a-full-example-zeromq.html#disclaimer">disclaimer at the start of this chapter</a> if you skipped straight here!</p>
+<pre><pre class="playground"><code class="language-rust edition2018">#![allow(clippy::uninlined_format_args)]
+
+//! A Calloop event source implementation for ZeroMQ sockets.
+
+use std::{collections, io};
+
+use anyhow::Context;
+
+/// A Calloop event source that contains a ZeroMQ socket (of any kind) and a
+/// Calloop MPSC channel for sending over it.
+///
+/// The basic interface is:
+/// - create a zmq::Socket for your ZeroMQ socket
+/// - use `ZeroMQSource::from_socket()` to turn it into a Calloop event source
+///   (plus the sending end of the channel)
+/// - queue messages to be sent by sending them on the sending end of the MPSC
+///   channel
+/// - add the event source to the Calloop event loop with a callback to handle
+///   reading
+/// - the sending end of the MPSC channel can be cloned and sent across threads
+///   if necessary
+///
+/// This type is parameterised by `T`:
+///
+///     T where T: IntoIterator, T::Item: Into&lt;zmq::Message&gt;
+//
+/// This means that `T` is anything that can be converted to an iterator, and
+/// the items in the iterator are anything that can be converted to a
+/// `zmq::Message`. So eg. a `Vec&lt;String&gt;` would work.
+///
+/// The callback is called whenever the underlying socket becomes readable. It
+/// is called with a vec of byte sequences (`Vec&lt;Vec&lt;u8&gt;&gt;`) and the event loop
+/// data set by the user.
+///
+/// Note about why the read data is a vec of multipart message parts: we don't
+/// know what kind of socket this is, or what will be sent, so the most general
+/// thing we can do is receive the entirety of a multipart message and call the
+/// user callback with the whole set. Usually the number of parts in a multipart
+/// message will be one, but the code will work just the same when it's not.
+///
+/// This event source also allows you to use different event sources to publish
+/// messages over the same writeable ZeroMQ socket (usually PUB or PUSH).
+/// Messages should be sent over the Calloop MPSC channel sending end. This end
+/// can be cloned and used by multiple senders.
+pub struct ZeroMQSource&lt;T&gt;
+where
+    T: IntoIterator,
+    T::Item: Into&lt;zmq::Message&gt;,
+{
+    // Calloop components.
+    /// Event source for ZeroMQ socket.
+    socket: calloop::generic::Generic&lt;calloop::generic::FdWrapper&lt;zmq::Socket&gt;&gt;,
+
+    /// Event source for channel.
+    mpsc_receiver: calloop::channel::Channel&lt;T&gt;,
+
+    /// Because the ZeroMQ socket is edge triggered, we need a way to &quot;wake&quot; the
+    /// event source upon (re-)registration. We do this with a separate
+    /// `calloop::ping::Ping` source.
+    wake_ping_receiver: calloop::ping::PingSource,
+
+    /// Sending end of the ping source.
+    wake_ping_sender: calloop::ping::Ping,
+
+    // ZeroMQ socket.
+    /// FIFO queue for the messages to be published.
+    outbox: collections::VecDeque&lt;T&gt;,
+}
+
+impl&lt;T&gt; ZeroMQSource&lt;T&gt;
+where
+    T: IntoIterator,
+    T::Item: Into&lt;zmq::Message&gt;,
+{
+    // Converts a `zmq::Socket` into a `ZeroMQSource` plus the sending end of an
+    // MPSC channel to enqueue outgoing messages.
+    pub fn from_socket(socket: zmq::Socket) -&gt; io::Result&lt;(Self, calloop::channel::Sender&lt;T&gt;)&gt; {
+        let (mpsc_sender, mpsc_receiver) = calloop::channel::channel();
+        let (wake_ping_sender, wake_ping_receiver) = calloop::ping::make_ping()?;
+
+        let socket = calloop::generic::Generic::new(
+            unsafe { calloop::generic::FdWrapper::new(socket) },
+            calloop::Interest::READ,
+            calloop::Mode::Edge,
+        );
+
+        Ok((
+            Self {
+                socket,
+                mpsc_receiver,
+                wake_ping_receiver,
+                wake_ping_sender,
+                outbox: collections::VecDeque::new(),
+            },
+            mpsc_sender,
+        ))
+    }
+}
+
+/// This event source runs for three events:
+///
+/// 1. The event source was registered. It is forced to run so that any pending
+///    events on the socket are processed.
+///
+/// 2. A message was sent over the MPSC channel. In this case we put it in the
+///    internal queue.
+///
+/// 3. The ZeroMQ socket is readable. For this, we read off a complete multipart
+///    message and call the user callback with it.
+///
+/// The callback provided to `process_events()` may be called multiple times
+/// within a single call to `process_events()`.
+impl&lt;T&gt; calloop::EventSource for ZeroMQSource&lt;T&gt;
+where
+    T: IntoIterator,
+    T::Item: Into&lt;zmq::Message&gt;,
+{
+    type Event = Vec&lt;Vec&lt;u8&gt;&gt;;
+    type Metadata = ();
+    type Ret = io::Result&lt;()&gt;;
+    type Error = anyhow::Error;
+
+    fn process_events&lt;F&gt;(
+        &amp;mut self,
+        readiness: calloop::Readiness,
+        token: calloop::Token,
+        mut callback: F,
+    ) -&gt; Result&lt;calloop::PostAction, Self::Error&gt;
+    where
+        F: FnMut(Self::Event, &amp;mut Self::Metadata) -&gt; Self::Ret,
+    {
+        // Runs if we were woken up on startup/registration.
+        self.wake_ping_receiver
+            .process_events(readiness, token, |_, _| {})
+            .context(&quot;Failed after registration&quot;)?;
+
+        // Runs if we were woken up because a message was sent on the channel.
+        let outbox = &amp;mut self.outbox;
+
+        self.mpsc_receiver
+            .process_events(readiness, token, |evt, _| {
+                if let calloop::channel::Event::Msg(msg) = evt {
+                    outbox.push_back(msg);
+                }
+            })
+            .context(&quot;Failed to processing outgoing messages&quot;)?;
+
+        // The ZeroMQ file descriptor is edge triggered. This means that if (a)
+        // messages are added to the queue before registration, or (b) the
+        // socket became writeable before messages were enqueued, we will need
+        // to run the loop below. Hence, it always runs if this event source
+        // fires. The process_events() method doesn't do anything though, so we
+        // ignore it.
+
+        loop {
+            // According to the docs, the edge-triggered FD will not change
+            // state if a socket goes directly from being readable to being
+            // writeable (or vice-versa) without there being an in-between point
+            // where there are no events. This can happen as a result of sending
+            // or receiving on the socket while processing such an event. The
+            // &quot;used_socket&quot; flag below tracks whether we perform an operation
+            // on the socket that warrants reading the events again.
+            let events = self
+                .socket
+                .get_ref()
+                .get_events()
+                .context(&quot;Failed to read ZeroMQ events&quot;)?;
+
+            let mut used_socket = false;
+
+            if events.contains(zmq::POLLOUT) {
+                if let Some(parts) = self.outbox.pop_front() {
+                    self.socket
+                        .get_ref()
+                        .send_multipart(parts, 0)
+                        .context(&quot;Failed to send message&quot;)?;
+                    used_socket = true;
+                }
+            }
+
+            if events.contains(zmq::POLLIN) {
+                // Batch up multipart messages. ZeroMQ guarantees atomic message
+                // sending, which includes all parts of a multipart message.
+                let messages = self
+                    .socket
+                    .get_ref()
+                    .recv_multipart(0)
+                    .context(&quot;Failed to receive message&quot;)?;
+                used_socket = true;
+
+                // Capture and report errors from the callback, but don't propagate
+                // them up.
+                callback(messages, &amp;mut ()).context(&quot;Error in event callback&quot;)?;
+            }
+
+            if !used_socket {
+                break;
+            }
+        }
+
+        Ok(calloop::PostAction::Continue)
+    }
+
+    fn register(
+        &amp;mut self,
+        poll: &amp;mut calloop::Poll,
+        token_factory: &amp;mut calloop::TokenFactory,
+    ) -&gt; calloop::Result&lt;()&gt; {
+        self.socket.register(poll, token_factory)?;
+        self.mpsc_receiver.register(poll, token_factory)?;
+        self.wake_ping_receiver.register(poll, token_factory)?;
+
+        self.wake_ping_sender.ping();
+
+        Ok(())
+    }
+
+    fn reregister(
+        &amp;mut self,
+        poll: &amp;mut calloop::Poll,
+        token_factory: &amp;mut calloop::TokenFactory,
+    ) -&gt; calloop::Result&lt;()&gt; {
+        self.socket.reregister(poll, token_factory)?;
+        self.mpsc_receiver.reregister(poll, token_factory)?;
+        self.wake_ping_receiver.reregister(poll, token_factory)?;
+
+        self.wake_ping_sender.ping();
+
+        Ok(())
+    }
+
+    fn unregister(&amp;mut self, poll: &amp;mut calloop::Poll) -&gt; calloop::Result&lt;()&gt; {
+        self.socket.unregister(poll)?;
+        self.mpsc_receiver.unregister(poll)?;
+        self.wake_ping_receiver.unregister(poll)?;
+        Ok(())
+    }
+}
+
+impl&lt;T&gt; Drop for ZeroMQSource&lt;T&gt;
+where
+    T: IntoIterator,
+    T::Item: Into&lt;zmq::Message&gt;,
+{
+    fn drop(&amp;mut self) {
+        // This is one way to stop socket code (especially PUSH sockets) hanging
+        // at the end of any blocking functions.
+        //
+        // - https://stackoverflow.com/a/38338578/188535
+        // - http://api.zeromq.org/4-0:zmq-ctx-term
+        self.socket.get_ref().set_linger(0).ok();
+        self.socket.get_ref().set_rcvtimeo(0).ok();
+        self.socket.get_ref().set_sndtimeo(0).ok();
+
+        // Double result because (a) possible failure on call and (b) possible
+        // failure decoding.
+        if let Ok(Ok(last_endpoint)) = self.socket.get_ref().get_last_endpoint() {
+            self.socket.get_ref().disconnect(&amp;last_endpoint).ok();
+        }
+    }
+}
+
+pub fn main() {}
+</code></pre></pre>
+<p>Dependencies are:</p>
+<ul>
+<li>calloop (whatever version this document was built from)</li>
+<li>zmq 0.9</li>
+<li>anyhow 1.0</li>
+</ul>
+<pre><code class="language-toml">[dependencies]
+calloop = { path = '../..' }
+zmq = &quot;0.9&quot;
+anyhow = &quot;1.0&quot;
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                        
+
+                        
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                
+
+                
+            </nav>
+
+        </div>
+
+        
+
+        
+
+        
+
+        
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+        
+
+        
+
+        
+        <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
+        
+
+        <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+        
+
+        
+        
+        <script type="text/javascript">
+        window.addEventListener('load', function() {
+            window.setTimeout(window.print, 100);
+        });
+        </script>
+        
+        
+
+    </body>
+</html>

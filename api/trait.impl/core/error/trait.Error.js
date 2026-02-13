@@ -1,0 +1,9 @@
+(function() {
+    const implementors = Object.fromEntries([["calloop",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/beta/core/error/trait.Error.html\" title=\"trait core::error::Error\">Error</a> for <a class=\"enum\" href=\"calloop/error/enum.Error.html\" title=\"enum calloop::error::Error\">Error</a>",0],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/beta/core/error/trait.Error.html\" title=\"trait core::error::Error\">Error</a> for <a class=\"enum\" href=\"calloop/futures/enum.ExecutorError.html\" title=\"enum calloop::futures::ExecutorError\">ExecutorError</a>",0],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/beta/core/error/trait.Error.html\" title=\"trait core::error::Error\">Error</a> for <a class=\"struct\" href=\"calloop/channel/struct.ChannelError.html\" title=\"struct calloop::channel::ChannelError\">ChannelError</a>",0],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/beta/core/error/trait.Error.html\" title=\"trait core::error::Error\">Error</a> for <a class=\"struct\" href=\"calloop/futures/struct.ExecutorDestroyed.html\" title=\"struct calloop::futures::ExecutorDestroyed\">ExecutorDestroyed</a>",0],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/beta/core/error/trait.Error.html\" title=\"trait core::error::Error\">Error</a> for <a class=\"struct\" href=\"calloop/ping/struct.PingError.html\" title=\"struct calloop::ping::PingError\">PingError</a>",0],["impl&lt;T&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/beta/core/error/trait.Error.html\" title=\"trait core::error::Error\">Error</a> for <a class=\"struct\" href=\"calloop/error/struct.InsertError.html\" title=\"struct calloop::error::InsertError\">InsertError</a>&lt;T&gt;",0]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":59,"fragment_lengths":[1682]}
