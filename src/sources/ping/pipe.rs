@@ -13,7 +13,13 @@ use crate::{
     generic::Generic, EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory,
 };
 
-#[cfg(target_os = "macos")]
+#[cfg(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "tvos",
+    target_os = "visionos",
+    target_os = "watchos"
+))]
 #[inline]
 fn make_ends() -> std::io::Result<(OwnedFd, OwnedFd)> {
     use rustix::fs::{fcntl_getfl, fcntl_setfl, OFlags};
@@ -29,7 +35,13 @@ fn make_ends() -> std::io::Result<(OwnedFd, OwnedFd)> {
     Ok((read, write))
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "tvos",
+    target_os = "visionos",
+    target_os = "watchos"
+)))]
 #[inline]
 fn make_ends() -> std::io::Result<(OwnedFd, OwnedFd)> {
     use rustix::pipe::{pipe_with, PipeFlags};
