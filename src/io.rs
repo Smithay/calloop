@@ -199,32 +199,63 @@ trait IoLoopInner {
 
 impl<Data> IoLoopInner for LoopInner<'_, Data> {
     unsafe fn register(&self, dispatcher: &RefCell<IoDispatcher>) -> crate::Result<()> {
-        let disp = dispatcher.borrow();
-        unsafe {
-            self.poll.borrow_mut().register(
-                BorrowedFd::borrow_raw(disp.fd),
-                Interest::EMPTY,
-                Mode::OneShot,
-                disp.token.expect("No token for IO dispatcher"),
-            )
+        let result = {
+            let disp = dispatcher.borrow();
+            unsafe {
+                self.poll.borrow_mut().register(
+                    BorrowedFd::borrow_raw(disp.fd),
+                    Interest::EMPTY,
+                    Mode::OneShot,
+                    disp.token.expect("No token for IO dispatcher"),
+                )
+            }
+        };
+
+        if result.is_ok() {
+            dispatcher.borrow_mut().is_registered = true
         }
+
+        result
     }
 
     fn reregister(&self, dispatcher: &RefCell<IoDispatcher>) -> crate::Result<()> {
-        let disp = dispatcher.borrow();
-        self.poll.borrow_mut().reregister(
-            unsafe { BorrowedFd::borrow_raw(disp.fd) },
-            disp.interest,
-            Mode::OneShot,
-            disp.token.expect("No token for IO dispatcher"),
-        )
+        let result = {
+            let disp = dispatcher.borrow();
+            self.poll.borrow_mut().reregister(
+                unsafe { BorrowedFd::borrow_raw(disp.fd) },
+                disp.interest,
+                Mode::OneShot,
+                disp.token.expect("No token for IO dispatcher"),
+            )
+        };
+
+        if result.is_ok() {
+            dispatcher.borrow_mut().is_registered = true;
+        }
+
+        result
     }
 
     fn kill(&self, dispatcher: &RefCell<IoDispatcher>) {
-        let token = dispatcher
-            .borrow()
-            .token
-            .expect("No token for IO dispatcher");
+        let (token, fd, registered) = {
+            let disp = dispatcher.borrow();
+            (
+                disp.token.expect("No token for IO dispatcher"),
+                disp.fd,
+                disp.is_registered,
+            )
+        };
+
+        if registered
+            && self
+                .poll
+                .borrow_mut()
+                .unregister(unsafe { BorrowedFd::borrow_raw(fd) })
+                .is_ok()
+        {
+            dispatcher.borrow_mut().is_registered = false;
+        }
+
         if let Ok(slot) = self.sources.borrow_mut().get_mut(token.inner) {
             slot.source = None;
         }
