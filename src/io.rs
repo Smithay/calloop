@@ -1,10 +1,8 @@
 //! Adapters for async IO objects
 //!
 //! This module mainly hosts the [`Async`] adapter for making IO objects async with readiness
-//! monitoring backed by an [`EventLoop`](crate::EventLoop). See [`LoopHandle::adapt_io`] for
-//! how to create them.
-//!
-//! [`LoopHandle::adapt_io`]: [crate::LoopHandle::adapt_io]
+//! monitoring backed by an [`EventLoop`](crate::EventLoop). See
+//! [`LoopHandle::adapt_io`][crate::LoopHandle::adapt_io] for how to create them.
 
 use std::cell::RefCell;
 use std::pin::Pin;
