@@ -21,13 +21,13 @@
 use std::os::unix::io::{AsFd, BorrowedFd, OwnedFd};
 use std::sync::Arc;
 
-use rustix::event::{eventfd, EventfdFlags};
-use rustix::io::{read, write, Errno};
+use rustix::event::{EventfdFlags, eventfd};
+use rustix::io::{Errno, read, write};
 use tracing::warn;
 
 use super::PingError;
 use crate::{
-    generic::Generic, EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory,
+    EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory, generic::Generic,
 };
 
 // These are not bitfields! They are increments to add to the eventfd counter.

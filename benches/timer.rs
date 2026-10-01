@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use calloop::timer::TimeoutAction;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 
 fn single(c: &mut Criterion) {
     let mut event_loop = calloop::EventLoop::<()>::try_new().unwrap();

@@ -23,7 +23,7 @@ mod test {
     use self::calloop::signals::{Signal, Signals};
     use self::calloop::{Dispatcher, EventLoop};
 
-    use self::nix::sys::signal::{kill, SigSet};
+    use self::nix::sys::signal::{SigSet, kill};
     use self::nix::unistd::Pid;
 
     pub const TESTS: &[fn()] = &[single_usr1, usr2_added_afterwards, usr2_signal_removed];

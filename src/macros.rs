@@ -104,8 +104,8 @@ mod tests {
     use std::time::Duration;
 
     use crate::{
-        ping::{make_ping, PingSource},
         EventSource, PostAction,
+        ping::{PingSource, make_ping},
     };
 
     struct BatchSource {

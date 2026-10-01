@@ -7,7 +7,7 @@ use std::{
 use tracing::trace;
 
 pub use crate::loop_logic::EventIterator;
-use crate::{sys::TokenFactory, Poll, Readiness, RegistrationToken, Token};
+use crate::{Poll, Readiness, RegistrationToken, Token, sys::TokenFactory};
 
 pub mod channel;
 #[cfg(feature = "executor")]
@@ -605,7 +605,7 @@ where
 mod tests {
     use std::time::Duration;
 
-    use crate::{ping::make_ping, EventLoop};
+    use crate::{EventLoop, ping::make_ping};
 
     // Test event source boxing.
     #[test]

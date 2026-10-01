@@ -370,9 +370,9 @@ impl<T: crate::EventSource> crate::EventSource for TransientSource<T> {
 mod tests {
     use super::*;
     use crate::{
-        channel::{channel, Channel, Event},
-        ping::{make_ping, PingSource},
         Dispatcher, EventSource, PostAction,
+        channel::{Channel, Event, channel},
+        ping::{PingSource, make_ping},
     };
     use std::{
         rc::Rc,
