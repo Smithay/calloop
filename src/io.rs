@@ -4,7 +4,7 @@
 //! monitoring backed by an [`EventLoop`](crate::EventLoop). See [`LoopHandle::adapt_io`] for
 //! how to create them.
 //!
-//! [`LoopHandle::adapt_io`]: crate::LoopHandle#method.adapt_io
+//! [`LoopHandle::adapt_io`]: [crate::LoopHandle::adapt_io]
 
 use std::cell::RefCell;
 use std::pin::Pin;

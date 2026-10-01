@@ -44,11 +44,11 @@ pub enum PostAction {
     Reregister,
     /// Disable this source
     ///
-    /// Has the same effect as [`LoopHandle::disable`](crate::LoopHandle#method.disable)
+    /// Has the same effect as [`LoopHandle::disable`][crate::LoopHandle::disable]
     Disable,
     /// Remove this source from the eventloop
     ///
-    /// Has the same effect as [`LoopHandle::kill`](crate::LoopHandle#method.kill)
+    /// Has the same effect as [`LoopHandle::kill`][crate::LoopHandle::kill]
     Remove,
 }
 
@@ -145,17 +145,17 @@ pub trait EventSource {
 
     /// Register yourself to this poll instance
     ///
-    /// You should register all your relevant file descriptors to the provided [`Poll`](crate::Poll)
-    /// using its [`Poll::register`](crate::Poll#method.register) method.
+    /// You should register all your relevant file descriptors to the provided [`Poll`][crate::Poll]
+    /// using its [`Poll::register`][crate::Poll::register[ method.
     ///
     /// If you need to register more than one file descriptor, you can change the
-    /// `sub_id` field of the [`Token`](crate::Token) to differentiate between them.
+    /// `sub_id` field of the [`Token`][crate::Token] to differentiate between them.
     fn register(&mut self, poll: &mut Poll, token_factory: &mut TokenFactory) -> crate::Result<()>;
 
     /// Re-register your file descriptors
     ///
     /// Your should update the registration of all your relevant file descriptor to
-    /// the provided [`Poll`](crate::Poll) using its [`Poll::reregister`](crate::Poll#method.reregister),
+    /// the provided [`Poll`](crate::Poll) using its [`Poll::reregister`][crate::Poll::reregister],
     /// if necessary.
     fn reregister(
         &mut self,
@@ -166,7 +166,7 @@ pub trait EventSource {
     /// Unregister your file descriptors
     ///
     /// You should unregister all your file descriptors from this [`Poll`](crate::Poll) using its
-    /// [`Poll::unregister`](crate::Poll#method.unregister) method.
+    /// [`Poll::unregister`][crate::Poll::unregister] method.
     fn unregister(&mut self, poll: &mut Poll) -> crate::Result<()>;
 
     /// Whether this source needs to be sent the [`EventSource::before_sleep`]

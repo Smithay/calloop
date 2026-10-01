@@ -30,9 +30,9 @@ type IdleCallback<'i, Data> = Rc<RefCell<dyn IdleDispatcher<Data> + 'i>>;
 /// A token representing a registration in the [`EventLoop`].
 ///
 /// This token is given to you by the [`EventLoop`] when an [`EventSource`] is inserted or
-/// a [`Dispatcher`] is registered. You can use it to [disable](LoopHandle#method.disable),
-/// [enable](LoopHandle#method.enable), [update`](LoopHandle#method.update),
-/// [remove](LoopHandle#method.remove) or [kill](LoopHandle#method.kill) it.
+/// a [`Dispatcher`] is registered. You can use it to [disable][LoopHandle::disable],
+/// [enable][LoopHandle::enable], [update][LoopHandle::update],
+/// [remove][LoopHandle::remove] or [kill][LoopHandle::kill] it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RegistrationToken {
     inner: TokenInner,
