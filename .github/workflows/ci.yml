@@ -157,10 +157,15 @@ jobs:
 
             - run: mdbook build doc
 
-            - name: Deploy
-              uses: peaceiris/actions-gh-pages@v4
-              if: ${{ github.event_name == 'push' }}
+            - name: Upload static files as artifact
+              uses: actions/upload-pages-artifact@v3
               with:
-                  github_token: ${{ secrets.GITHUB_TOKEN }}
-                  publish_dir: ./doc/book
-                  force_orphan: true
+                path: ./doc/book
+
+            - name: Deploy to GitHub Pages
+              if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+              uses: actions/deploy-pages@v4
+
+permissions:
+  pages: write
+  id-token: write
