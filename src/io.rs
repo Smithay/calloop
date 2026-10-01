@@ -202,12 +202,14 @@ trait IoLoopInner {
 impl<Data> IoLoopInner for LoopInner<'_, Data> {
     unsafe fn register(&self, dispatcher: &RefCell<IoDispatcher>) -> crate::Result<()> {
         let disp = dispatcher.borrow();
-        self.poll.borrow_mut().register(
-            unsafe { BorrowedFd::borrow_raw(disp.fd) },
-            Interest::EMPTY,
-            Mode::OneShot,
-            disp.token.expect("No token for IO dispatcher"),
-        )
+        unsafe {
+            self.poll.borrow_mut().register(
+                BorrowedFd::borrow_raw(disp.fd),
+                Interest::EMPTY,
+                Mode::OneShot,
+                disp.token.expect("No token for IO dispatcher"),
+            )
+        }
     }
 
     fn reregister(&self, dispatcher: &RefCell<IoDispatcher>) -> crate::Result<()> {

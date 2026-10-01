@@ -115,7 +115,7 @@ impl EventSource for Timer {
     where
         F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
-        if let (Some(ref registration), Some(ref deadline)) = (&self.registration, &self.deadline) {
+        if let (Some(registration), Some(deadline)) = (&self.registration, &self.deadline) {
             if registration.token != token {
                 return Ok(PostAction::Continue);
             }

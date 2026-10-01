@@ -243,7 +243,9 @@ impl<F: AsFd, E> Generic<F, E> {
     /// allows you to drop the underlying event source. Dropping the underlying source
     /// leads to a dangling reference.
     pub unsafe fn get_mut(&mut self) -> &mut F {
-        self.file.as_mut().unwrap().get_mut()
+        unsafe {
+            self.file.as_mut().unwrap().get_mut()
+        }
     }
 }
 
