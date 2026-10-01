@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+#### Changes
+- Bump MSRV to 1.86.0
+
 ## 0.14.4 - 2025-02-13
 
 #### Additions
