@@ -52,7 +52,7 @@ pub struct Async<'l, F: AsFd> {
 }
 
 impl<F: AsFd + std::fmt::Debug> std::fmt::Debug for Async<'_, F> {
-    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    #[cfg_attr(unstable_coverage, coverage(off))]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Async").field("fd", &self.fd).finish()
     }

@@ -72,7 +72,7 @@ pub struct WeakLoopHandle<'l, Data> {
 }
 
 impl<Data> Debug for LoopHandle<'_, Data> {
-    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    #[cfg_attr(unstable_coverage, coverage(off))]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("LoopHandle { ... }")
     }
@@ -82,7 +82,7 @@ impl<Data> Debug for LoopHandle<'_, Data> {
 ///
 /// The derived implementation adds a `Clone` bound on the generic parameter `Data`.
 impl<Data> Clone for LoopHandle<'_, Data> {
-    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    #[cfg_attr(unstable_coverage, coverage(off))]
     fn clone(&self) -> Self {
         LoopHandle {
             inner: self.inner.clone(),
@@ -120,7 +120,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
     /// Use this function if you need access to the event source after its insertion in the loop.
     ///
     /// See also `insert_source`.
-    #[cfg_attr(feature = "nightly_coverage", coverage(off))] // Contains a branch we can't hit w/o OOM
+    #[cfg_attr(unstable_coverage, coverage(off))] // Contains a branch we can't hit w/o OOM
     pub fn register_dispatcher<S>(
         &self,
         dispatcher: Dispatcher<'l, S, Data>,
@@ -328,7 +328,7 @@ impl<'l, Data> LoopHandle<'l, Data> {
 }
 
 impl<Data> Debug for WeakLoopHandle<'_, Data> {
-    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    #[cfg_attr(unstable_coverage, coverage(off))]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("WeakLoopHandle { ... }")
     }
@@ -338,7 +338,7 @@ impl<Data> Debug for WeakLoopHandle<'_, Data> {
 ///
 /// The derived implementation adds a `Clone` bound on the generic parameter `Data`.
 impl<Data> Clone for WeakLoopHandle<'_, Data> {
-    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    #[cfg_attr(unstable_coverage, coverage(off))]
     fn clone(&self) -> Self {
         WeakLoopHandle {
             inner: self.inner.clone(),
@@ -350,7 +350,7 @@ impl<Data> Clone for WeakLoopHandle<'_, Data> {
 ///
 /// The derived implementation adds a `Default` bound on the generic parameter `Data`.
 impl<Data> Default for WeakLoopHandle<'_, Data> {
-    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    #[cfg_attr(unstable_coverage, coverage(off))]
     fn default() -> Self {
         WeakLoopHandle {
             inner: Weak::default(),
@@ -385,7 +385,7 @@ pub struct EventLoop<'l, Data> {
 }
 
 impl<Data> Debug for EventLoop<'_, Data> {
-    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    #[cfg_attr(unstable_coverage, coverage(off))]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("EventLoop { ... }")
     }
@@ -822,7 +822,7 @@ pub struct LoopSignal {
 }
 
 impl Debug for LoopSignal {
-    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    #[cfg_attr(unstable_coverage, coverage(off))]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("LoopSignal { ... }")
     }

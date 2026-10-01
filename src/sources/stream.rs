@@ -27,7 +27,7 @@ impl Wake for PingWaker {
         self.0.ping();
     }
 
-    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    #[cfg_attr(unstable_coverage, coverage(off))]
     fn wake_by_ref(self: &Arc<Self>) {
         self.0.ping();
     }
@@ -123,21 +123,21 @@ impl<S: Stream + Unpin> EventSource for StreamSource<S> {
 pub struct StreamError(PingError);
 
 impl fmt::Display for StreamError {
-    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    #[cfg_attr(unstable_coverage, coverage(off))]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&self.0, f)
     }
 }
 
 impl std::error::Error for StreamError {
-    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    #[cfg_attr(unstable_coverage, coverage(off))]
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         Some(&self.0)
     }
 }
 
 impl From<PingError> for StreamError {
-    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    #[cfg_attr(unstable_coverage, coverage(off))]
     fn from(err: PingError) -> Self {
         Self(err)
     }

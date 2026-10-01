@@ -39,7 +39,6 @@ criterion = { version = "0.8.2" }
 [features]
 block_on = []
 executor = ["async-task", "dep:slab"]
-nightly_coverage = []
 signals = ["nix"]
 stream = ["futures-core"]
 
@@ -54,3 +53,6 @@ harness = false
 [[bench]]
 name = "timer"
 harness = false
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(unstable_coverage)'] }
