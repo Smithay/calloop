@@ -1,7 +1,7 @@
 //! Ping to the event loop
 //!
 //! This is an event source that just produces `()` events whevener the associated
-//! [`Ping::ping`](Ping#method.ping) method is called. If the event source is pinged multiple times
+//! [`Ping::ping`] method is called. If the event source is pinged multiple times
 //! between a single dispatching, it'll only generate one event.
 //!
 //! This event source is a simple way of waking up the event loop from an other part of your program
