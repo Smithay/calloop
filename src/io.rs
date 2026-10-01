@@ -440,6 +440,10 @@ fn set_nonblocking(fd: BorrowedFd<'_>, is_nonblocking: bool) -> std::io::Result<
 
 #[cfg(all(test, unix, feature = "executor", feature = "futures-io"))]
 mod tests {
+    use std::io;
+    use std::os::unix::net::UnixStream;
+    use std::rc::Rc;
+
     use futures::io::{AsyncReadExt, AsyncWriteExt};
 
     use crate::sources::futures::executor;
@@ -640,5 +644,26 @@ mod tests {
         while !dispatched {
             event_loop.dispatch(None, &mut dispatched).unwrap();
         }
+    }
+
+    #[test]
+    fn double_adapt_io() {
+        let event_loop = crate::EventLoop::<()>::try_new().unwrap();
+        let handle = event_loop.handle();
+
+        let socket = Rc::new(UnixStream::pair().unwrap().0);
+        handle.adapt_io(socket.clone()).unwrap();
+        handle.adapt_io(socket).unwrap();
+    }
+
+    #[test]
+    fn double_adapt_io_error() {
+        let event_loop = crate::EventLoop::<()>::try_new().unwrap();
+        let handle = event_loop.handle();
+
+        let socket = Rc::new(UnixStream::pair().unwrap().0);
+        let _async = handle.adapt_io(socket.clone()).unwrap();
+        assert!(matches!(handle.adapt_io(socket).unwrap_err(),
+                crate::Error::IoError(err) if err.kind() == io::ErrorKind::AlreadyExists));
     }
 }
