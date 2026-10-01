@@ -257,7 +257,7 @@ impl<T> Drop for Executor<T> {
 pub struct ExecutorDestroyed;
 
 impl fmt::Display for ExecutorDestroyed {
-    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    #[cfg_attr(unstable_coverage, coverage(off))]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("the executor was destroyed")
     }
@@ -399,7 +399,7 @@ pub enum ExecutorError {
 }
 
 impl fmt::Display for ExecutorError {
-    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    #[cfg_attr(unstable_coverage, coverage(off))]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NewFutureError(err) => write!(f, "error adding new futures: {}", err),

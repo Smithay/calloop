@@ -60,7 +60,7 @@ pub struct Sender<T> {
 }
 
 impl<T> Clone for Sender<T> {
-    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    #[cfg_attr(unstable_coverage, coverage(off))]
     fn clone(&self) -> Sender<T> {
         Sender {
             sender: self.sender.clone(),
@@ -91,7 +91,7 @@ pub struct SyncSender<T> {
 }
 
 impl<T> Clone for SyncSender<T> {
-    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    #[cfg_attr(unstable_coverage, coverage(off))]
     fn clone(&self) -> SyncSender<T> {
         SyncSender {
             sender: self.sender.clone(),
@@ -283,14 +283,14 @@ impl<T> EventSource for Channel<T> {
 pub struct ChannelError(PingError);
 
 impl fmt::Display for ChannelError {
-    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    #[cfg_attr(unstable_coverage, coverage(off))]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&self.0, f)
     }
 }
 
 impl std::error::Error for ChannelError {
-    #[cfg_attr(feature = "nightly_coverage", coverage(off))]
+    #[cfg_attr(unstable_coverage, coverage(off))]
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         Some(&self.0)
     }
