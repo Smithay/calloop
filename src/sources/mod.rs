@@ -48,7 +48,7 @@ pub enum PostAction {
     Disable,
     /// Remove this source from the eventloop
     ///
-    /// Has the same effect as [`LoopHandle::kill`][crate::LoopHandle::kill]
+    /// Has the same effect as [`LoopHandle::remove`][crate::LoopHandle::remove]
     Remove,
 }
 
