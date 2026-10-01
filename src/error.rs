@@ -70,7 +70,7 @@ impl From<Error> for std::io::Error {
         match err {
             Error::IoError(source) => source,
             Error::InvalidToken => Self::new(std::io::ErrorKind::InvalidInput, err.to_string()),
-            Error::OtherError(source) => Self::new(std::io::ErrorKind::Other, source),
+            Error::OtherError(source) => Self::other(source),
         }
     }
 }
@@ -107,7 +107,7 @@ impl<T> Debug for InsertError<T> {
 impl<T> fmt::Display for InsertError<T> {
     #[cfg_attr(feature = "nightly_coverage", coverage(off))]
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "error inserting event source: {}", &self.error)
+        write!(f, "error inserting event source: {}", self.error)
     }
 }
 
