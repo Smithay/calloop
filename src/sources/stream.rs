@@ -16,8 +16,8 @@ use std::{
 };
 
 use crate::{
-    ping::{make_ping, Ping, PingError, PingSource},
     EventSource, Poll, PostAction, Readiness, Token, TokenFactory,
+    ping::{Ping, PingError, PingSource, make_ping},
 };
 
 struct PingWaker(Ping);

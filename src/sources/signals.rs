@@ -16,7 +16,7 @@ use std::io::Error as IoError;
 use std::os::raw::c_int;
 
 use nix::sys::signal::SigSet;
-use nix::sys::signalfd::{siginfo, SfdFlags, SignalFd};
+use nix::sys::signalfd::{SfdFlags, SignalFd, siginfo};
 use tracing::warn;
 
 use super::generic::{FdWrapper, Generic};

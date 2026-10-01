@@ -11,8 +11,8 @@
 
 use crate::sources::EventSource;
 
-use polling::os::iocp::{CompletionPacket, PollerIocpExt};
 use polling::Poller;
+use polling::os::iocp::{CompletionPacket, PollerIocpExt};
 use tracing::{trace, warn};
 
 use std::fmt;
@@ -300,13 +300,13 @@ fn debug_ping(state: &State, name: &str, f: &mut fmt::Formatter) -> fmt::Result 
             return f
                 .debug_tuple("Ping")
                 .field(&format_args!("<locked>"))
-                .finish()
+                .finish();
         }
         Err(TryLockError::Poisoned(_)) => {
             return f
                 .debug_tuple("Ping")
                 .field(&format_args!("<poisoned>"))
-                .finish()
+                .finish();
         }
     };
 

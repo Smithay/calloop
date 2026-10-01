@@ -4,8 +4,8 @@
 use std::time::Duration;
 
 use calloop::{
-    timer::{TimeoutAction, Timer},
     EventLoop,
+    timer::{TimeoutAction, Timer},
 };
 
 fn main() {

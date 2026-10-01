@@ -1,8 +1,8 @@
 use std::cell::{Cell, RefCell};
 use std::fmt::Debug;
 use std::rc::{Rc, Weak};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use std::{io, slice};
 
@@ -855,14 +855,15 @@ mod tests {
     use std::{cell::Cell, rc::Rc, time::Duration};
 
     use crate::{
-        channel::{channel, Channel},
-        ping::*,
-        timer, EventIterator, EventSource, Poll, PostAction, Readiness, RegistrationToken, Token,
+        EventIterator, EventSource, Poll, PostAction, Readiness, RegistrationToken, Token,
         TokenFactory,
+        channel::{Channel, channel},
+        ping::*,
+        timer,
     };
 
     #[cfg(unix)]
-    use crate::{generic::Generic, Dispatcher, Interest, Mode};
+    use crate::{Dispatcher, Interest, Mode, generic::Generic};
 
     use super::EventLoop;
 
@@ -1424,7 +1425,7 @@ mod tests {
     #[test]
     fn change_interests() {
         use rustix::io::write;
-        use rustix::net::{recv, socketpair, AddressFamily, RecvFlags, SocketFlags, SocketType};
+        use rustix::net::{AddressFamily, RecvFlags, SocketFlags, SocketType, recv, socketpair};
         let mut event_loop = EventLoop::<bool>::try_new().unwrap();
 
         let (sock1, sock2) = socketpair(

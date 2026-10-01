@@ -11,11 +11,11 @@
 use std::cmp;
 use std::fmt;
 use std::ops;
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 
 use crate::{EventSource, Poll, PostAction, Readiness, Token, TokenFactory};
 
-use super::ping::{make_ping, Ping, PingError, PingSource};
+use super::ping::{Ping, PingError, PingSource, make_ping};
 
 const MAX_EVENTS_CHECK: usize = 1024;
 

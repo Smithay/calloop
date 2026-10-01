@@ -14,9 +14,9 @@ use std::os::windows::io::{AsRawSocket, AsSocket, BorrowedSocket as Borrowed, Ra
 
 use polling::{Event, Events, PollMode, Poller};
 
+use crate::RegistrationToken;
 use crate::sources::timer::TimerWheel;
 use crate::token::TokenInner;
-use crate::RegistrationToken;
 
 /// Possible modes for registering a file descriptor
 #[derive(Copy, Clone, Debug)]

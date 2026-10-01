@@ -26,19 +26,20 @@ use std::{
     future::Future,
     rc::Rc,
     sync::{
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
-        mpsc, Arc, Mutex,
+        mpsc,
     },
     task::Waker,
 };
 
 use crate::{
-    sources::{
-        channel::ChannelError,
-        ping::{make_ping, Ping, PingError, PingSource},
-        EventSource,
-    },
     Poll, PostAction, Readiness, Token, TokenFactory,
+    sources::{
+        EventSource,
+        channel::ChannelError,
+        ping::{Ping, PingError, PingSource, make_ping},
+    },
 };
 
 /// A future executor as an event source

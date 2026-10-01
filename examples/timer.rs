@@ -1,8 +1,8 @@
 #![allow(clippy::uninlined_format_args)]
 
 use calloop::{
-    timer::{TimeoutAction, Timer},
     EventLoop, LoopSignal,
+    timer::{TimeoutAction, Timer},
 };
 
 fn main() {

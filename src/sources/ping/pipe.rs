@@ -5,12 +5,12 @@
 use std::os::unix::io::{AsFd, BorrowedFd, OwnedFd};
 use std::sync::Arc;
 
-use rustix::io::{read, write, Errno};
+use rustix::io::{Errno, read, write};
 use tracing::warn;
 
 use super::PingError;
 use crate::{
-    generic::Generic, EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory,
+    EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory, generic::Generic,
 };
 
 #[cfg(any(
@@ -22,7 +22,7 @@ use crate::{
 ))]
 #[inline]
 fn make_ends() -> std::io::Result<(OwnedFd, OwnedFd)> {
-    use rustix::fs::{fcntl_getfl, fcntl_setfl, OFlags};
+    use rustix::fs::{OFlags, fcntl_getfl, fcntl_setfl};
     use rustix::pipe::pipe;
 
     let (read, write) = pipe()?;
@@ -44,7 +44,7 @@ fn make_ends() -> std::io::Result<(OwnedFd, OwnedFd)> {
 )))]
 #[inline]
 fn make_ends() -> std::io::Result<(OwnedFd, OwnedFd)> {
-    use rustix::pipe::{pipe_with, PipeFlags};
+    use rustix::pipe::{PipeFlags, pipe_with};
     Ok(pipe_with(PipeFlags::CLOEXEC | PipeFlags::NONBLOCK)?)
 }
 

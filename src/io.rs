@@ -22,11 +22,11 @@ use std::os::windows::io::{
 use futures_io::{AsyncRead, AsyncWrite, IoSlice, IoSliceMut};
 
 use crate::loop_logic::EventIterator;
-use crate::{
-    loop_logic::LoopInner, sources::EventDispatcher, Interest, Mode, Poll, PostAction, Readiness,
-    Token, TokenFactory,
-};
 use crate::{AdditionalLifecycleEventsSet, RegistrationToken};
+use crate::{
+    Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory, loop_logic::LoopInner,
+    sources::EventDispatcher,
+};
 
 /// Adapter for async IO manipulations
 ///

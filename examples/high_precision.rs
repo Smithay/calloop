@@ -1,8 +1,8 @@
 use std::time::{Duration, Instant};
 
 use calloop::{
-    timer::{TimeoutAction, Timer},
     EventLoop,
+    timer::{TimeoutAction, Timer},
 };
 
 fn main() {
