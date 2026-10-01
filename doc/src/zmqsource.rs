@@ -168,14 +168,14 @@ where
 
             let mut used_socket = false;
 
-            if events.contains(zmq::POLLOUT) {
-                if let Some(parts) = self.outbox.pop_front() {
-                    self.socket
-                        .get_ref()
-                        .send_multipart(parts, 0)
-                        .context("Failed to send message")?;
-                    used_socket = true;
-                }
+            if events.contains(zmq::POLLOUT)
+                && let Some(parts) = self.outbox.pop_front()
+            {
+                self.socket
+                    .get_ref()
+                    .send_multipart(parts, 0)
+                    .context("Failed to send message")?;
+                used_socket = true;
             }
 
             if events.contains(zmq::POLLIN) {
