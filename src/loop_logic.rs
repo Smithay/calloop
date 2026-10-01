@@ -706,7 +706,7 @@ impl<'l, Data> EventLoop<'l, Data> {
         }
 
         // Pin the future to the stack.
-        pin_utils::pin_mut!(future);
+        let mut future = std::pin::pin!(future);
 
         // Create a waker that will wake up the event loop when it is ready to make progress.
         let waker = {
