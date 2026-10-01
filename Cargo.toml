@@ -8,7 +8,7 @@ license = "MIT"
 description = "A callback-based event loop"
 keywords = [ "events", "loop", "callback", "eventloop", "unix" ]
 autotests = false
-edition = "2018"
+edition = "2024"
 readme = "README.md"
 rust-version = "1.86.0"
 
