@@ -105,6 +105,7 @@ impl AsFd for ArcAsFd {
 }
 
 // The event source is simply a generic source with one of the eventfds.
+#[allow(missing_docs)] // Documented in re-export
 #[derive(Debug)]
 pub struct PingSource {
     event: Generic<ArcAsFd>,
@@ -165,6 +166,7 @@ impl EventSource for PingSource {
     }
 }
 
+#[allow(missing_docs)] // Documented in re-export
 #[derive(Clone, Debug)]
 pub struct Ping {
     // This is an Arc because it's potentially shared with clones. The last one

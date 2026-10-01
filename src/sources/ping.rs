@@ -47,7 +47,7 @@ pub fn make_ping() -> std::io::Result<(Ping, PingSource)> {
 ///
 /// This handle can be cloned and sent accross threads. It can be used to
 /// send pings to the `PingSource`.
-pub type Ping = platform::Ping;
+pub use platform::Ping;
 
 /// The ping event source
 ///
@@ -55,7 +55,7 @@ pub type Ping = platform::Ping;
 ///
 /// If you use it directly, it will automatically remove itself from the event loop
 /// once all [`Ping`] instances are dropped.
-pub type PingSource = platform::PingSource;
+pub use platform::PingSource;
 
 /// An error arising from processing events for a ping.
 #[derive(Debug)]

@@ -71,6 +71,7 @@ fn send_ping(fd: BorrowedFd<'_>) -> std::io::Result<()> {
 
 // The event source is simply a generic source with the FD of the read end of
 // the pipe.
+#[allow(missing_docs)] // Documented in re-export
 #[derive(Debug)]
 pub struct PingSource {
     pipe: Generic<OwnedFd>,
@@ -143,6 +144,7 @@ impl EventSource for PingSource {
 }
 
 // The sending end of the ping writes zeroes to the write end of the pipe.
+#[allow(missing_docs)] // Documented in re-export
 #[derive(Clone, Debug)]
 pub struct Ping {
     pipe: Arc<OwnedFd>,

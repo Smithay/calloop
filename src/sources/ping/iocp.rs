@@ -36,7 +36,7 @@ pub fn make_ping() -> io::Result<(Ping, PingSource)> {
     ))
 }
 
-/// The event to trigger.
+#[allow(missing_docs)] // Documented in re-export
 #[derive(Clone)]
 pub struct Ping {
     state: Arc<State>,
@@ -49,7 +49,7 @@ impl fmt::Debug for Ping {
     }
 }
 
-/// The event source.
+#[allow(missing_docs)] // Documented in re-export
 pub struct PingSource {
     state: Arc<State>,
 }
