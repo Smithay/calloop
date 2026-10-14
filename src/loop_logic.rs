@@ -9,8 +9,10 @@ use std::{io, slice};
 #[cfg(feature = "block_on")]
 use std::future::Future;
 
+#[cfg(all(unix, not(target_os = "haiku")))]
+use std::os::unix::io::{AsRawFd, BorrowedFd, RawFd};
 #[cfg(unix)]
-use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, RawFd};
+use std::os::unix::io::AsFd;
 #[cfg(windows)]
 use std::os::windows::io::{AsHandle, AsRawHandle, AsSocket as AsFd, BorrowedHandle, RawHandle};
 
@@ -742,7 +744,7 @@ impl<'l, Data> EventLoop<'l, Data> {
     }
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "haiku")))]
 impl<Data> AsRawFd for EventLoop<'_, Data> {
     /// Get the underlying raw-fd of the poller.
     ///
@@ -756,7 +758,7 @@ impl<Data> AsRawFd for EventLoop<'_, Data> {
     }
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "haiku")))]
 impl<Data> AsFd for EventLoop<'_, Data> {
     /// Get the underlying fd of the poller.
     ///

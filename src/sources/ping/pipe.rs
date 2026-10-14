@@ -40,12 +40,25 @@ fn make_ends() -> std::io::Result<(OwnedFd, OwnedFd)> {
     target_os = "ios",
     target_os = "tvos",
     target_os = "visionos",
-    target_os = "watchos"
+    target_os = "watchos",
+    target_os = "haiku"
 )))]
 #[inline]
 fn make_ends() -> std::io::Result<(OwnedFd, OwnedFd)> {
     use rustix::pipe::{PipeFlags, pipe_with};
     Ok(pipe_with(PipeFlags::CLOEXEC | PipeFlags::NONBLOCK)?)
+}
+
+#[cfg(target_os = "haiku")]
+fn make_ends() -> std::io::Result<(OwnedFd, OwnedFd)> {
+    use rustix::fs::{OFlags, fcntl_getfl, fcntl_setfl};
+    use rustix::io::{FdFlags, fcntl_getfd, fcntl_setfd};
+    let (read, write) = rustix::pipe::pipe()?;
+    for fd in [&read, &write] {
+        fcntl_setfd(fd, fcntl_getfd(fd)? | FdFlags::CLOEXEC)?;
+        fcntl_setfl(fd, fcntl_getfl(fd)? | OFlags::NONBLOCK)?;
+    }
+    Ok((read, write))
 }
 
 #[inline]
@@ -157,5 +170,15 @@ impl Ping {
         if let Err(e) = send_ping(self.pipe.as_fd()) {
             warn!("Failed to write a ping: {e:?}");
         }
+    }
+}
+
+#[cfg(all(test, target_os = "haiku"))]
+#[test]
+fn haiku_ping_pipe_flags() {
+    let (read, write) = make_ends().unwrap();
+    for fd in [&read, &write] {
+        assert!(rustix::io::fcntl_getfd(fd).unwrap().contains(rustix::io::FdFlags::CLOEXEC));
+        assert!(rustix::fs::fcntl_getfl(fd).unwrap().contains(rustix::fs::OFlags::NONBLOCK));
     }
 }
