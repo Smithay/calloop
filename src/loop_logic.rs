@@ -382,6 +382,8 @@ pub struct EventLoop<'l, Data> {
     signals: Arc<Signals>,
     // A caching vector for synthetic poll events
     synthetic_events: Vec<PollEvent>,
+    // A caching vector for the events returned by the poller, reused across dispatches
+    poll_events: Vec<PollEvent>,
 }
 
 impl<Data> Debug for EventLoop<'_, Data> {
@@ -427,6 +429,7 @@ impl<'l, Data> EventLoop<'l, Data> {
             }),
             poller,
             synthetic_events: vec![],
+            poll_events: vec![],
         })
     }
 
@@ -463,13 +466,13 @@ impl<'l, Data> EventLoop<'l, Data> {
                 }
             }
         }
-        let events = {
+        {
             let poll = self.handle.inner.poll.borrow();
             loop {
-                let result = poll.poll(timeout);
+                let result = poll.poll(timeout, &mut self.poll_events);
 
                 match result {
-                    Ok(events) => break events,
+                    Ok(()) => break,
                     Err(crate::Error::IoError(err)) if err.kind() == io::ErrorKind::Interrupted => {
                         // Interrupted by a signal. Update timeout and retry.
                         if let Some(to) = timeout {
@@ -484,7 +487,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                     Err(err) => return Err(err),
                 };
             }
-        };
+        }
         {
             let mut extra_lifecycle_sources = self
                 .handle
@@ -498,7 +501,7 @@ impl<'l, Data> EventLoop<'l, Data> {
                     }) = self.handle.inner.sources.borrow().get(source.inner)
                     {
                         let iter = EventIterator {
-                            inner: events.iter(),
+                            inner: self.poll_events.iter(),
                             registration_token: *source,
                         };
                         disp.before_handle_events(iter);
@@ -509,7 +512,11 @@ impl<'l, Data> EventLoop<'l, Data> {
             }
         }
 
-        for event in self.synthetic_events.drain(..).chain(events) {
+        for event in self
+            .synthetic_events
+            .drain(..)
+            .chain(self.poll_events.drain(..))
+        {
             // Get the registration token associated with the event.
             let reg_token = event.token.inner.forget_sub_id();
 

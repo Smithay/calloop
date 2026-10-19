@@ -50,6 +50,9 @@ rustdoc-args = ["--cfg", "docsrs"]
 name = "signals"
 harness = false
 
+[[test]]
+name = "dispatch_allocations"
+
 [[bench]]
 name = "timer"
 harness = false

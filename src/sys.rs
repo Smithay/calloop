@@ -220,7 +220,14 @@ impl Poll {
         })
     }
 
-    pub(crate) fn poll(&self, mut timeout: Option<Duration>) -> crate::Result<Vec<PollEvent>> {
+    ///
+    /// The events are written into `poll_events`, which is cleared first: the caller keeps one
+    /// buffer across calls, so a wake allocates nothing once the buffer has grown to fit.
+    pub(crate) fn poll(
+        &self,
+        mut timeout: Option<Duration>,
+        poll_events: &mut Vec<PollEvent>,
+    ) -> crate::Result<()> {
         // Adjust the timeout for the timers.
         let next_timeout = self
             .timers
@@ -238,32 +245,30 @@ impl Poll {
 
         // Convert `polling` events to `calloop` events.
         let level_triggered = self.level_triggered.as_ref().map(RefCell::borrow);
-        let mut poll_events = events
-            .iter()
-            .map(|ev| {
-                // If we need to emulate level-triggered events...
-                if let Some(level_triggered) = level_triggered.as_ref() {
-                    // ...and this event is from a level-triggered source...
-                    if let Some((source, interest)) = level_triggered.get(&ev.key) {
-                        // ...then we need to re-register the source.
-                        // SAFETY: The source is valid.
-                        self.poller
-                            .modify(unsafe { Borrowed::borrow_raw(*source) }, *interest)?;
-                    }
+        poll_events.clear();
+        for ev in events.iter() {
+            // If we need to emulate level-triggered events...
+            if let Some(level_triggered) = level_triggered.as_ref() {
+                // ...and this event is from a level-triggered source...
+                if let Some((source, interest)) = level_triggered.get(&ev.key) {
+                    // ...then we need to re-register the source.
+                    // SAFETY: The source is valid.
+                    self.poller
+                        .modify(unsafe { Borrowed::borrow_raw(*source) }, *interest)?;
                 }
+            }
 
-                Ok(PollEvent {
-                    readiness: Readiness {
-                        readable: ev.readable,
-                        writable: ev.writable,
-                        error: false,
-                    },
-                    token: Token {
-                        inner: TokenInner::from(ev.key),
-                    },
-                })
-            })
-            .collect::<std::io::Result<Vec<_>>>()?;
+            poll_events.push(PollEvent {
+                readiness: Readiness {
+                    readable: ev.readable,
+                    writable: ev.writable,
+                    error: false,
+                },
+                token: Token {
+                    inner: TokenInner::from(ev.key),
+                },
+            });
+        }
 
         drop(events);
 
@@ -280,7 +285,7 @@ impl Poll {
             });
         }
 
-        Ok(poll_events)
+        Ok(())
     }
 
     /// Register a new file descriptor for polling
